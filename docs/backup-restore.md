@@ -18,3 +18,9 @@ Treat PostgreSQL and object storage as one recovery set. Pause application write
 5. rotate credentials used during recovery and document the test or incident.
 
 Never restore a database and object snapshot from different recovery points without a documented reconciliation; doing so can orphan or misassociate sensitive evidence.
+
+## Organisation migration export
+
+An organisation owner can download a checksummed migration export from **Imports & Exports**. It contains the organisation, member mappings, clients, engagements, approved and draft domain records, finding templates and provenance, findings, assets, scope versions/items, evidence metadata, report versions, notes, tasks, audit events, and time entries. It deliberately excludes passwords, sessions, API/webhook secrets, encrypted provider credentials, and evidence/report binary objects.
+
+Treat the JSON export and the matching private object-storage archive as one encrypted migration set. Verify the response `x-content-sha256` checksum, transfer both artifacts, and retain the source release/migration number. A migration restore must validate every referenced user and object checksum in an isolated environment before cutover. The PostgreSQL integration suite asserts the export domains, migration-only superset, checksum, tenant boundary, and absence of storage locators; the operational `pg_dump` plus object snapshot remains the authoritative full-disaster-recovery backup.

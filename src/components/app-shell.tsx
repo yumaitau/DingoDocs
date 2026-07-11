@@ -4,6 +4,7 @@ import * as Dialog from "@radix-ui/react-dialog";
 import { Command } from "cmdk";
 import {
   Activity,
+  ArrowLeftRight,
   BookOpen,
   Building2,
   Cable,
@@ -35,6 +36,7 @@ const primary: NavItem[] = [
   { label: "Reports", href: "/reports", icon: FileText },
   { label: "Tasks", href: "/tasks", icon: CheckSquare },
   { label: "Templates", href: "/templates", icon: BookOpen },
+  { label: "Imports & Exports", href: "/imports", icon: ArrowLeftRight },
 ];
 const secondary: NavItem[] = [
   { label: "Team", href: "/team", icon: Users },
@@ -257,6 +259,15 @@ function CommandPalette({
 }) {
   const router = useRouter();
   const items = useMemo(() => [...primary, ...secondary], []);
+  const [results, setResults] = useState<
+    Array<{
+      type: string;
+      id: string;
+      title: string;
+      subtitle: string;
+      href: string;
+    }>
+  >([]);
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
@@ -269,6 +280,17 @@ function CommandPalette({
               <Command.Input
                 autoFocus
                 placeholder="Search pages, clients, engagements, or actions"
+                onValueChange={(query) => {
+                  if (query.trim().length < 2) return setResults([]);
+                  fetch(`/api/search?q=${encodeURIComponent(query)}`)
+                    .then((response) =>
+                      response.ok ? response.json() : { results: [] },
+                    )
+                    .then((value: { results?: typeof results }) =>
+                      setResults(value.results ?? []),
+                    )
+                    .catch(() => setResults([]));
+                }}
                 className="h-13 min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-slate-400"
               />
               <kbd className="rounded border bg-muted px-1.5 py-0.5 text-[10px] text-slate-500">
@@ -279,6 +301,34 @@ function CommandPalette({
               <Command.Empty className="px-3 py-10 text-center text-sm text-slate-500">
                 No matching commands
               </Command.Empty>
+              <Command.Group
+                heading="Search results"
+                className="text-xs text-slate-500 [&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-2"
+              >
+                {results.map((result) => (
+                  <Command.Item
+                    key={`${result.type}-${result.id}`}
+                    value={`${result.title} ${result.subtitle}`}
+                    onSelect={() => {
+                      router.push(result.href);
+                      onOpenChange(false);
+                    }}
+                    className="flex cursor-default items-center justify-between gap-3 rounded-md px-2 py-2.5 text-sm text-slate-700 data-[selected=true]:bg-[var(--harbour-50)]"
+                  >
+                    <span className="min-w-0">
+                      <span className="block truncate font-medium">
+                        {result.title}
+                      </span>
+                      <span className="block truncate text-xs text-slate-500">
+                        {result.subtitle}
+                      </span>
+                    </span>
+                    <span className="text-[10px] uppercase text-slate-400">
+                      {result.type}
+                    </span>
+                  </Command.Item>
+                ))}
+              </Command.Group>
               <Command.Group
                 heading="Navigate"
                 className="text-xs text-slate-500 [&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-2"

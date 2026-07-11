@@ -3,10 +3,19 @@ import Link from "next/link";
 import { requireOrganisationContext } from "@/lib/permissions/require";
 import { formatDate } from "@/lib/utils";
 import { listPortalEngagements } from "@/server/services/client-portal";
+import { globalSearch } from "@/server/services/global-search";
 
-export default async function PortalPage() {
+export default async function PortalPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ q?: string }>;
+}) {
   const actor = await requireOrganisationContext();
-  const engagements = await listPortalEngagements(actor);
+  const query = (await searchParams).q?.trim() ?? "";
+  const [engagements, results] = await Promise.all([
+    listPortalEngagements(actor),
+    query.length >= 2 ? globalSearch(actor, query) : Promise.resolve([]),
+  ]);
   return (
     <div className="space-y-6">
       <div>
@@ -21,6 +30,59 @@ export default async function PortalPage() {
           shared with your account.
         </p>
       </div>
+      <form className="flex max-w-xl gap-2" action="/portal">
+        <label className="sr-only" htmlFor="portal-search">
+          Search shared records
+        </label>
+        <input
+          id="portal-search"
+          name="q"
+          defaultValue={query}
+          placeholder="Search shared engagements, findings, scope, evidence, reports, and tasks"
+          className="min-h-11 min-w-0 flex-1 rounded-md border bg-paper px-3 text-sm"
+        />
+        <button className="rounded-md bg-primary px-4 text-sm font-medium text-white">
+          Search
+        </button>
+      </form>
+      {query && (
+        <section className="rounded-xl border bg-paper">
+          <div className="border-b p-4">
+            <h2 className="font-semibold">Search results</h2>
+            <p className="text-xs text-slate-500">
+              Only explicitly shared records are searched.
+            </p>
+          </div>
+          {results.length ? (
+            <ul className="divide-y">
+              {results.map((result) => (
+                <li key={`${result.type}-${result.id}`}>
+                  <Link
+                    href={result.href}
+                    className="flex items-center justify-between gap-3 p-4 hover:bg-muted"
+                  >
+                    <span>
+                      <span className="block text-sm font-medium">
+                        {result.title}
+                      </span>
+                      <span className="block text-xs text-slate-500">
+                        {result.subtitle}
+                      </span>
+                    </span>
+                    <span className="text-[10px] uppercase text-slate-400">
+                      {result.type}
+                    </span>
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="p-4 text-sm text-slate-500">
+              No shared records match “{query}”.
+            </p>
+          )}
+        </section>
+      )}
       {engagements.length ? (
         <ul className="grid gap-4 md:grid-cols-2">
           {engagements.map((engagement) => (

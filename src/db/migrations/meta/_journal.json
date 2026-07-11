@@ -64,6 +64,13 @@
       "when": 1783776142083,
       "tag": "0008_graceful_patch",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1783777176749,
+      "tag": "0009_aromatic_hercules",
+      "breakpoints": true
     }
   ]
 }

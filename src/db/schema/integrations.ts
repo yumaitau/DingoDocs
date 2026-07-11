@@ -12,6 +12,8 @@ import {
 } from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 import { users } from "./auth";
+import { engagements } from "./engagements";
+import { evidence } from "./evidence";
 import { organisations } from "./organisations";
 
 export const serviceAccounts = pgTable(
@@ -269,4 +271,81 @@ export const aiAssistRuns = pgTable(
       .defaultNow(),
   },
   (table) => [index("ai_assist_runs_org_idx").on(table.organisationId)],
+);
+
+export const importRuns = pgTable(
+  "import_runs",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organisationId: uuid("organisation_id")
+      .notNull()
+      .references(() => organisations.id, { onDelete: "cascade" }),
+    engagementId: uuid("engagement_id")
+      .notNull()
+      .references(() => engagements.id, { onDelete: "cascade" }),
+    sourceEvidenceId: uuid("source_evidence_id")
+      .notNull()
+      .references(() => evidence.id, { onDelete: "restrict" }),
+    adapter: text("adapter").notNull(),
+    sourceFilename: text("source_filename").notNull(),
+    sourceSha256: text("source_sha256").notNull(),
+    status: text("status").notNull().default("previewed"),
+    summary: jsonb("summary")
+      .$type<{
+        total: number;
+        new: number;
+        duplicate: number;
+        selected: number;
+      }>()
+      .notNull()
+      .default({ total: 0, new: 0, duplicate: 0, selected: 0 }),
+    createdBy: uuid("created_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    appliedAt: timestamp("applied_at", { withTimezone: true }),
+  },
+  (table) => [
+    index("import_runs_org_engagement_idx").on(
+      table.organisationId,
+      table.engagementId,
+      table.createdAt,
+    ),
+  ],
+);
+
+export const importItems = pgTable(
+  "import_items",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organisationId: uuid("organisation_id")
+      .notNull()
+      .references(() => organisations.id, { onDelete: "cascade" }),
+    importRunId: uuid("import_run_id")
+      .notNull()
+      .references(() => importRuns.id, { onDelete: "cascade" }),
+    fingerprint: text("fingerprint").notNull(),
+    externalId: text("external_id"),
+    title: text("title").notNull(),
+    severity: text("severity").notNull(),
+    assetIdentifier: text("asset_identifier"),
+    action: text("action").notNull(),
+    selected: boolean("selected").notNull().default(true),
+    normalized: jsonb("normalized").$type<Record<string, unknown>>().notNull(),
+    findingId: uuid("finding_id"),
+    assetId: uuid("asset_id"),
+    appliedAt: timestamp("applied_at", { withTimezone: true }),
+  },
+  (table) => [
+    index("import_items_org_run_idx").on(
+      table.organisationId,
+      table.importRunId,
+    ),
+    index("import_items_org_fingerprint_idx").on(
+      table.organisationId,
+      table.fingerprint,
+    ),
+  ],
 );

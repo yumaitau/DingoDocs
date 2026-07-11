@@ -127,6 +127,11 @@ export const findings = pgTable(
     version: integer("version").notNull().default(1),
     approvedVersion: integer("approved_version"),
     clientVisible: boolean("client_visible").notNull().default(false),
+    sourceFingerprint: text("source_fingerprint"),
+    sourceProvenance: jsonb("source_provenance")
+      .$type<Record<string, unknown>>()
+      .notNull()
+      .default({}),
     publishedAt: timestamp("published_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
@@ -147,6 +152,10 @@ export const findings = pgTable(
       table.status,
     ),
     index("findings_org_severity_idx").on(table.organisationId, table.severity),
+    index("findings_org_source_fingerprint_idx").on(
+      table.organisationId,
+      table.sourceFingerprint,
+    ),
   ],
 );
 
