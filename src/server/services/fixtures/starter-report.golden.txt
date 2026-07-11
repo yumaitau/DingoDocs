@@ -1,0 +1,57 @@
+# Customer Portal Assessment
+
+**Client:** Northstar Systems
+**Engagement:** Customer portal (ENG-001)
+**Classification:** Confidential
+
+## Executive summary
+
+One high-severity finding requires remediation.
+
+## Finding severity overview
+
+| Severity | Findings |
+| --- | --- |
+| critical | 0 |
+| high | 1 |
+| medium | 0 |
+| low | 0 |
+| informational | 0 |
+
+## Assessment scope
+
+| Name | Value | Status |
+| --- | --- | --- |
+| Customer portal | portal.northstar.test | in_scope |
+
+## Assessed assets
+
+| Asset | Type | Identifier | Criticality |
+| --- | --- | --- | --- |
+| Portal | application | portal.northstar.test | high |
+
+## Detailed findings
+
+### WEB-001: Missing object authorisation
+
+**Severity:** high | **CVSS:** 8.7
+
+Users can access another account's invoice.
+
+#### Technical detail
+The invoice lookup is not tenant scoped.
+
+#### Remediation
+Scope every lookup to the active account.
+
+## Evidence register
+
+| File | Type | Classification | SHA-256 |
+| --- | --- | --- | --- |
+| proof.png | image/png | restricted | aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa |
+
+## Approvals and signatures
+
+____________________  Prepared by - Lead consultant
+
+____________________  Approved by - Quality assurance

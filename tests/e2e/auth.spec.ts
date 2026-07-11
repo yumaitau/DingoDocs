@@ -77,6 +77,34 @@ test("evidence and finding workspaces expose their secure core flows", async ({
   ).toBeVisible();
 });
 
+test("report workspace and live preview share the seeded report model", async ({
+  page,
+}) => {
+  await signIn(page);
+  await page.goto("/reports");
+  await expect(page.getByRole("heading", { name: "Reports" })).toBeVisible();
+  await expect(
+    page.getByText("Northstar Customer Portal Assessment", { exact: true }),
+  ).toBeVisible();
+  await page.getByRole("link", { name: "Open" }).first().click();
+  await expect(
+    page.getByRole("heading", { name: "Server-side exports" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("paragraph").filter({
+      hasText: "Version 1 · internal review",
+    }),
+  ).toBeVisible();
+  const preview = page.getByRole("link", { name: "Live preview" });
+  const previewPath = await preview.getAttribute("href");
+  expect(previewPath).toBeTruthy();
+  const response = await page.request.get(previewPath!);
+  expect(response.ok()).toBe(true);
+  const html = await response.text();
+  expect(html).toContain("Northstar Customer Portal Assessment");
+  expect(html).toContain("Missing object-level authorisation exposes invoices");
+});
+
 async function signIn(page: Page) {
   await page.goto("/sign-in");
   await page.getByLabel("Email").fill("admin@dingodocs.local");

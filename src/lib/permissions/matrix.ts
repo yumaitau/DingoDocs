@@ -52,6 +52,7 @@ const manager: readonly Permission[] = [
   "client:manage",
   "template:manage",
   "data:export",
+  "report:publish",
 ];
 
 export const permissionMatrix: Record<Role, readonly Permission[]> = {

@@ -15,6 +15,56 @@ import { engagements } from "./engagements";
 import { reportStatusEnum } from "./enums";
 import { organisations } from "./organisations";
 
+export type ReportFormat = "pdf" | "docx" | "html" | "markdown" | "json";
+export type ReportCondition = {
+  field: "hasFindings" | "hasEvidence" | "hasScope" | "status";
+  operator: "equals" | "not_equals" | "truthy";
+  value?: string | boolean;
+};
+export type ReportSectionDefinition = {
+  id: string;
+  type:
+    | "cover"
+    | "executive_summary"
+    | "reusable_content"
+    | "prose"
+    | "findings"
+    | "scope"
+    | "assets"
+    | "chart"
+    | "risk_matrix"
+    | "evidence"
+    | "appendix"
+    | "page_break";
+  title?: string;
+  content?: string;
+  reusableKey?: string;
+  condition?: ReportCondition;
+  options?: Record<string, string | number | boolean>;
+};
+export type ReportTemplateDefinition = {
+  sections: ReportSectionDefinition[];
+  reusableContent?: Record<string, string>;
+  variables?: Record<string, string>;
+  branding: {
+    organisationName?: string;
+    logoUrl?: string;
+    primaryColour: string;
+    accentColour: string;
+  };
+  typography: {
+    bodyFont: string;
+    headingFont: string;
+    bodySize: number;
+  };
+  header: { left?: string; right?: string; showRule?: boolean };
+  footer: { left?: string; showPageNumbers?: boolean };
+  watermark?: string;
+  classification: string;
+  approvals?: Array<{ role: string; required: boolean }>;
+  signatures?: Array<{ label: string; role: string }>;
+};
+
 export const reportTemplates = pgTable(
   "report_templates",
   {
@@ -27,12 +77,7 @@ export const reportTemplates = pgTable(
     }),
     name: text("name").notNull(),
     version: integer("version").notNull().default(1),
-    definition: jsonb("definition")
-      .$type<{
-        sections: Array<Record<string, unknown>>;
-        theme: Record<string, unknown>;
-      }>()
-      .notNull(),
+    definition: jsonb("definition").$type<ReportTemplateDefinition>().notNull(),
     customCss: text("custom_css"),
     createdBy: uuid("created_by").references(() => users.id, {
       onDelete: "set null",
@@ -71,6 +116,7 @@ export const reports = pgTable(
     templateId: uuid("template_id").references(() => reportTemplates.id, {
       onDelete: "set null",
     }),
+    templateVersion: integer("template_version"),
     title: text("title").notNull(),
     status: reportStatusEnum("status").notNull().default("draft"),
     currentVersion: integer("current_version").notNull().default(1),
@@ -104,10 +150,22 @@ export const reportVersions = pgTable(
       .notNull()
       .references(() => reports.id, { onDelete: "cascade" }),
     version: integer("version").notNull(),
+    status: reportStatusEnum("status").notNull().default("draft"),
     content: jsonb("content").$type<Record<string, unknown>>().notNull(),
     immutable: boolean("immutable").notNull().default(false),
     storageKeyPdf: text("storage_key_pdf"),
     storageKeyDocx: text("storage_key_docx"),
+    exportKeys: jsonb("export_keys")
+      .$type<Partial<Record<ReportFormat, string>>>()
+      .notNull()
+      .default({}),
+    exportChecksums: jsonb("export_checksums")
+      .$type<Partial<Record<ReportFormat, string>>>()
+      .notNull()
+      .default({}),
+    renderStatus: text("render_status").notNull().default("not_requested"),
+    renderError: text("render_error"),
+    renderedAt: timestamp("rendered_at", { withTimezone: true }),
     checksum: text("checksum"),
     createdBy: uuid("created_by").references(() => users.id, {
       onDelete: "set null",
@@ -127,6 +185,37 @@ export const reportVersions = pgTable(
       table.version,
     ),
     index("report_versions_org_idx").on(table.organisationId),
+  ],
+);
+
+export const reportTransitions = pgTable(
+  "report_transitions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organisationId: uuid("organisation_id")
+      .notNull()
+      .references(() => organisations.id, { onDelete: "cascade" }),
+    reportId: uuid("report_id")
+      .notNull()
+      .references(() => reports.id, { onDelete: "cascade" }),
+    reportVersionId: uuid("report_version_id")
+      .notNull()
+      .references(() => reportVersions.id, { onDelete: "cascade" }),
+    fromStatus: reportStatusEnum("from_status").notNull(),
+    toStatus: reportStatusEnum("to_status").notNull(),
+    actorId: uuid("actor_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    comment: text("comment"),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index("report_transitions_org_report_idx").on(
+      table.organisationId,
+      table.reportId,
+    ),
   ],
 );
 
