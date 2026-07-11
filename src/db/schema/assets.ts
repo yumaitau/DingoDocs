@@ -1,5 +1,6 @@
 import {
   index,
+  jsonb,
   pgTable,
   text,
   timestamp,
@@ -26,6 +27,10 @@ export const assets = pgTable(
     owner: text("owner"),
     criticality: text("criticality"),
     notes: text("notes"),
+    sourceProvenance: jsonb("source_provenance")
+      .$type<Record<string, unknown>>()
+      .notNull()
+      .default({}),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),

@@ -61,7 +61,7 @@ See [Architecture](docs/architecture.md), [Deployment](docs/deployment.md), [Adm
 
 ## Project status
 
-DingoDocs is under active development. The engagement workspace, secure evidence lifecycle, formal finding workflow, report rendering, authentication hardening, retention operations, audit model, client remediation and retesting, and local/S3-compatible storage are implemented. Scanner adapters and global search remain subsequent delivery phases.
+DingoDocs is under active development. The engagement workspace, secure evidence lifecycle, formal finding workflow, report rendering, authentication hardening, retention operations, audit model, client remediation and retesting, scanner exchange, checksummed organisation exports, PostgreSQL global search, and local/S3-compatible storage are implemented.
 
 ## Licence
 

@@ -65,6 +65,26 @@ test("demo user reaches the tenant-scoped dashboard and command palette", async 
   await expect(
     page.getByRole("dialog", { name: "Command palette" }),
   ).toBeVisible();
+  await page
+    .getByPlaceholder("Search pages, clients, engagements, or actions")
+    .fill("Northstar");
+  await expect(
+    page.getByRole("option", { name: /Northstar Systems/ }).first(),
+  ).toBeVisible();
+});
+
+test("scanner exchange workspace exposes staged imports and checksummed exports", async ({
+  page,
+}) => {
+  await signIn(page);
+  await page.goto("/imports");
+  await expect(
+    page.getByRole("heading", { name: "Imports and exports" }),
+  ).toBeVisible();
+  await expect(page.getByLabel("Source format")).toContainText("NMAP");
+  await expect(
+    page.getByRole("button", { name: "Download migration export" }),
+  ).toBeVisible();
 });
 
 test("signed-in users can review account devices and administrators can open retention controls", async ({
