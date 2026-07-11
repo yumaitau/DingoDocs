@@ -127,3 +127,34 @@ export const evidenceAnnotations = pgTable(
     ),
   ],
 );
+
+export const evidenceLegalHolds = pgTable(
+  "evidence_legal_holds",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organisationId: uuid("organisation_id")
+      .notNull()
+      .references(() => organisations.id, { onDelete: "cascade" }),
+    evidenceId: uuid("evidence_id")
+      .notNull()
+      .references(() => evidence.id, { onDelete: "cascade" }),
+    reason: text("reason").notNull(),
+    placedBy: uuid("placed_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    releasedBy: uuid("released_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    releasedAt: timestamp("released_at", { withTimezone: true }),
+  },
+  (table) => [
+    index("evidence_legal_holds_org_idx").on(table.organisationId),
+    index("evidence_legal_holds_evidence_idx").on(
+      table.evidenceId,
+      table.releasedAt,
+    ),
+  ],
+);

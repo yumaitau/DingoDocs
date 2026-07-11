@@ -152,18 +152,18 @@ export const passkeys = pgTable(
       .references(() => users.id, { onDelete: "cascade" }),
     name: text("name"),
     publicKey: text("public_key").notNull(),
-    credentialId: text("credential_id").notNull(),
+    credentialID: text("credential_id").notNull(),
     counter: integer("counter").notNull().default(0),
     deviceType: text("device_type"),
     backedUp: boolean("backed_up").notNull().default(false),
     transports: text("transports"),
+    aaguid: text("aaguid"),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
-    lastUsedAt: timestamp("last_used_at", { withTimezone: true }),
   },
   (table) => [
-    uniqueIndex("passkeys_credential_uq").on(table.credentialId),
+    uniqueIndex("passkeys_credential_uq").on(table.credentialID),
     index("passkeys_user_idx").on(table.userId),
   ],
 );

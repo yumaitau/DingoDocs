@@ -2,10 +2,12 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { Suspense } from "react";
 import { SignInForm } from "./sign-in-form";
+import { publicAuthProviders } from "@/lib/auth/providers";
 
 export const metadata: Metadata = { title: "Sign in" };
 
 export default function SignInPage() {
+  const providers = publicAuthProviders();
   return (
     <div className="w-full max-w-sm">
       <div className="mb-8 lg:hidden">
@@ -24,7 +26,7 @@ export default function SignInPage() {
           <div className="mt-7 h-72 animate-pulse rounded-lg bg-muted" />
         }
       >
-        <SignInForm />
+        <SignInForm providers={providers} />
       </Suspense>
       <p className="mt-6 text-center text-sm text-slate-500">
         New to DingoDocs?{" "}

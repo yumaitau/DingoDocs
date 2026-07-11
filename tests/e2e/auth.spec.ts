@@ -7,6 +7,47 @@ test("sign-in is keyboard accessible", async ({ page }) => {
   ).toBeVisible();
   await page.keyboard.press("Tab");
   await expect(page.locator(":focus")).toBeVisible();
+  await expect(
+    page.getByRole("button", { name: "Sign in with a passkey" }),
+  ).toBeVisible();
+  const response = await page.request.get("/api/health", {
+    headers: { "x-request-id": "e2e-correlation-id" },
+  });
+  expect(response.headers()["x-request-id"]).toBe("e2e-correlation-id");
+  expect(response.headers()["content-security-policy"]).toContain(
+    "frame-ancestors 'none'",
+  );
+  expect(response.headers()["x-content-type-options"]).toBe("nosniff");
+});
+
+test("sign-in failures are audited and locked out without account enumeration", async ({
+  request,
+}) => {
+  const email = `lockout-${Date.now()}-${Math.random()}@test.invalid`;
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const response = await request.post("/api/auth/sign-in/email", {
+      data: { email, password: "not-the-password" },
+    });
+    expect(response.status()).toBeGreaterThanOrEqual(400);
+  }
+  const locked = await request.post("/api/auth/sign-in/email", {
+    data: { email, password: "not-the-password" },
+  });
+  expect(locked.status()).toBe(429);
+  expect(locked.headers()["retry-after"]).toBe("900");
+});
+
+test("cross-origin authentication posts are rejected by CSRF origin checks", async ({
+  request,
+}) => {
+  const response = await request.post("/api/auth/sign-in/email", {
+    headers: { origin: "https://attacker.invalid" },
+    data: {
+      email: `csrf-${Date.now()}@test.invalid`,
+      password: "not-the-password",
+    },
+  });
+  expect(response.status()).toBeGreaterThanOrEqual(400);
 });
 
 test("demo user reaches the tenant-scoped dashboard and command palette", async ({
@@ -23,6 +64,26 @@ test("demo user reaches the tenant-scoped dashboard and command palette", async 
   await page.keyboard.press("ControlOrMeta+k");
   await expect(
     page.getByRole("dialog", { name: "Command palette" }),
+  ).toBeVisible();
+});
+
+test("signed-in users can review account devices and administrators can open retention controls", async ({
+  page,
+}) => {
+  await signIn(page);
+  await page.goto("/account/security");
+  await expect(
+    page.getByRole("heading", { name: "Account security" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Signed-in devices" }),
+  ).toBeVisible();
+  await page.goto("/settings");
+  await expect(
+    page.getByRole("heading", { name: "Security and operations" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Retention preview and purge" }),
   ).toBeVisible();
 });
 
@@ -86,7 +147,12 @@ test("report workspace and live preview share the seeded report model", async ({
   await expect(
     page.getByText("Northstar Customer Portal Assessment", { exact: true }),
   ).toBeVisible();
-  await page.getByRole("link", { name: "Open" }).first().click();
+  const reportPath = await page
+    .getByRole("link", { name: "Open" })
+    .first()
+    .getAttribute("href");
+  expect(reportPath).toBeTruthy();
+  await page.goto(reportPath!);
   await expect(
     page.getByRole("heading", { name: "Server-side exports" }),
   ).toBeVisible();

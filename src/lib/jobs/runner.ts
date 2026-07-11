@@ -14,4 +14,13 @@ export function startJobRunner() {
     },
     { timezone: process.env.CRON_TIMEZONE ?? "Australia/Sydney" },
   );
+  cron.schedule(
+    "15 2 * * *",
+    async () => {
+      const { enqueueScheduledRetention } =
+        await import("@/server/services/retention");
+      await enqueueScheduledRetention();
+    },
+    { timezone: process.env.CRON_TIMEZONE ?? "Australia/Sydney" },
+  );
 }

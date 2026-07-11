@@ -1,12 +1,15 @@
 "use client";
 
-import { useSearchParams } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
+import Link from "next/link";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { authClient } from "@/lib/auth/client";
+import type { PublicAuthProvider } from "@/lib/auth/providers";
 
-export function SignInForm() {
+export function SignInForm({ providers }: { providers: PublicAuthProvider[] }) {
   const search = useSearchParams();
+  const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
@@ -49,6 +52,39 @@ export function SignInForm() {
     setMagicSent(true);
   }
 
+  async function signInWithProvider(provider: PublicAuthProvider) {
+    setPending(true);
+    setError("");
+    const result =
+      provider.protocol === "social"
+        ? await authClient.signIn.social({
+            provider: provider.id as "google" | "github",
+            callbackURL,
+          })
+        : await authClient.signIn.oauth2({
+            providerId: provider.id,
+            callbackURL,
+          });
+    setPending(false);
+    if (result.error)
+      setError(
+        result.error.message ?? `Unable to sign in with ${provider.label}`,
+      );
+  }
+
+  async function signInWithPasskey() {
+    setPending(true);
+    setError("");
+    const result = await authClient.signIn.passkey();
+    setPending(false);
+    if (result.error) {
+      setError(result.error.message ?? "Unable to sign in with a passkey");
+      return;
+    }
+    router.push(callbackURL);
+    router.refresh();
+  }
+
   return (
     <form onSubmit={submit} className="mt-7 space-y-4">
       <label className="block">
@@ -63,7 +99,15 @@ export function SignInForm() {
         />
       </label>
       <label className="block">
-        <span className="mb-1.5 block text-sm font-medium">Password</span>
+        <span className="mb-1.5 flex items-center justify-between text-sm font-medium">
+          Password
+          <Link
+            href="/forgot-password"
+            className="text-[var(--harbour-700)] hover:underline"
+          >
+            Forgot password?
+          </Link>
+        </span>
         <input
           required
           autoComplete="current-password"
@@ -107,6 +151,29 @@ export function SignInForm() {
       >
         Email me a sign-in link
       </Button>
+      <Button
+        type="button"
+        variant="secondary"
+        className="w-full"
+        size="lg"
+        onClick={signInWithPasskey}
+        disabled={pending}
+      >
+        Sign in with a passkey
+      </Button>
+      {providers.map((provider) => (
+        <Button
+          key={provider.id}
+          type="button"
+          variant="secondary"
+          className="w-full"
+          size="lg"
+          onClick={() => signInWithProvider(provider)}
+          disabled={pending}
+        >
+          Continue with {provider.label}
+        </Button>
+      ))}
     </form>
   );
 }

@@ -5,6 +5,7 @@ import {
   pgTable,
   text,
   timestamp,
+  uniqueIndex,
   uuid,
 } from "drizzle-orm/pg-core";
 import { users } from "./auth";
@@ -76,5 +77,6 @@ export const backgroundJobs = pgTable(
   (table) => [
     index("background_jobs_ready_idx").on(table.status, table.availableAt),
     index("background_jobs_org_idx").on(table.organisationId),
+    uniqueIndex("background_jobs_idempotency_uq").on(table.idempotencyKey),
   ],
 );

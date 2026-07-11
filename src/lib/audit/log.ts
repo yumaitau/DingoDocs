@@ -13,14 +13,21 @@ type AuditInput = {
   newValues?: Record<string, unknown>;
 };
 
-const sensitiveKeys = /password|secret|token|key|cookie|authorization/i;
+const sensitiveKeys =
+  /password|secret|token|key|cookie|authorization|credential|payload|body/i;
 
-function redact(value?: Record<string, unknown>) {
+export function redactAuditValues(
+  value?: Record<string, unknown>,
+): Record<string, unknown> | undefined {
   if (!value) return undefined;
   return Object.fromEntries(
     Object.entries(value).map(([key, item]) => [
       key,
-      sensitiveKeys.test(key) ? "[REDACTED]" : item,
+      sensitiveKeys.test(key)
+        ? "[REDACTED]"
+        : item && typeof item === "object" && !Array.isArray(item)
+          ? redactAuditValues(item as Record<string, unknown>)
+          : item,
     ]),
   );
 }
@@ -36,8 +43,8 @@ export async function recordAudit(input: AuditInput) {
     ipAddress: requestHeaders.get("x-forwarded-for")?.split(",")[0]?.trim(),
     userAgent: requestHeaders.get("user-agent"),
     requestId: requestHeaders.get("x-request-id"),
-    metadata: redact(input.metadata) ?? {},
-    previousValues: redact(input.previousValues),
-    newValues: redact(input.newValues),
+    metadata: redactAuditValues(input.metadata) ?? {},
+    previousValues: redactAuditValues(input.previousValues),
+    newValues: redactAuditValues(input.newValues),
   });
 }
