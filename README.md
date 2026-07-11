@@ -57,7 +57,7 @@ pnpm docker:down     Stop Compose services
 
 Domain schema is split under `src/db/schema`. Protected operations resolve the authenticated user and revalidate active organisation membership on the server. Repositories require a tenant scope and include `organisation_id` in record lookups. UI visibility is never treated as authorisation.
 
-See [Architecture](docs/architecture.md), [Deployment](docs/deployment.md), [Administrator guide](docs/admin-guide.md), [User guide](docs/user-guide.md), [Client portal guide](docs/client-portal-guide.md), [Backup/restore](docs/backup-restore.md), [Upgrade](docs/upgrade.md), [Threat model](docs/threat-model.md), [Data flow](docs/data-flow.md), [Security model](docs/security.md), and [API](docs/api.md).
+See [Architecture](docs/architecture.md), [Deployment](docs/deployment.md), [Administrator guide](docs/admin-guide.md), [User guide](docs/user-guide.md), [Client portal guide](docs/client-portal-guide.md), [Backup/restore](docs/backup-restore.md), [Upgrade](docs/upgrade.md), [Threat model](docs/threat-model.md), [Data flow](docs/data-flow.md), [Security model](docs/security.md), [API](docs/api.md), and [Integration operations](docs/integrations.md).
 
 ## Project status
 

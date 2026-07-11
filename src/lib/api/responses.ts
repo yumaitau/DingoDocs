@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { ZodError } from "zod";
 import { AuthenticationRequiredError } from "@/lib/auth/session";
 import { PermissionDeniedError } from "@/lib/permissions/require";
+import { ApiAuthenticationError } from "@/lib/api/authentication";
+import { structuredLog } from "@/lib/observability/logger";
 
 export function apiError(error: unknown, requestId?: string | null) {
   if (error instanceof ZodError)
@@ -24,6 +26,20 @@ export function apiError(error: unknown, requestId?: string | null) {
       },
       { status: 401 },
     );
+  if (error instanceof ApiAuthenticationError)
+    return NextResponse.json(
+      {
+        error: { code: error.code, message: error.message },
+        requestId,
+      },
+      {
+        status: error.status,
+        headers:
+          error.status === 401
+            ? { "www-authenticate": 'Bearer realm="DingoDocs API"' }
+            : undefined,
+      },
+    );
   if (error instanceof PermissionDeniedError)
     return NextResponse.json(
       {
@@ -32,13 +48,10 @@ export function apiError(error: unknown, requestId?: string | null) {
       },
       { status: 403 },
     );
-  console.error(
-    JSON.stringify({
-      event: "api.error",
-      requestId,
-      message: error instanceof Error ? error.message : "unknown",
-    }),
-  );
+  structuredLog("error", "api.error", {
+    requestId,
+    errorType: error instanceof Error ? error.name : "UnknownError",
+  });
   return NextResponse.json(
     {
       error: {

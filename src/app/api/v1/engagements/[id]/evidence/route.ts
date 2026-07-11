@@ -1,6 +1,6 @@
 import { z } from "zod";
+import { apiWriteContext } from "@/lib/api/authentication";
 import { apiError } from "@/lib/api/responses";
-import { requirePermission } from "@/lib/permissions/require";
 import {
   EvidenceDuplicateError,
   scopedEvidenceActor,
@@ -26,43 +26,42 @@ async function handleUpload(
 ) {
   const { id: engagementId } = await context.params;
   z.string().uuid().parse(engagementId);
-  const permission = await requirePermission("evidence:upload", {
-    engagementId,
-  });
-  const actor = await scopedEvidenceActor({
-    organisationId: permission.organisationId,
-    userId: permission.userId,
-    roles: permission.roles,
-  });
+  const permission = await apiWriteContext(
+    request,
+    "evidence:write",
+    "evidence:upload",
+    { engagementId },
+  );
+  if (!permission.userId)
+    throw new Error("API key does not have an attributable owner");
+  const actor =
+    "roles" in permission
+      ? await scopedEvidenceActor({
+          organisationId: permission.organisationId,
+          userId: permission.userId,
+          roles: permission.roles,
+        })
+      : {
+          organisationId: permission.organisationId,
+          userId: permission.userId,
+        };
   const formData = await request.formData();
   const classification = z
     .enum(["internal", "restricted", "client_visible"])
     .parse(formData.get("classification") ?? "restricted");
   const retentionValue = z
     .string()
+    .date()
     .optional()
     .parse(formData.get("retentionUntil") || undefined);
   const retentionUntil = retentionValue
     ? new Date(`${retentionValue}T23:59:59.999Z`)
     : undefined;
-  if (retentionUntil && Number.isNaN(retentionUntil.getTime()))
-    return Response.json(
-      { error: "Retention date is invalid" },
-      { status: 400 },
-    );
-  const files = formData
-    .getAll("files")
-    .filter((entry): entry is File => entry instanceof File);
-  if (!files.length)
-    return Response.json(
-      { error: "At least one file is required" },
-      { status: 400 },
-    );
-  if (files.length > 25)
-    return Response.json(
-      { error: "A maximum of 25 files is allowed" },
-      { status: 400 },
-    );
+  const files = z
+    .array(z.instanceof(File))
+    .min(1, "At least one file is required")
+    .max(25, "A maximum of 25 files is allowed")
+    .parse(formData.getAll("files"));
 
   const results: Array<
     | {

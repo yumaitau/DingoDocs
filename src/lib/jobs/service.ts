@@ -109,5 +109,22 @@ async function runJob(job: JobRow) {
     });
     return;
   }
+  if (job.type === "webhook.deliver") {
+    const deliveryId = job.payload.deliveryId;
+    if (typeof deliveryId !== "string")
+      throw new Error("Webhook job payload is invalid");
+    const { deliverWebhookJob } = await import("@/server/services/webhooks");
+    await deliverWebhookJob(deliveryId);
+    return;
+  }
+  if (job.type === "notification.deliver") {
+    const deliveryId = job.payload.deliveryId;
+    if (typeof deliveryId !== "string")
+      throw new Error("Notification job payload is invalid");
+    const { deliverNotificationJob } =
+      await import("@/server/services/notifications");
+    await deliverNotificationJob(deliveryId);
+    return;
+  }
   throw new Error(`No handler registered for job type ${job.type}`);
 }

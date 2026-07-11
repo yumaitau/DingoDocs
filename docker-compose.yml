@@ -9,11 +9,15 @@ services:
       DATABASE_URL: postgres://dingodocs:dingodocs@postgres:5432/dingodocs
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?Set BETTER_AUTH_SECRET in .env}
       BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://localhost:3000}
+      INTEGRATION_ENCRYPTION_KEY: ${INTEGRATION_ENCRYPTION_KEY:?Set INTEGRATION_ENCRYPTION_KEY in .env}
+      AI_ENABLED: ${AI_ENABLED:-false}
       APP_URL: ${APP_URL:-http://localhost:3000}
       STORAGE_PROVIDER: ${STORAGE_PROVIDER:-local}
       LOCAL_STORAGE_ROOT: /app/storage/data
       SMTP_HOST: mailpit
       SMTP_PORT: 1025
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
       CRON_TIMEZONE: ${CRON_TIMEZONE:-Australia/Sydney}
     ports:
       - "3000:3000"

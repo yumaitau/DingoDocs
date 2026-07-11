@@ -87,6 +87,34 @@ test("signed-in users can review account devices and administrators can open ret
   ).toBeVisible();
 });
 
+test("administrators create a one-time scoped API key that authenticates REST resources", async ({
+  page,
+}, testInfo) => {
+  await signIn(page);
+  await page.goto("/integrations");
+  await expect(
+    page.getByRole("heading", { name: "Integrations and automation" }),
+  ).toBeVisible();
+  const name = `Browser API ${testInfo.project.name} ${Date.now()}`;
+  await page.getByPlaceholder("Credential name").fill(name);
+  await page.getByLabel("clients:read").check();
+  await page.getByRole("button", { name: "Create credential" }).click();
+  const secret = page.getByLabel("One-time secret or untrusted draft");
+  await expect(secret).toBeVisible();
+  const token = await secret.inputValue();
+  expect(token).toMatch(/^dd_pat_/);
+  const clients = await page.request.get("/api/v1/clients", {
+    headers: { authorization: `Bearer ${token}` },
+  });
+  expect(clients.ok()).toBe(true);
+  const findings = await page.request.get("/api/v1/findings", {
+    headers: { authorization: `Bearer ${token}` },
+  });
+  expect(findings.status()).toBe(403);
+  const row = page.getByRole("listitem").filter({ hasText: name });
+  await row.getByRole("button", { name: "Revoke" }).click();
+});
+
 test("engagement workspace tabs remain keyboard accessible", async ({
   page,
 }) => {

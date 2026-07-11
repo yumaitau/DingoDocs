@@ -1,0 +1,1 @@
+ALTER TABLE "api_keys" ADD CONSTRAINT "api_keys_principal_check" CHECK ("api_keys"."revoked_at" is not null or (("api_keys"."kind" = 'personal' and "api_keys"."user_id" is not null and "api_keys"."service_account_id" is null) or ("api_keys"."kind" = 'service' and "api_keys"."user_id" is null and "api_keys"."service_account_id" is not null)));
