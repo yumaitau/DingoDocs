@@ -32,4 +32,8 @@ Restore into an empty deployment, stop the application, restore PostgreSQL with 
 - `/api/health`: process liveness; does not touch dependencies
 - `/api/ready`: PostgreSQL and active storage-provider readiness
 
+Readiness also returns aggregate queued/running/retrying/dead-letter job counts; it never returns payloads or dependency error text. `x-request-id` is accepted or generated at the proxy and forwarded through server work and audit events. OpenTelemetry spans use the `dingodocs` tracer; attach the deployment's SDK/exporter and set `OTEL_EXPORTER_OTLP_ENDPOINT` when collection is required.
+
 Application logs are structured and should be collected by the container platform. Passwords, session tokens, API keys, raw evidence, and report content must never be logged.
+
+Detailed procedures: [backup and restore](backup-restore.md) and [upgrade](upgrade.md).

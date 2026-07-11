@@ -57,11 +57,11 @@ pnpm docker:down     Stop Compose services
 
 Domain schema is split under `src/db/schema`. Protected operations resolve the authenticated user and revalidate active organisation membership on the server. Repositories require a tenant scope and include `organisation_id` in record lookups. UI visibility is never treated as authorisation.
 
-See [Architecture](docs/architecture.md), [Deployment and operations](docs/deployment.md), [Security model](docs/security.md), and [API](docs/api.md).
+See [Architecture](docs/architecture.md), [Deployment](docs/deployment.md), [Administrator guide](docs/admin-guide.md), [User guide](docs/user-guide.md), [Client portal guide](docs/client-portal-guide.md), [Backup/restore](docs/backup-restore.md), [Upgrade](docs/upgrade.md), [Threat model](docs/threat-model.md), [Data flow](docs/data-flow.md), [Security model](docs/security.md), and [API](docs/api.md).
 
 ## Project status
 
-DingoDocs is under active development. The foundation, engagement model, core UI shell, audit model, storage providers, and formal finding workflow are implemented. Advanced evidence processing, scanner adapters, PDF/DOCX rendering, the client portal, complete remediation/retesting screens, and external notification providers remain subsequent delivery phases.
+DingoDocs is under active development. The engagement workspace, secure evidence lifecycle, formal finding workflow, report rendering, authentication hardening, retention operations, audit model, and local/S3-compatible storage are implemented. Scanner adapters and expanded client remediation/retesting experiences remain subsequent delivery phases.
 
 ## Licence
 

@@ -1,5 +1,7 @@
 import { sql } from "drizzle-orm";
 import { db } from "@/db";
+import { structuredLog } from "@/lib/observability/logger";
+import { withSpan } from "@/lib/observability/telemetry";
 
 type JobRow = {
   id: string;
@@ -24,11 +26,22 @@ export async function processNextJobs(limit: number) {
   `);
 
   for (const job of claimed) {
+    const startedAt = performance.now();
     try {
-      await runJob(job);
+      await withSpan(
+        "job.process",
+        { "job.type": job.type, "job.attempt": job.attempts },
+        () => runJob(job),
+      );
       await db.execute(
         sql`update background_jobs set status = 'completed', completed_at = now() where id = ${job.id}`,
       );
+      structuredLog("info", "job.completed", {
+        jobId: job.id,
+        jobType: job.type,
+        attempt: job.attempts,
+        durationMs: Math.round(performance.now() - startedAt),
+      });
     } catch (error) {
       const message =
         error instanceof Error
@@ -43,6 +56,14 @@ export async function processNextJobs(limit: number) {
           last_error = ${message}, locked_at = null
         where id = ${job.id}
       `);
+      structuredLog(terminal ? "error" : "warn", "job.failed", {
+        jobId: job.id,
+        jobType: job.type,
+        attempt: job.attempts,
+        terminal,
+        errorType: error instanceof Error ? error.name : "UnknownError",
+        durationMs: Math.round(performance.now() - startedAt),
+      });
     }
   }
 }
@@ -73,6 +94,19 @@ async function runJob(job: JobRow) {
       reportVersionId,
       formats as Array<"pdf" | "docx" | "html" | "markdown" | "json">,
     );
+    return;
+  }
+  if (job.type === "retention.process") {
+    const organisationId = job.payload.organisationId;
+    const asOf = job.payload.asOf;
+    if (typeof organisationId !== "string" || typeof asOf !== "string")
+      throw new Error("Retention job payload is invalid");
+    const { purgeExpiredEvidence } =
+      await import("@/server/services/retention");
+    await purgeExpiredEvidence(organisationId, {
+      asOf: new Date(asOf),
+      scheduled: true,
+    });
     return;
   }
   throw new Error(`No handler registered for job type ${job.type}`);
