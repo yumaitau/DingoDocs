@@ -119,8 +119,21 @@ test("evidence and finding workspaces expose their secure core flows", async ({
     mimeType: "application/json",
     buffer: Buffer.from(JSON.stringify({ marker })),
   });
+  const uploadResponsePromise = page.waitForResponse(
+    (response) =>
+      response.request().method() === "POST" &&
+      response
+        .url()
+        .endsWith(
+          `/api/v1/engagements/${engagement.split("/").at(-1)}/evidence`,
+        ),
+  );
   await page.getByRole("button", { name: "Upload 1 file" }).click();
-  await expect(page.getByText(`${marker}.json uploaded`)).toBeVisible();
+  const uploadResponse = await uploadResponsePromise;
+  expect(uploadResponse.ok()).toBe(true);
+  await expect(page.getByText(`${marker}.json uploaded`)).toBeVisible({
+    timeout: 15_000,
+  });
   await expect(page.getByText(`${marker}.json`, { exact: true })).toBeVisible();
 
   await page.goto(`${engagement}?view=findings`);
