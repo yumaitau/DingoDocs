@@ -21,6 +21,10 @@ import {
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { StatusPill } from "@/components/ui/status-pill";
+import {
+  EngagementStatusPanel,
+  EngagementWorkspaceSection,
+} from "@/features/engagements/workspace-sections";
 import { requireOrganisationContext } from "@/lib/permissions/require";
 import { cn, formatDate } from "@/lib/utils";
 import { getEngagement } from "@/server/repositories/tenant";
@@ -30,6 +34,7 @@ const tabs = [
   "Scope",
   "Assets",
   "Rules of Engagement",
+  "Team",
   "Methodology",
   "Findings",
   "Evidence",
@@ -154,18 +159,29 @@ export default async function EngagementPage({
       </nav>
       <div className="px-4 py-6 sm:px-6 lg:px-8">
         {active === "Overview" ? (
-          <Overview
-            engagement={engagement}
-            client={client[0]?.name ?? "Unknown client"}
-            counts={{
-              findings: findingCount[0]?.value ?? 0,
-              evidence: evidenceCount[0]?.value ?? 0,
-              tasks: taskCount[0]?.value ?? 0,
-              members: memberCount[0]?.value ?? 0,
-            }}
-          />
+          <>
+            <Overview
+              engagement={engagement}
+              client={client[0]?.name ?? "Unknown client"}
+              counts={{
+                findings: findingCount[0]?.value ?? 0,
+                evidence: evidenceCount[0]?.value ?? 0,
+                tasks: taskCount[0]?.value ?? 0,
+                members: memberCount[0]?.value ?? 0,
+              }}
+            />
+            <EngagementStatusPanel
+              engagementId={id}
+              status={engagement.status}
+            />
+          </>
         ) : (
-          <WorkspaceSection title={active} />
+          <EngagementWorkspaceSection
+            title={active}
+            engagementId={id}
+            organisationId={context.organisationId}
+            userId={context.userId}
+          />
         )}
       </div>
     </>
@@ -272,31 +288,6 @@ function Overview({
   );
 }
 
-function WorkspaceSection({ title }: { title: string }) {
-  return (
-    <section className="rounded-xl border bg-paper">
-      <div className="border-b p-5">
-        <h2 className="text-base font-semibold">{title}</h2>
-        <p className="mt-1 text-sm text-slate-500">
-          This workspace is scoped to the active engagement and organisation.
-        </p>
-      </div>
-      <div className="px-5 py-14 text-center">
-        <ShieldCheck className="mx-auto size-7 text-slate-400" />
-        <p className="mt-3 text-sm font-medium">
-          No {title.toLowerCase()} records yet
-        </p>
-        <p className="mx-auto mt-1 max-w-md text-sm text-slate-500">
-          Create the first record when this delivery stage begins. All changes
-          will be versioned and audited.
-        </p>
-        <Button className="mt-5" size="sm">
-          Add {title.toLowerCase()}
-        </Button>
-      </div>
-    </section>
-  );
-}
 function Item({
   label,
   value,

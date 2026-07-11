@@ -26,6 +26,7 @@ export const notes = pgTable(
       .notNull()
       .references(() => engagements.id, { onDelete: "cascade" }),
     title: text("title").notNull(),
+    kind: text("kind").notNull().default("note"),
     content: jsonb("content").$type<Record<string, unknown>>().notNull(),
     visibility: text("visibility").notNull().default("team"),
     authorId: uuid("author_id").references(() => users.id, {

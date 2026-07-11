@@ -293,3 +293,32 @@ export const ruleAcknowledgements = pgTable(
     ),
   ],
 );
+
+export const engagementTransitions = pgTable(
+  "engagement_transitions",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organisationId: uuid("organisation_id")
+      .notNull()
+      .references(() => organisations.id, { onDelete: "cascade" }),
+    engagementId: uuid("engagement_id")
+      .notNull()
+      .references(() => engagements.id, { onDelete: "cascade" }),
+    fromStatus: engagementStatusEnum("from_status").notNull(),
+    toStatus: engagementStatusEnum("to_status").notNull(),
+    reason: text("reason"),
+    actorId: uuid("actor_id").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+  },
+  (table) => [
+    index("engagement_transitions_org_engagement_idx").on(
+      table.organisationId,
+      table.engagementId,
+      table.createdAt,
+    ),
+  ],
+);
