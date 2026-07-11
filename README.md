@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="docs/assets/dingodocs-banner.png" alt="DingoDocs penetration testing engagement tracker" width="100%">
+</p>
+
 # DingoDocs
 
 DingoDocs is an open source, self-hosted penetration testing engagement and reporting platform. It keeps scope, assets, evidence, findings, review, reporting, client remediation, and retesting inside one auditable organisation boundary.
