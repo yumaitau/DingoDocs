@@ -7,6 +7,8 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { StatusPill } from "@/components/ui/status-pill";
+import { EvidenceSection } from "@/features/evidence/evidence-section";
+import { FindingsSection } from "@/features/findings/findings-section";
 import {
   acknowledgeRulesAction,
   addScopeItemAction,
@@ -37,6 +39,8 @@ const managedSections = new Set([
   "Timeline",
   "Tasks",
   "Time Tracking",
+  "Findings",
+  "Evidence",
 ]);
 
 const field =
@@ -79,6 +83,22 @@ export async function EngagementWorkspaceSection({
       return <TasksSection {...props} />;
     case "Time Tracking":
       return <TimeSection {...props} />;
+    case "Findings":
+      return (
+        <FindingsSection
+          engagementId={engagementId}
+          organisationId={organisationId}
+          workspace={workspace}
+        />
+      );
+    case "Evidence":
+      return (
+        <EvidenceSection
+          engagementId={engagementId}
+          organisationId={organisationId}
+          workspace={workspace}
+        />
+      );
     default:
       return null;
   }

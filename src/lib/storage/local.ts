@@ -15,7 +15,15 @@ export class LocalStorageProvider implements StorageProvider {
   }
 
   private pathFor(key: string) {
-    if (!/^[a-zA-Z0-9/_-]+(?:\.[a-zA-Z0-9_-]+)?$/.test(key))
+    const segments = key.split("/");
+    if (
+      !key ||
+      key.startsWith("/") ||
+      !/^[a-zA-Z0-9/_.-]+$/.test(key) ||
+      segments.some(
+        (segment) => !segment || segment === "." || segment === "..",
+      )
+    )
       throw new Error("Invalid storage key");
     const path = resolve(this.root, key);
     if (path !== this.root && !path.startsWith(`${this.root}${sep}`))
@@ -30,11 +38,12 @@ export class LocalStorageProvider implements StorageProvider {
     let size = 0;
     const source =
       input.body instanceof Uint8Array
-        ? Readable.from(input.body)
+        ? Readable.from([Buffer.from(input.body)])
         : Readable.from(input.body as unknown as AsyncIterable<Uint8Array>);
-    source.on("data", (chunk: Buffer) => {
-      size += chunk.length;
-      hash.update(chunk);
+    source.on("data", (chunk: Buffer | Uint8Array | string) => {
+      const bytes = typeof chunk === "string" ? Buffer.from(chunk) : chunk;
+      size += bytes.byteLength;
+      hash.update(bytes);
     });
     await pipeline(
       source,

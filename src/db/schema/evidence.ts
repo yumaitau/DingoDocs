@@ -43,13 +43,27 @@ export const evidence = pgTable(
     classification: evidenceClassificationEnum("classification")
       .notNull()
       .default("restricted"),
+    restrictions: jsonb("restrictions")
+      .$type<{
+        userIds?: string[];
+        reason?: string;
+        clientVisibleAfterPublication?: boolean;
+      }>()
+      .notNull()
+      .default({}),
     retentionStatus: text("retention_status").notNull().default("active"),
+    retentionUntil: timestamp("retention_until", { withTimezone: true }),
     encryptionMetadata: jsonb("encryption_metadata")
       .$type<Record<string, string>>()
       .default({}),
     version: integer("version").notNull().default(1),
     immutable: boolean("immutable").notNull().default(false),
     malwareScanStatus: text("malware_scan_status").notNull().default("pending"),
+    malwareScanResult: jsonb("malware_scan_result")
+      .$type<{ engine?: string; signature?: string; scannedAt?: string }>()
+      .notNull()
+      .default({}),
+    quarantinedAt: timestamp("quarantined_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),

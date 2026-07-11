@@ -6,5 +6,11 @@ export default defineConfig({
     include: ["src/**/*.test.ts", "src/**/*.test.tsx"],
     coverage: { reporter: ["text", "json", "html"] },
   },
-  resolve: { alias: { "@": new URL("./src", import.meta.url).pathname } },
+  resolve: {
+    alias: {
+      "@": new URL("./src", import.meta.url).pathname,
+      "server-only": new URL("./src/test/server-only.ts", import.meta.url)
+        .pathname,
+    },
+  },
 });

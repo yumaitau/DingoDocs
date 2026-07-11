@@ -184,6 +184,27 @@ async function main() {
         organisationId: ids.organisation,
         engagementId: ids.engagement,
         templateId: ids.findingTemplate,
+        templateVersion: 1,
+        templateSnapshot: {
+          title: "Missing object-level authorisation",
+          summary:
+            "Object identifiers can be modified to access another user's records.",
+          executiveDescription: null,
+          technicalDescription:
+            "The application does not consistently verify that the authenticated principal owns the requested object.",
+          businessImpact: null,
+          technicalImpact: null,
+          likelihood: null,
+          severity: "high",
+          riskRationale: null,
+          remediation:
+            "Enforce object-level authorisation on every server-side data access path.",
+          verificationSteps: null,
+          references: ["https://owasp.org/API-Security/"],
+          tags: ["access-control", "api"],
+          assessmentTypes: ["Web Application Assessment", "API Assessment"],
+          mappings: [],
+        },
         identifier: "WEB-001",
         title: "Missing object-level authorisation exposes invoices",
         status: "ready_for_review",

@@ -1,4 +1,5 @@
 import {
+  boolean,
   index,
   integer,
   jsonb,
@@ -11,6 +12,7 @@ import {
 } from "drizzle-orm/pg-core";
 import { users } from "./auth";
 import { assets } from "./assets";
+import { clients } from "./clients";
 import { engagements } from "./engagements";
 import { findingStatusEnum, severityEnum } from "./enums";
 import { organisations } from "./organisations";
@@ -83,6 +85,11 @@ export const findings = pgTable(
     templateId: uuid("template_id").references(() => findingTemplates.id, {
       onDelete: "set null",
     }),
+    templateVersion: integer("template_version"),
+    templateSnapshot: jsonb("template_snapshot")
+      .$type<Record<string, unknown>>()
+      .notNull()
+      .default({}),
     identifier: text("identifier").notNull(),
     title: text("title").notNull(),
     status: findingStatusEnum("status").notNull().default("draft"),
@@ -115,6 +122,7 @@ export const findings = pgTable(
     dueAt: timestamp("due_at", { withTimezone: true }),
     retestStatus: text("retest_status"),
     version: integer("version").notNull().default(1),
+    approvedVersion: integer("approved_version"),
     publishedAt: timestamp("published_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
@@ -135,6 +143,53 @@ export const findings = pgTable(
       table.status,
     ),
     index("findings_org_severity_idx").on(table.organisationId, table.severity),
+  ],
+);
+
+export type RiskMatrixDefinition = {
+  likelihood: Array<{ key: string; label: string; order: number }>;
+  impact: Array<{ key: string; label: string; order: number }>;
+  ratings: Array<{
+    likelihood: string;
+    impact: string;
+    severity: "informational" | "low" | "medium" | "high" | "critical";
+    label: string;
+    colour: string;
+  }>;
+};
+
+export const riskMatrices = pgTable(
+  "risk_matrices",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organisationId: uuid("organisation_id")
+      .notNull()
+      .references(() => organisations.id, { onDelete: "cascade" }),
+    clientId: uuid("client_id").references(() => clients.id, {
+      onDelete: "cascade",
+    }),
+    name: text("name").notNull(),
+    definition: jsonb("definition").$type<RiskMatrixDefinition>().notNull(),
+    isDefault: boolean("is_default").notNull().default(false),
+    version: integer("version").notNull().default(1),
+    createdBy: uuid("created_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    supersededAt: timestamp("superseded_at", { withTimezone: true }),
+  },
+  (table) => [
+    index("risk_matrices_org_client_idx").on(
+      table.organisationId,
+      table.clientId,
+    ),
+    uniqueIndex("risk_matrices_org_name_version_uq").on(
+      table.organisationId,
+      table.name,
+      table.version,
+    ),
   ],
 );
 

@@ -43,6 +43,40 @@ test("engagement workspace tabs remain keyboard accessible", async ({
   await expect(page.getByRole("button", { name: "Add asset" })).toBeVisible();
 });
 
+test("evidence and finding workspaces expose their secure core flows", async ({
+  page,
+}, testInfo) => {
+  await signIn(page);
+  const engagement = "/engagements/0197f30f-122c-7000-8000-000000000004";
+  await page.goto(`${engagement}?view=evidence`);
+  await expect(
+    page.getByRole("heading", { name: "Upload evidence" }),
+  ).toBeVisible();
+  const marker = `${testInfo.project.name}-${Date.now()}-${Math.random()}`;
+  await page.locator('input[type="file"]').setInputFiles({
+    name: `${marker}.json`,
+    mimeType: "application/json",
+    buffer: Buffer.from(JSON.stringify({ marker })),
+  });
+  await page.getByRole("button", { name: "Upload 1 file" }).click();
+  await expect(page.getByText(`${marker}.json uploaded`)).toBeVisible();
+  await expect(page.getByText(`${marker}.json`, { exact: true })).toBeVisible();
+
+  await page.goto(`${engagement}?view=findings`);
+  await expect(
+    page.getByRole("heading", { name: "Create engagement finding" }),
+  ).toBeVisible();
+  const template = page.getByLabel("Approved template");
+  await expect(template).toContainText("Missing object-level authorisation");
+  await template.focus();
+  await expect(template).toBeFocused();
+  await expect(
+    page.getByRole("heading", {
+      name: "Missing object-level authorisation exposes invoices",
+    }),
+  ).toBeVisible();
+});
+
 async function signIn(page: Page) {
   await page.goto("/sign-in");
   await page.getByLabel("Email").fill("admin@dingodocs.local");
