@@ -3,8 +3,9 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/db";
 import { engagements } from "@/db/schema";
+import { clients } from "@/db/schema";
+import { apiReadContext, apiWriteContext } from "@/lib/api/authentication";
 import { apiError } from "@/lib/api/responses";
-import { requireOrganisationContext } from "@/lib/permissions/require";
 
 const querySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
@@ -33,7 +34,7 @@ const querySchema = z.object({
 export async function GET(request: Request) {
   const requestId = request.headers.get("x-request-id");
   try {
-    const context = await requireOrganisationContext();
+    const context = await apiReadContext(request, "engagements:read");
     const url = new URL(request.url);
     const query = querySchema.parse(Object.fromEntries(url.searchParams));
     const where = and(
@@ -65,6 +66,57 @@ export async function GET(request: Request) {
       },
       requestId,
     });
+  } catch (error) {
+    return apiError(error, requestId);
+  }
+}
+
+const createSchema = z.object({
+  clientId: z.string().uuid(),
+  name: z.string().trim().min(2).max(200),
+  reference: z.string().trim().min(2).max(80),
+  type: z.string().trim().min(2).max(120),
+  startDate: z.string().date().optional(),
+  endDate: z.string().date().optional(),
+  objectives: z.string().trim().max(10_000).optional(),
+});
+
+export async function POST(request: Request) {
+  const requestId = request.headers.get("x-request-id");
+  try {
+    const context = await apiWriteContext(
+      request,
+      "engagements:write",
+      "engagement:create",
+    );
+    const input = createSchema.parse(await request.json());
+    const [client] = await db
+      .select({ id: clients.id })
+      .from(clients)
+      .where(
+        and(
+          eq(clients.id, input.clientId),
+          eq(clients.organisationId, context.organisationId),
+          isNull(clients.deletedAt),
+        ),
+      )
+      .limit(1);
+    if (!client)
+      return NextResponse.json(
+        {
+          error: { code: "not_found", message: "Client was not found" },
+          requestId,
+        },
+        { status: 404 },
+      );
+    const [created] = await db
+      .insert(engagements)
+      .values({
+        organisationId: context.organisationId,
+        ...input,
+      })
+      .returning();
+    return NextResponse.json({ data: created, requestId }, { status: 201 });
   } catch (error) {
     return apiError(error, requestId);
   }

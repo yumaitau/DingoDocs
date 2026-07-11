@@ -36,6 +36,20 @@
       "when": 1783772421731,
       "tag": "0004_nostalgic_demogoblin",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1783774400566,
+      "tag": "0005_happy_newton_destine",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1783774434902,
+      "tag": "0006_damp_lockjaw",
+      "breakpoints": true
     }
   ]
 }

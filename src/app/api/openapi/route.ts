@@ -1,4 +1,43 @@
 import { NextResponse } from "next/server";
+import { apiScopes } from "@/lib/api/scopes";
+
+const paginationParameters = [
+  {
+    name: "page",
+    in: "query",
+    schema: { type: "integer", minimum: 1, default: 1 },
+  },
+  {
+    name: "pageSize",
+    in: "query",
+    schema: { type: "integer", minimum: 1, maximum: 100, default: 25 },
+  },
+];
+const standardResponses = {
+  "400": { $ref: "#/components/responses/ValidationError" },
+  "401": { $ref: "#/components/responses/AuthenticationError" },
+  "403": { $ref: "#/components/responses/PermissionError" },
+};
+const paginated = (
+  resource: string,
+  scope: string,
+  parameters: object[] = [],
+) => ({
+  summary: `List ${resource}`,
+  security: [{ bearerAuth: [scope] }, { cookieAuth: [] }],
+  parameters: [...paginationParameters, ...parameters],
+  responses: {
+    "200": {
+      description: `Tenant-scoped paginated ${resource} list`,
+      content: {
+        "application/json": {
+          schema: { $ref: "#/components/schemas/PaginatedResponse" },
+        },
+      },
+    },
+    ...standardResponses,
+  },
+});
 
 export function GET() {
   return NextResponse.json({
@@ -7,30 +46,222 @@ export function GET() {
       title: "DingoDocs API",
       version: "1.0.0",
       description:
-        "Tenant-scoped API for penetration testing engagements and reporting.",
+        "Versioned, tenant-scoped API. Bearer credentials are shown once, hashed at rest, and restricted to explicit scopes.",
     },
     servers: [{ url: "/api/v1" }],
     paths: {
+      "/clients": {
+        get: paginated("clients", "clients:read", [
+          {
+            name: "q",
+            in: "query",
+            schema: { type: "string", maxLength: 100 },
+          },
+          {
+            name: "sort",
+            in: "query",
+            schema: { enum: ["name", "createdAt"] },
+          },
+          { name: "order", in: "query", schema: { enum: ["asc", "desc"] } },
+        ]),
+      },
       "/engagements": {
-        get: {
-          summary: "List engagements",
+        get: paginated("engagements", "engagements:read", [
+          { name: "status", in: "query", schema: { type: "string" } },
+          {
+            name: "sort",
+            in: "query",
+            schema: { enum: ["name", "createdAt"] },
+          },
+          { name: "order", in: "query", schema: { enum: ["asc", "desc"] } },
+        ]),
+        post: {
+          summary: "Create an engagement",
+          security: [{ bearerAuth: ["engagements:write"] }, { cookieAuth: [] }],
+          requestBody: {
+            required: true,
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/CreateEngagement" },
+              },
+            },
+          },
+          responses: {
+            "201": { description: "Engagement created" },
+            "404": { description: "Client not found in the active tenant" },
+            ...standardResponses,
+          },
+        },
+      },
+      "/findings": {
+        get: paginated("findings", "findings:read", [
+          {
+            name: "engagementId",
+            in: "query",
+            schema: { type: "string", format: "uuid" },
+          },
+          { name: "status", in: "query", schema: { type: "string" } },
+          {
+            name: "severity",
+            in: "query",
+            schema: {
+              enum: ["informational", "low", "medium", "high", "critical"],
+            },
+          },
+        ]),
+      },
+      "/reports": {
+        get: paginated("reports", "reports:read", [
+          {
+            name: "engagementId",
+            in: "query",
+            schema: { type: "string", format: "uuid" },
+          },
+          { name: "status", in: "query", schema: { type: "string" } },
+        ]),
+      },
+      "/tasks": {
+        get: paginated("tasks", "tasks:read", [
+          {
+            name: "engagementId",
+            in: "query",
+            schema: { type: "string", format: "uuid" },
+          },
+          { name: "status", in: "query", schema: { type: "string" } },
+          {
+            name: "sort",
+            in: "query",
+            schema: { enum: ["createdAt", "dueAt", "priority"] },
+          },
+        ]),
+      },
+      "/engagements/{id}/evidence": {
+        post: {
+          summary: "Upload validated evidence",
+          security: [{ bearerAuth: ["evidence:write"] }, { cookieAuth: [] }],
           parameters: [
             {
-              name: "page",
-              in: "query",
-              schema: { type: "integer", minimum: 1 },
+              name: "id",
+              in: "path",
+              required: true,
+              schema: { type: "string", format: "uuid" },
             },
-            {
-              name: "pageSize",
-              in: "query",
-              schema: { type: "integer", maximum: 100 },
-            },
-            { name: "status", in: "query", schema: { type: "string" } },
           ],
+          requestBody: {
+            required: true,
+            content: {
+              "multipart/form-data": {
+                schema: {
+                  type: "object",
+                  required: ["files"],
+                  properties: {
+                    files: {
+                      type: "array",
+                      maxItems: 25,
+                      items: { type: "string", format: "binary" },
+                    },
+                    classification: {
+                      enum: ["internal", "restricted", "client_visible"],
+                    },
+                    retentionUntil: { type: "string", format: "date" },
+                  },
+                },
+              },
+            },
+          },
           responses: {
-            "200": { description: "Paginated engagement list" },
-            "401": { description: "Authentication required" },
-            "403": { description: "Permission denied" },
+            "201": { description: "Evidence created" },
+            "207": { description: "Partial batch success" },
+            ...standardResponses,
+          },
+        },
+      },
+    },
+    components: {
+      securitySchemes: {
+        bearerAuth: {
+          type: "http",
+          scheme: "bearer",
+          bearerFormat: "dd_pat or dd_svc",
+          description: `Available scopes: ${apiScopes.join(", ")}`,
+        },
+        cookieAuth: {
+          type: "apiKey",
+          in: "cookie",
+          name: "better-auth.session_token",
+        },
+      },
+      schemas: {
+        CreateEngagement: {
+          type: "object",
+          additionalProperties: false,
+          required: ["clientId", "name", "reference", "type"],
+          properties: {
+            clientId: { type: "string", format: "uuid" },
+            name: { type: "string", minLength: 2, maxLength: 200 },
+            reference: { type: "string", minLength: 2, maxLength: 80 },
+            type: { type: "string", minLength: 2, maxLength: 120 },
+            startDate: { type: "string", format: "date" },
+            endDate: { type: "string", format: "date" },
+            objectives: { type: "string", maxLength: 10000 },
+          },
+        },
+        PaginatedResponse: {
+          type: "object",
+          required: ["data", "pagination"],
+          properties: {
+            data: { type: "array", items: { type: "object" } },
+            pagination: {
+              type: "object",
+              required: ["page", "pageSize", "total"],
+              properties: {
+                page: { type: "integer" },
+                pageSize: { type: "integer" },
+                total: { type: "integer" },
+              },
+            },
+            requestId: { type: ["string", "null"] },
+          },
+        },
+        Error: {
+          type: "object",
+          properties: {
+            error: {
+              type: "object",
+              required: ["code", "message"],
+              properties: {
+                code: { type: "string" },
+                message: { type: "string" },
+                details: { type: "array" },
+              },
+            },
+            requestId: { type: ["string", "null"] },
+          },
+        },
+      },
+      responses: {
+        ValidationError: {
+          description: "Zod validation failed",
+          content: {
+            "application/json": {
+              schema: { $ref: "#/components/schemas/Error" },
+            },
+          },
+        },
+        AuthenticationError: {
+          description: "Session or API key required",
+          content: {
+            "application/json": {
+              schema: { $ref: "#/components/schemas/Error" },
+            },
+          },
+        },
+        PermissionError: {
+          description: "Permission or API scope denied",
+          content: {
+            "application/json": {
+              schema: { $ref: "#/components/schemas/Error" },
+            },
           },
         },
       },
