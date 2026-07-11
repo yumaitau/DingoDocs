@@ -1,0 +1,1054 @@
+import {
+  CheckCircle2,
+  CircleAlert,
+  Clock3,
+  Plus,
+  ShieldCheck,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { StatusPill } from "@/components/ui/status-pill";
+import {
+  acknowledgeRulesAction,
+  addScopeItemAction,
+  approveRulesAction,
+  approveScopeVersionAction,
+  assignEngagementMemberAction,
+  createAssetAction,
+  createRulesVersionAction,
+  createScopeDraftAction,
+  createTimelineEntryAction,
+  createWorkspaceNoteAction,
+  createWorkspaceTaskAction,
+  logWorkspaceTimeAction,
+  transitionEngagementAction,
+  updateScopeItemAction,
+} from "@/server/actions/engagement-workspace";
+import {
+  getEngagementWorkspace,
+  type EngagementStatus,
+} from "@/server/services/engagement-workspace";
+
+const managedSections = new Set([
+  "Scope",
+  "Assets",
+  "Rules of Engagement",
+  "Team",
+  "Notes",
+  "Timeline",
+  "Tasks",
+  "Time Tracking",
+]);
+
+const field =
+  "min-h-11 w-full rounded-md border bg-paper px-3 text-sm outline-none focus:border-[var(--harbour-500)]";
+const area = `${field} py-2`;
+
+export async function EngagementWorkspaceSection({
+  title,
+  engagementId,
+  organisationId,
+  userId,
+}: {
+  title: string;
+  engagementId: string;
+  organisationId: string;
+  userId: string;
+}) {
+  if (!managedSections.has(title))
+    return <UnimplementedSection title={title} />;
+  const workspace = await getEngagementWorkspace(
+    { organisationId },
+    engagementId,
+  );
+  if (!workspace) return null;
+  const props = { workspace, engagementId, userId };
+  switch (title) {
+    case "Scope":
+      return <ScopeSection {...props} />;
+    case "Assets":
+      return <AssetsSection {...props} />;
+    case "Rules of Engagement":
+      return <RulesSection {...props} />;
+    case "Team":
+      return <TeamSection {...props} />;
+    case "Notes":
+      return <NotesSection {...props} />;
+    case "Timeline":
+      return <TimelineSection {...props} />;
+    case "Tasks":
+      return <TasksSection {...props} />;
+    case "Time Tracking":
+      return <TimeSection {...props} />;
+    default:
+      return null;
+  }
+}
+
+type Workspace = NonNullable<
+  Awaited<ReturnType<typeof getEngagementWorkspace>>
+>;
+type SectionProps = {
+  workspace: Workspace;
+  engagementId: string;
+  userId: string;
+};
+
+function ScopeSection({ workspace, engagementId }: SectionProps) {
+  const current = workspace.currentScope;
+  const draft = current?.status === "draft" ? current : null;
+  return (
+    <Stack>
+      <SectionHeader
+        title="Scope"
+        description="Every edit is made in a new immutable version and requires approval."
+        state={
+          current
+            ? `Version ${current.version} · ${current.status}`
+            : "No version"
+        }
+      />
+      {!draft ? (
+        <ActionDetails label={current ? "Create new version" : "Create scope"}>
+          <form
+            action={createScopeDraftAction.bind(null, engagementId)}
+            className="space-y-3"
+          >
+            <Field label="Change summary">
+              <input
+                className={field}
+                name="changeSummary"
+                required
+                minLength={3}
+              />
+            </Field>
+            <Button type="submit">
+              <Plus className="size-4" />
+              Create draft
+            </Button>
+          </form>
+        </ActionDetails>
+      ) : (
+        <div className="grid gap-4 xl:grid-cols-2">
+          <ActionDetails label="Add scope item" open>
+            <form
+              action={addScopeItemAction.bind(null, engagementId)}
+              className="grid gap-3 sm:grid-cols-2"
+            >
+              <input type="hidden" name="scopeVersionId" value={draft.id} />
+              <Field label="Name">
+                <input className={field} name="name" required />
+              </Field>
+              <Field label="Type">
+                <input
+                  className={field}
+                  name="type"
+                  placeholder="Web application"
+                  required
+                />
+              </Field>
+              <Field label="Target" wide>
+                <input className={field} name="value" required />
+              </Field>
+              <Field label="Environment">
+                <input className={field} name="environment" />
+              </Field>
+              <Field label="Scope state">
+                <select
+                  className={field}
+                  name="scopeStatus"
+                  defaultValue="in_scope"
+                >
+                  <option value="in_scope">In scope</option>
+                  <option value="excluded">Excluded</option>
+                </select>
+              </Field>
+              <Field label="Exclusion reason" wide>
+                <textarea className={area} name="exclusionReason" rows={2} />
+              </Field>
+              <Field label="Testing restrictions" wide>
+                <textarea
+                  className={area}
+                  name="testingRestrictions"
+                  rows={2}
+                />
+              </Field>
+              <Field label="Approved methods (comma-separated)" wide>
+                <input className={field} name="approvedMethods" />
+              </Field>
+              <Button type="submit">Add item</Button>
+            </form>
+          </ActionDetails>
+          <div className="rounded-xl border bg-paper p-5">
+            <h3 className="font-semibold">Approve version {draft.version}</h3>
+            <p className="mt-1 text-sm text-slate-500">
+              Approval freezes this version. Further changes create another
+              version.
+            </p>
+            <form
+              action={approveScopeVersionAction.bind(null, engagementId)}
+              className="mt-4"
+            >
+              <input type="hidden" name="scopeVersionId" value={draft.id} />
+              <Button type="submit">
+                <CheckCircle2 className="size-4" />
+                Approve scope
+              </Button>
+            </form>
+          </div>
+        </div>
+      )}
+      <RecordList empty="No scope items in this version.">
+        {workspace.currentScopeItems.map((item) => (
+          <article key={item.id} className="border-b p-4 last:border-b-0">
+            <div className="flex flex-wrap items-start justify-between gap-2">
+              <div>
+                <h3 className="font-medium">{item.name}</h3>
+                <p className="mt-1 font-mono text-xs text-slate-500">
+                  {item.value}
+                </p>
+              </div>
+              <StatusPill
+                tone={item.scopeStatus === "excluded" ? "warning" : "success"}
+              >
+                {item.scopeStatus.replaceAll("_", " ")}
+              </StatusPill>
+            </div>
+            {item.exclusionReason ? (
+              <p className="mt-2 text-sm text-slate-600">
+                Reason: {item.exclusionReason}
+              </p>
+            ) : null}
+            {draft ? (
+              <details className="mt-3 rounded-md border p-3">
+                <summary className="cursor-pointer text-sm font-medium">
+                  Edit item
+                </summary>
+                <form
+                  action={updateScopeItemAction.bind(null, engagementId)}
+                  className="mt-3 grid gap-3 sm:grid-cols-2"
+                >
+                  <input type="hidden" name="scopeVersionId" value={draft.id} />
+                  <input type="hidden" name="itemId" value={item.id} />
+                  <Field label="Name">
+                    <input
+                      className={field}
+                      name="name"
+                      defaultValue={item.name}
+                      required
+                    />
+                  </Field>
+                  <Field label="Target">
+                    <input
+                      className={field}
+                      name="value"
+                      defaultValue={item.value}
+                      required
+                    />
+                  </Field>
+                  <Field label="Scope state">
+                    <select
+                      className={field}
+                      name="scopeStatus"
+                      defaultValue={item.scopeStatus}
+                    >
+                      <option value="in_scope">In scope</option>
+                      <option value="excluded">Excluded</option>
+                    </select>
+                  </Field>
+                  <Field label="Exclusion reason">
+                    <input
+                      className={field}
+                      name="exclusionReason"
+                      defaultValue={item.exclusionReason ?? ""}
+                    />
+                  </Field>
+                  <Field label="Testing restrictions" wide>
+                    <textarea
+                      className={area}
+                      name="testingRestrictions"
+                      defaultValue={item.testingRestrictions ?? ""}
+                    />
+                  </Field>
+                  <Button type="submit">Save changes</Button>
+                </form>
+              </details>
+            ) : null}
+          </article>
+        ))}
+      </RecordList>
+      {workspace.scopeVersions.length ? (
+        <p className="text-xs text-slate-500">
+          Version history:{" "}
+          {workspace.scopeVersions
+            .map((version) => `v${version.version} ${version.status}`)
+            .join(" · ")}
+        </p>
+      ) : null}
+    </Stack>
+  );
+}
+
+function AssetsSection({ workspace, engagementId }: SectionProps) {
+  return (
+    <Stack>
+      <SectionHeader
+        title="Assets"
+        description="Assets remain linked to the engagement and its versioned scope."
+        state={`${workspace.assets.length} assets`}
+      />
+      <ActionDetails label="Add asset" open>
+        <form
+          action={createAssetAction.bind(null, engagementId)}
+          className="grid gap-3 sm:grid-cols-2"
+        >
+          <Field label="Name">
+            <input className={field} name="name" required />
+          </Field>
+          <Field label="Type">
+            <input
+              className={field}
+              name="type"
+              placeholder="Application, host, API"
+              required
+            />
+          </Field>
+          <Field label="Identifier" wide>
+            <input className={field} name="identifier" required />
+          </Field>
+          <Field label="Environment">
+            <input className={field} name="environment" />
+          </Field>
+          <Field label="Owner">
+            <input className={field} name="owner" />
+          </Field>
+          <Field label="Criticality">
+            <select className={field} name="criticality" defaultValue="medium">
+              <option>low</option>
+              <option>medium</option>
+              <option>high</option>
+              <option>critical</option>
+            </select>
+          </Field>
+          {workspace.currentScopeItems.length ? (
+            <CheckGroup
+              label="Linked scope items"
+              name="scopeItemIds"
+              options={workspace.currentScopeItems.map((item) => ({
+                value: item.id,
+                label: `${item.name} — ${item.value}`,
+              }))}
+            />
+          ) : null}
+          <Button type="submit">Add asset</Button>
+        </form>
+      </ActionDetails>
+      <RecordList empty="No assets recorded.">
+        {workspace.assets.map((asset) => (
+          <article
+            key={asset.id}
+            className="flex flex-wrap items-center justify-between gap-3 border-b p-4 last:border-b-0"
+          >
+            <div>
+              <h3 className="font-medium">{asset.name}</h3>
+              <p className="mt-1 font-mono text-xs text-slate-500">
+                {asset.identifier}
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <StatusPill tone="neutral">{asset.type}</StatusPill>
+              {asset.criticality ? (
+                <StatusPill
+                  tone={
+                    asset.criticality === "critical" ||
+                    asset.criticality === "high"
+                      ? "danger"
+                      : "info"
+                  }
+                >
+                  {asset.criticality}
+                </StatusPill>
+              ) : null}
+            </div>
+          </article>
+        ))}
+      </RecordList>
+    </Stack>
+  );
+}
+
+function RulesSection({ workspace, engagementId, userId }: SectionProps) {
+  const latest = workspace.rules[0];
+  const acknowledged = latest
+    ? workspace.ruleAcknowledgements.some(
+        (entry) => entry.rulesId === latest.id && entry.userId === userId,
+      )
+    : false;
+  return (
+    <Stack>
+      <SectionHeader
+        title="Rules of Engagement"
+        description="Structured rules are versioned, approved, and acknowledged by assigned team members."
+        state={
+          latest
+            ? `Version ${latest.version} · ${latest.approvedAt ? "approved" : "draft"}`
+            : "No rules"
+        }
+      />
+      {latest ? (
+        <article className="rounded-xl border bg-paper p-5">
+          <dl className="grid gap-4 sm:grid-cols-2">
+            <Item
+              label="Permitted test times"
+              value={latest.permittedTestTimes ?? "Not specified"}
+            />
+            <Item
+              label="Source IP addresses"
+              value={latest.sourceIpAddresses.join(", ") || "None"}
+            />
+            <Item
+              label="Approved tooling"
+              value={latest.approvedTooling.join(", ") || "None"}
+            />
+            <Item
+              label="Prohibited techniques"
+              value={latest.prohibitedTechniques.join(", ") || "None"}
+            />
+            <Item
+              label="Stop-testing procedure"
+              value={latest.stopTestingProcedure ?? "Not specified"}
+            />
+            <Item
+              label="Escalation procedure"
+              value={latest.escalationProcedure ?? "Not specified"}
+            />
+          </dl>
+          <div className="mt-4 flex flex-wrap gap-2">
+            {!latest.approvedAt ? (
+              <form action={approveRulesAction.bind(null, engagementId)}>
+                <input type="hidden" name="rulesId" value={latest.id} />
+                <Button type="submit">Approve rules</Button>
+              </form>
+            ) : !acknowledged ? (
+              <form action={acknowledgeRulesAction.bind(null, engagementId)}>
+                <input type="hidden" name="rulesId" value={latest.id} />
+                <Button type="submit">Acknowledge rules</Button>
+              </form>
+            ) : (
+              <StatusPill tone="success">Acknowledged</StatusPill>
+            )}
+          </div>
+        </article>
+      ) : null}
+      {latest?.approvedAt || !latest ? (
+        <ActionDetails
+          label={latest ? "Create new version" : "Create rules"}
+          open={!latest}
+        >
+          <form
+            action={createRulesVersionAction.bind(null, engagementId)}
+            className="grid gap-3 sm:grid-cols-2"
+          >
+            <Field label="Permitted test times" wide>
+              <input className={field} name="permittedTestTimes" />
+            </Field>
+            <Field label="Source IP addresses">
+              <textarea className={area} name="sourceIpAddresses" rows={3} />
+            </Field>
+            <Field label="Approved tooling">
+              <textarea className={area} name="approvedTooling" rows={3} />
+            </Field>
+            <Field label="Prohibited techniques" wide>
+              <textarea className={area} name="prohibitedTechniques" rows={3} />
+            </Field>
+            <Field label="Stop-testing procedure" wide>
+              <textarea
+                className={area}
+                name="stopTestingProcedure"
+                rows={3}
+                required
+              />
+            </Field>
+            <Field label="Escalation procedure" wide>
+              <textarea
+                className={area}
+                name="escalationProcedure"
+                rows={3}
+                required
+              />
+            </Field>
+            <Field label="Evidence handling" wide>
+              <textarea
+                className={area}
+                name="evidenceHandling"
+                rows={3}
+                required
+              />
+            </Field>
+            <Field label="Data destruction" wide>
+              <textarea
+                className={area}
+                name="dataDestruction"
+                rows={3}
+                required
+              />
+            </Field>
+            <Button type="submit">Save draft version</Button>
+          </form>
+        </ActionDetails>
+      ) : null}
+    </Stack>
+  );
+}
+
+function TeamSection({ workspace, engagementId }: SectionProps) {
+  return (
+    <Stack>
+      <SectionHeader
+        title="Team assignments"
+        description="Only active organisation members can receive engagement-level roles."
+        state={`${workspace.members.length} assigned`}
+      />
+      <ActionDetails label="Assign team member" open>
+        <form
+          action={assignEngagementMemberAction.bind(null, engagementId)}
+          className="grid gap-3 sm:grid-cols-2"
+        >
+          <Field label="Organisation member">
+            <select className={field} name="userId" required>
+              <option value="">Select a member</option>
+              {workspace.availableMembers.map((member) => (
+                <option key={member.userId} value={member.userId}>
+                  {member.name} ({member.email})
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Engagement role">
+            <select className={field} name="role" defaultValue="consultant">
+              <option value="engagement_manager">Engagement manager</option>
+              <option value="lead_consultant">Lead consultant</option>
+              <option value="consultant">Consultant</option>
+              <option value="reviewer">Reviewer</option>
+              <option value="read_only">Read only</option>
+            </select>
+          </Field>
+          <Button type="submit">Assign member</Button>
+        </form>
+      </ActionDetails>
+      <RecordList empty="No team members assigned.">
+        {workspace.members.map((member) => (
+          <article
+            key={member.id}
+            className="flex items-center justify-between gap-3 border-b p-4 last:border-b-0"
+          >
+            <div>
+              <h3 className="font-medium">{member.name}</h3>
+              <p className="text-xs text-slate-500">{member.email}</p>
+            </div>
+            <StatusPill tone="info">
+              {member.role.replaceAll("_", " ")}
+            </StatusPill>
+          </article>
+        ))}
+      </RecordList>
+    </Stack>
+  );
+}
+
+function NotesSection({ workspace, engagementId }: SectionProps) {
+  return (
+    <Stack>
+      <SectionHeader
+        title="Notes and testing journal"
+        description="Internal working notes and client-visible updates are stored separately by visibility."
+        state={`${workspace.notes.length} entries`}
+      />
+      <ActionDetails label="Add note or journal entry" open>
+        <form
+          action={createWorkspaceNoteAction.bind(null, engagementId)}
+          className="grid gap-3 sm:grid-cols-2"
+        >
+          <Field label="Type">
+            <select className={field} name="kind">
+              <option value="note">Note</option>
+              <option value="testing_journal">Testing journal</option>
+            </select>
+          </Field>
+          <Field label="Visibility">
+            <select className={field} name="visibility">
+              <option value="private">Private</option>
+              <option value="team">Team</option>
+              <option value="client">Client visible</option>
+            </select>
+          </Field>
+          <Field label="Title" wide>
+            <input className={field} name="title" required />
+          </Field>
+          <Field label="Content" wide>
+            <textarea className={area} name="body" rows={5} required />
+          </Field>
+          {workspace.assets.length ? (
+            <CheckGroup
+              label="Linked assets"
+              name="assetIds"
+              options={workspace.assets.map((asset) => ({
+                value: asset.id,
+                label: asset.name,
+              }))}
+            />
+          ) : null}
+          <Button type="submit">Save entry</Button>
+        </form>
+      </ActionDetails>
+      <RecordList empty="No notes or journal entries.">
+        {workspace.notes.map((note) => (
+          <article key={note.id} className="border-b p-4 last:border-b-0">
+            <div className="flex flex-wrap justify-between gap-2">
+              <h3 className="font-medium">{note.title}</h3>
+              <div className="flex gap-2">
+                <StatusPill tone="neutral">
+                  {note.kind.replaceAll("_", " ")}
+                </StatusPill>
+                <StatusPill
+                  tone={note.visibility === "client" ? "info" : "neutral"}
+                >
+                  {note.visibility}
+                </StatusPill>
+              </div>
+            </div>
+            <p className="mt-2 whitespace-pre-wrap text-sm text-slate-600">
+              {contentText(note.content)}
+            </p>
+          </article>
+        ))}
+      </RecordList>
+    </Stack>
+  );
+}
+
+function TimelineSection({ workspace, engagementId }: SectionProps) {
+  return (
+    <Stack>
+      <SectionHeader
+        title="Attack timeline"
+        description="Timestamped testing activity preserves commands and client visibility state."
+        state={`${workspace.timeline.length} events`}
+      />
+      <ActionDetails label="Add timeline event" open>
+        <form
+          action={createTimelineEntryAction.bind(null, engagementId)}
+          className="grid gap-3 sm:grid-cols-2"
+        >
+          <Field label="Occurred at">
+            <input
+              className={field}
+              name="occurredAt"
+              type="datetime-local"
+              required
+            />
+          </Field>
+          <Field label="Phase">
+            <input className={field} name="phase" required />
+          </Field>
+          <Field label="Description" wide>
+            <textarea className={area} name="description" rows={4} required />
+          </Field>
+          <Field label="Commands" wide>
+            <textarea className={area} name="commands" rows={3} />
+          </Field>
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" name="clientVisible" />
+            Client visible
+          </label>
+          <Button type="submit">Add event</Button>
+        </form>
+      </ActionDetails>
+      <RecordList empty="No timeline events.">
+        {workspace.timeline.map((entry) => (
+          <article key={entry.id} className="border-b p-4 last:border-b-0">
+            <div className="flex flex-wrap justify-between gap-2">
+              <h3 className="font-medium">{entry.phase}</h3>
+              <time className="text-xs text-slate-500">
+                {entry.occurredAt.toLocaleString()}
+              </time>
+            </div>
+            <p className="mt-2 text-sm text-slate-600">{entry.description}</p>
+            {entry.commands ? (
+              <pre className="mt-2 overflow-x-auto rounded-md bg-slate-950 p-3 text-xs text-white">
+                {entry.commands}
+              </pre>
+            ) : null}
+          </article>
+        ))}
+      </RecordList>
+    </Stack>
+  );
+}
+
+function TasksSection({ workspace, engagementId }: SectionProps) {
+  return (
+    <Stack>
+      <SectionHeader
+        title="Tasks"
+        description="Tasks are scoped to this engagement and can only be assigned to its team."
+        state={`${workspace.tasks.length} tasks`}
+      />
+      <ActionDetails label="Add task" open>
+        <form
+          action={createWorkspaceTaskAction.bind(null, engagementId)}
+          className="grid gap-3 sm:grid-cols-2"
+        >
+          <Field label="Title" wide>
+            <input className={field} name="title" required />
+          </Field>
+          <Field label="Priority">
+            <select className={field} name="priority" defaultValue="normal">
+              <option>low</option>
+              <option>normal</option>
+              <option>high</option>
+              <option>urgent</option>
+            </select>
+          </Field>
+          <Field label="Assignee">
+            <select className={field} name="assigneeId">
+              <option value="">Unassigned</option>
+              {workspace.members.map((member) => (
+                <option key={member.userId} value={member.userId}>
+                  {member.name}
+                </option>
+              ))}
+            </select>
+          </Field>
+          <Field label="Due">
+            <input className={field} name="dueAt" type="datetime-local" />
+          </Field>
+          <Field label="Description" wide>
+            <textarea className={area} name="description" rows={3} />
+          </Field>
+          {workspace.assets.length ? (
+            <CheckGroup
+              label="Linked assets"
+              name="assetIds"
+              options={workspace.assets.map((asset) => ({
+                value: asset.id,
+                label: asset.name,
+              }))}
+            />
+          ) : null}
+          <Button type="submit">Create task</Button>
+        </form>
+      </ActionDetails>
+      <RecordList empty="No tasks.">
+        {workspace.tasks.map((task) => (
+          <article
+            key={task.id}
+            className="flex flex-wrap items-start justify-between gap-3 border-b p-4 last:border-b-0"
+          >
+            <div>
+              <h3 className="font-medium">{task.title}</h3>
+              {task.description ? (
+                <p className="mt-1 text-sm text-slate-500">
+                  {task.description}
+                </p>
+              ) : null}
+            </div>
+            <div className="flex gap-2">
+              <StatusPill tone="neutral">
+                {task.status.replaceAll("_", " ")}
+              </StatusPill>
+              <StatusPill
+                tone={
+                  task.priority === "urgent" || task.priority === "high"
+                    ? "warning"
+                    : "info"
+                }
+              >
+                {task.priority}
+              </StatusPill>
+            </div>
+          </article>
+        ))}
+      </RecordList>
+    </Stack>
+  );
+}
+
+function TimeSection({ workspace, engagementId }: SectionProps) {
+  const total = workspace.timeEntries.reduce(
+    (sum, entry) => sum + Number(entry.hours),
+    0,
+  );
+  return (
+    <Stack>
+      <SectionHeader
+        title="Time tracking"
+        description="Consultant time is recorded against the engagement with billable state."
+        state={`${total.toFixed(2)} hours`}
+      />
+      <ActionDetails label="Log time" open>
+        <form
+          action={logWorkspaceTimeAction.bind(null, engagementId)}
+          className="grid gap-3 sm:grid-cols-2"
+        >
+          <Field label="Category">
+            <input
+              className={field}
+              name="category"
+              placeholder="Testing"
+              required
+            />
+          </Field>
+          <Field label="Hours">
+            <input
+              className={field}
+              name="hours"
+              type="number"
+              min="0.01"
+              max="24"
+              step="0.25"
+              required
+            />
+          </Field>
+          <Field label="Started at">
+            <input
+              className={field}
+              name="startedAt"
+              type="datetime-local"
+              required
+            />
+          </Field>
+          <Field label="Description">
+            <input className={field} name="description" />
+          </Field>
+          <label className="flex items-center gap-2 text-sm">
+            <input type="checkbox" name="billable" defaultChecked />
+            Billable
+          </label>
+          <Button type="submit">Log time</Button>
+        </form>
+      </ActionDetails>
+      <RecordList empty="No time entries.">
+        {workspace.timeEntries.map((entry) => (
+          <article
+            key={entry.id}
+            className="flex flex-wrap justify-between gap-3 border-b p-4 last:border-b-0"
+          >
+            <div>
+              <h3 className="font-medium">{entry.category}</h3>
+              <p className="text-xs text-slate-500">
+                {entry.startedAt.toLocaleString()} ·{" "}
+                {entry.description ?? "No description"}
+              </p>
+            </div>
+            <StatusPill tone={entry.billable ? "success" : "neutral"}>
+              {entry.hours}h · {entry.billable ? "billable" : "non-billable"}
+            </StatusPill>
+          </article>
+        ))}
+      </RecordList>
+    </Stack>
+  );
+}
+
+const nextStatuses: Record<EngagementStatus, readonly EngagementStatus[]> = {
+  proposed: ["scoping", "cancelled"],
+  scoping: ["scheduled", "cancelled"],
+  scheduled: ["ready", "scoping", "cancelled"],
+  ready: ["testing", "scheduled", "cancelled"],
+  testing: ["reporting", "cancelled"],
+  reporting: ["peer_review", "testing", "cancelled"],
+  peer_review: ["quality_assurance", "reporting", "cancelled"],
+  quality_assurance: ["client_review", "reporting", "cancelled"],
+  client_review: ["retesting", "complete", "reporting", "cancelled"],
+  retesting: ["reporting", "complete", "cancelled"],
+  complete: ["archived", "retesting"],
+  archived: [],
+  cancelled: ["scoping", "archived"],
+};
+
+export function EngagementStatusPanel({
+  engagementId,
+  status,
+}: {
+  engagementId: string;
+  status: EngagementStatus;
+}) {
+  const options = nextStatuses[status];
+  if (!options.length) return null;
+  return (
+    <section className="mt-6 rounded-xl border bg-paper p-5">
+      <div className="flex items-start gap-3">
+        <ShieldCheck className="mt-0.5 size-5 text-[var(--harbour-600)]" />
+        <div>
+          <h2 className="font-semibold">Delivery status</h2>
+          <p className="mt-1 text-sm text-slate-500">
+            Transitions are validated server-side and written to audit history.
+          </p>
+        </div>
+      </div>
+      <form
+        action={transitionEngagementAction.bind(null, engagementId)}
+        className="mt-4 grid gap-3 sm:grid-cols-[minmax(180px,0.5fr)_1fr_auto]"
+      >
+        <label className="text-xs font-medium text-slate-600">
+          Next status
+          <select className={`${field} mt-1`} name="toStatus">
+            {options.map((option) => (
+              <option key={option} value={option}>
+                {option.replaceAll("_", " ")}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="text-xs font-medium text-slate-600">
+          Reason
+          <input className={`${field} mt-1`} name="reason" />
+        </label>
+        <Button type="submit" className="self-end">
+          Change status
+        </Button>
+      </form>
+    </section>
+  );
+}
+
+function SectionHeader({
+  title,
+  description,
+  state,
+}: {
+  title: string;
+  description: string;
+  state: string;
+}) {
+  return (
+    <header className="flex flex-wrap items-start justify-between gap-3 rounded-xl border bg-paper p-5">
+      <div>
+        <h2 className="text-base font-semibold">{title}</h2>
+        <p className="mt-1 text-sm text-slate-500">{description}</p>
+      </div>
+      <StatusPill tone="info">{state}</StatusPill>
+    </header>
+  );
+}
+function Stack({ children }: { children: React.ReactNode }) {
+  return <div className="space-y-5">{children}</div>;
+}
+function ActionDetails({
+  label,
+  children,
+  open = false,
+}: {
+  label: string;
+  children: React.ReactNode;
+  open?: boolean;
+}) {
+  return (
+    <details className="rounded-xl border bg-paper" open={open}>
+      <summary className="cursor-pointer px-5 py-4 text-sm font-semibold focus-visible:outline-offset-[-3px]">
+        {label}
+      </summary>
+      <div className="border-t p-5">{children}</div>
+    </details>
+  );
+}
+function Field({
+  label,
+  children,
+  wide = false,
+}: {
+  label: string;
+  children: React.ReactNode;
+  wide?: boolean;
+}) {
+  return (
+    <label
+      className={`block text-xs font-medium text-slate-600 ${wide ? "sm:col-span-2" : ""}`}
+    >
+      <span className="mb-1.5 block">{label}</span>
+      {children}
+    </label>
+  );
+}
+function CheckGroup({
+  label,
+  name,
+  options,
+}: {
+  label: string;
+  name: string;
+  options: Array<{ value: string; label: string }>;
+}) {
+  return (
+    <fieldset className="sm:col-span-2">
+      <legend className="text-xs font-medium text-slate-600">{label}</legend>
+      <div className="mt-2 grid gap-2 sm:grid-cols-2">
+        {options.map((option) => (
+          <label
+            key={option.value}
+            className="flex items-center gap-2 rounded-md border p-2 text-sm"
+          >
+            <input type="checkbox" name={name} value={option.value} />
+            {option.label}
+          </label>
+        ))}
+      </div>
+    </fieldset>
+  );
+}
+function RecordList({
+  children,
+  empty,
+}: {
+  children: React.ReactNode;
+  empty: string;
+}) {
+  const hasChildren = Array.isArray(children)
+    ? children.length > 0
+    : Boolean(children);
+  return (
+    <section className="overflow-hidden rounded-xl border bg-paper">
+      {hasChildren ? (
+        children
+      ) : (
+        <div className="p-10 text-center">
+          <CircleAlert className="mx-auto size-5 text-slate-400" />
+          <p className="mt-2 text-sm text-slate-500">{empty}</p>
+        </div>
+      )}
+    </section>
+  );
+}
+function Item({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <dt className="text-xs font-medium text-slate-500">{label}</dt>
+      <dd className="mt-1 whitespace-pre-wrap text-sm text-slate-700">
+        {value}
+      </dd>
+    </div>
+  );
+}
+function contentText(content: Record<string, unknown>) {
+  return typeof content.text === "string"
+    ? content.text
+    : JSON.stringify(content);
+}
+function UnimplementedSection({ title }: { title: string }) {
+  return (
+    <section className="rounded-xl border bg-paper">
+      <div className="border-b p-5">
+        <h2 className="text-base font-semibold">{title}</h2>
+        <p className="mt-1 text-sm text-slate-500">
+          This workspace is scoped to the active engagement and organisation.
+        </p>
+      </div>
+      <div className="px-5 py-14 text-center">
+        <Clock3 className="mx-auto size-7 text-slate-400" />
+        <p className="mt-3 text-sm font-medium">
+          No {title.toLowerCase()} records yet
+        </p>
+      </div>
+    </section>
+  );
+}
