@@ -73,7 +73,7 @@
     "drizzle-kit": "^0.31.10",
     "eslint": "^9.39.4",
     "eslint-config-next": "16.3.0-canary.21",
-    "jsdom": "^27.2.0",
+    "jsdom": "^29.1.1",
     "prettier": "^3.7.4",
     "tailwindcss": "^4.3.1",
     "tsx": "^4.22.4",
