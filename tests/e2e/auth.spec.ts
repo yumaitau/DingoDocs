@@ -52,6 +52,9 @@ async function signIn(page: Page) {
       response.request().method() === "POST" &&
       response.url().endsWith("/api/auth/sign-in/email"),
   );
+  const dashboardNavigationPromise = page.waitForURL(/\/dashboard/, {
+    waitUntil: "domcontentloaded",
+  });
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   const signInResponse = await signInResponsePromise;
   if (!signInResponse.ok()) {
@@ -59,5 +62,5 @@ async function signIn(page: Page) {
       `Sign-in failed with ${signInResponse.status()}: ${await signInResponse.text()}`,
     );
   }
-  await expect(page).toHaveURL(/\/dashboard/);
+  await dashboardNavigationPromise;
 }
