@@ -72,7 +72,7 @@
     "@vitest/coverage-v8": "^4.1.9",
     "drizzle-kit": "^0.31.10",
     "eslint": "^9.39.4",
-    "eslint-config-next": "16.3.0-canary.21",
+    "eslint-config-next": "16.3.0-preview.5",
     "jsdom": "^27.2.0",
     "prettier": "^3.7.4",
     "tailwindcss": "^4.3.1",
