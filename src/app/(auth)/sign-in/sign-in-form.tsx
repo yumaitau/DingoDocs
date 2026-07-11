@@ -1,31 +1,37 @@
 "use client";
 
-import { useRouter, useSearchParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { authClient } from "@/lib/auth/client";
 
 export function SignInForm() {
-  const router = useRouter();
   const search = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
   const [magicSent, setMagicSent] = useState(false);
+  const requestedNext = search.get("next");
+  const callbackURL =
+    requestedNext?.startsWith("/") && !requestedNext.startsWith("//")
+      ? requestedNext
+      : "/dashboard";
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
     setPending(true);
     setError("");
-    const result = await authClient.signIn.email({ email, password });
+    const result = await authClient.signIn.email({
+      email,
+      password,
+      callbackURL,
+    });
     setPending(false);
     if (result.error) {
       setError(result.error.message ?? "Unable to sign in");
       return;
     }
-    router.push(search.get("next") ?? "/dashboard");
-    router.refresh();
   }
 
   async function sendMagicLink() {
@@ -33,7 +39,7 @@ export function SignInForm() {
     setError("");
     const result = await authClient.signIn.magicLink({
       email,
-      callbackURL: search.get("next") ?? "/dashboard",
+      callbackURL,
     });
     setPending(false);
     if (result.error) {

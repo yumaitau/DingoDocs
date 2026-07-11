@@ -23,7 +23,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { cn } from "@/lib/utils";
 
 type NavItem = { label: string; href: string; icon: LucideIcon };
@@ -55,6 +55,7 @@ export function AppShell({
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const appShellRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
@@ -64,7 +65,12 @@ export function AppShell({
       }
     };
     window.addEventListener("keydown", onKeyDown);
-    return () => window.removeEventListener("keydown", onKeyDown);
+    const appShell = appShellRef.current;
+    appShell?.setAttribute("data-command-palette-ready", "true");
+    return () => {
+      window.removeEventListener("keydown", onKeyDown);
+      appShell?.setAttribute("data-command-palette-ready", "false");
+    };
   }, []);
 
   const nav = (
@@ -81,7 +87,11 @@ export function AppShell({
   );
 
   return (
-    <div className="min-h-screen bg-background lg:grid lg:grid-cols-[248px_minmax(0,1fr)]">
+    <div
+      ref={appShellRef}
+      className="min-h-screen bg-background lg:grid lg:grid-cols-[248px_minmax(0,1fr)]"
+      data-command-palette-ready="false"
+    >
       <aside className="sticky top-0 hidden h-screen border-r bg-[var(--paper)] lg:block">
         {nav}
       </aside>

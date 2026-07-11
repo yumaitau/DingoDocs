@@ -22,13 +22,17 @@ test("demo user reaches the tenant-scoped dashboard and command palette", async 
   );
   await page.getByRole("button", { name: "Sign in", exact: true }).click();
   const signInResponse = await signInResponsePromise;
-  expect(
-    signInResponse.ok(),
-    `Sign-in failed with ${signInResponse.status()}: ${await signInResponse.text()}`,
-  ).toBe(true);
+  if (!signInResponse.ok()) {
+    throw new Error(
+      `Sign-in failed with ${signInResponse.status()}: ${await signInResponse.text()}`,
+    );
+  }
   await expect(page).toHaveURL(/\/dashboard/);
   await expect(
     page.getByRole("heading", { name: "Good morning" }),
+  ).toBeVisible();
+  await expect(
+    page.locator('[data-command-palette-ready="true"]'),
   ).toBeVisible();
   await page.keyboard.press("ControlOrMeta+k");
   await expect(
