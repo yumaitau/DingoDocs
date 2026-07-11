@@ -1,9 +1,9 @@
 import { redirect } from "next/navigation";
-import { AppShell } from "@/components/app-shell";
+import { ClientPortalShell } from "@/components/client-portal-shell";
 import { getSession } from "@/lib/auth/session";
 import { resolveActiveOrganisation } from "@/lib/auth/active-organisation";
 
-export default async function ProtectedLayout({
+export default async function PortalLayout({
   children,
 }: {
   children: React.ReactNode;
@@ -13,16 +13,16 @@ export default async function ProtectedLayout({
   const organisation = await resolveActiveOrganisation(session.user.id);
   if (!organisation) redirect("/onboarding");
   if (
-    organisation.role === "client_user" ||
-    organisation.role === "client_administrator"
+    organisation.role !== "client_user" &&
+    organisation.role !== "client_administrator"
   )
-    redirect("/portal");
+    redirect("/dashboard");
   return (
-    <AppShell
+    <ClientPortalShell
       organisationName={organisation.name}
       userName={session.user.name ?? session.user.email}
     >
       {children}
-    </AppShell>
+    </ClientPortalShell>
   );
 }

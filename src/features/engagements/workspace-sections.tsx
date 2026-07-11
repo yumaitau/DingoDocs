@@ -26,6 +26,20 @@ import {
   updateScopeItemAction,
 } from "@/server/actions/engagement-workspace";
 import {
+  addRetestNoteAction,
+  attachRetestEvidenceAction,
+  completeRetestAction,
+  grantPortalAccessAction,
+  revokePortalAccessAction,
+  scheduleRetestAction,
+  setFindingPortalVisibilityAction,
+  setReportPortalVisibilityAction,
+} from "@/server/actions/client-portal";
+import {
+  getEngagementRetests,
+  getPortalAdministration,
+} from "@/server/services/client-portal";
+import {
   getEngagementWorkspace,
   type EngagementStatus,
 } from "@/server/services/engagement-workspace";
@@ -41,6 +55,8 @@ const managedSections = new Set([
   "Time Tracking",
   "Findings",
   "Evidence",
+  "Retesting",
+  "Client Portal",
 ]);
 
 const field =
@@ -99,9 +115,452 @@ export async function EngagementWorkspaceSection({
           workspace={workspace}
         />
       );
+    case "Retesting":
+      return <RetestingSection {...props} organisationId={organisationId} />;
+    case "Client Portal":
+      return (
+        <ClientPortalAdministrationSection
+          {...props}
+          organisationId={organisationId}
+        />
+      );
     default:
       return null;
   }
+}
+
+async function ClientPortalAdministrationSection({
+  workspace,
+  engagementId,
+  organisationId,
+}: SectionProps & { organisationId: string }) {
+  const portal = await getPortalAdministration(
+    { organisationId },
+    engagementId,
+  );
+  return (
+    <Stack>
+      <SectionHeader
+        title="Client portal"
+        description="Grant named contacts access, then explicitly share only published findings and permitted report versions."
+        state={`${portal.grants.length} contacts`}
+      />
+      <div className="grid gap-4 xl:grid-cols-2">
+        <ActionDetails label="Grant contact access" open>
+          <form
+            action={grantPortalAccessAction.bind(null, engagementId)}
+            className="grid gap-3 sm:grid-cols-2"
+          >
+            <Field label="Client contact">
+              <select className={field} name="contactId" required>
+                <option value="">Select linked user</option>
+                {portal.contacts.map((contact) => (
+                  <option key={contact.id} value={contact.id}>
+                    {contact.name} ({contact.email})
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Access level">
+              <select
+                className={field}
+                name="accessLevel"
+                defaultValue="standard"
+              >
+                <option value="standard">Standard</option>
+                <option value="administrator">Administrator</option>
+                <option value="read_only">Read only</option>
+              </select>
+            </Field>
+            <Button type="submit">Grant access</Button>
+          </form>
+        </ActionDetails>
+        <div className="rounded-xl border bg-paper">
+          <div className="border-b p-4">
+            <h3 className="font-semibold">Authorised contacts</h3>
+          </div>
+          {portal.grants.length ? (
+            <ul className="divide-y">
+              {portal.grants.map((grant) => (
+                <li
+                  key={grant.id}
+                  className="flex items-center justify-between gap-3 p-4"
+                >
+                  <div>
+                    <p className="text-sm font-medium">{grant.name}</p>
+                    <p className="text-xs text-slate-500">
+                      {grant.email} · {grant.accessLevel}
+                    </p>
+                  </div>
+                  <form
+                    action={revokePortalAccessAction.bind(
+                      null,
+                      engagementId,
+                      grant.id,
+                    )}
+                  >
+                    <Button type="submit" size="sm" variant="secondary">
+                      Revoke
+                    </Button>
+                  </form>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="p-4 text-sm text-slate-500">
+              No contacts can access this engagement.
+            </p>
+          )}
+        </div>
+      </div>
+      <div className="grid gap-4 xl:grid-cols-2">
+        <div className="rounded-xl border bg-paper">
+          <div className="border-b p-4">
+            <h3 className="font-semibold">Finding publication</h3>
+            <p className="mt-1 text-xs text-slate-500">
+              Draft and unpublished findings cannot be shared.
+            </p>
+          </div>
+          <ul className="divide-y">
+            {portal.findings.map((finding) => (
+              <li
+                key={finding.id}
+                className="flex items-center justify-between gap-3 p-4"
+              >
+                <div>
+                  <p className="text-sm font-medium">
+                    {finding.identifier} · {finding.title}
+                  </p>
+                  <p className="text-xs capitalize text-slate-500">
+                    {finding.status.replaceAll("_", " ")}
+                  </p>
+                </div>
+                <form
+                  action={setFindingPortalVisibilityAction.bind(
+                    null,
+                    engagementId,
+                    finding.id,
+                  )}
+                >
+                  <input
+                    type="hidden"
+                    name="visible"
+                    value={finding.clientVisible ? "false" : "true"}
+                  />
+                  <Button
+                    type="submit"
+                    size="sm"
+                    variant={finding.clientVisible ? "secondary" : "primary"}
+                    disabled={!finding.publishedAt && !finding.clientVisible}
+                  >
+                    {finding.clientVisible ? "Hide" : "Share"}
+                  </Button>
+                </form>
+              </li>
+            ))}
+          </ul>
+        </div>
+        <div className="rounded-xl border bg-paper">
+          <div className="border-b p-4">
+            <h3 className="font-semibold">Report publication</h3>
+            <p className="mt-1 text-xs text-slate-500">
+              Only client review, approved, or published versions can be shared.
+            </p>
+          </div>
+          <ul className="divide-y">
+            {portal.reports.map((report) => {
+              const shareable = [
+                "client_review",
+                "approved",
+                "published",
+                "superseded",
+              ].includes(report.versionStatus);
+              return (
+                <li
+                  key={report.versionId}
+                  className="flex items-center justify-between gap-3 p-4"
+                >
+                  <div>
+                    <p className="text-sm font-medium">
+                      {report.title} · v{report.version}
+                    </p>
+                    <p className="text-xs capitalize text-slate-500">
+                      {report.versionStatus.replaceAll("_", " ")}
+                    </p>
+                  </div>
+                  <form
+                    action={setReportPortalVisibilityAction.bind(
+                      null,
+                      engagementId,
+                      report.versionId,
+                    )}
+                  >
+                    <input
+                      type="hidden"
+                      name="visible"
+                      value={report.clientVisible ? "false" : "true"}
+                    />
+                    <Button
+                      type="submit"
+                      size="sm"
+                      variant={report.clientVisible ? "secondary" : "primary"}
+                      disabled={!shareable && !report.clientVisible}
+                    >
+                      {report.clientVisible ? "Hide" : "Share"}
+                    </Button>
+                  </form>
+                </li>
+              );
+            })}
+          </ul>
+        </div>
+      </div>
+      {!workspace.availableMembers.length ? (
+        <p className="text-xs text-slate-500">
+          Client contacts are managed from the client record and must be linked
+          to a user account before access can be granted.
+        </p>
+      ) : null}
+    </Stack>
+  );
+}
+
+async function RetestingSection({
+  workspace,
+  engagementId,
+  organisationId,
+}: SectionProps & { organisationId: string }) {
+  const retests = await getEngagementRetests({ organisationId }, engagementId);
+  return (
+    <Stack>
+      <SectionHeader
+        title="Retesting"
+        description="Schedule client requests, preserve evidence and notes, compare results, and generate a new report revision."
+        state={`${retests.attempts.length} attempts`}
+      />
+      <RecordList empty="No retest requests have been submitted.">
+        {retests.attempts.map(({ attempt, finding }) => {
+          const notes = retests.notes.filter(
+            (note) => note.retestAttemptId === attempt.id,
+          );
+          const attachments = retests.attachments.filter(
+            (item) => item.retestAttemptId === attempt.id,
+          );
+          return (
+            <article key={attempt.id} className="border-b p-5 last:border-b-0">
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+                    {finding.identifier} · original version{" "}
+                    {attempt.originalFindingVersion}
+                  </p>
+                  <h3 className="mt-1 font-semibold">{finding.title}</h3>
+                  <p className="mt-1 text-xs text-slate-500">
+                    Requested {attempt.requestedAt.toLocaleString()}
+                    {attempt.scheduledFor
+                      ? ` · scheduled ${attempt.scheduledFor.toLocaleString()}`
+                      : ""}
+                  </p>
+                </div>
+                <StatusPill
+                  tone={attempt.status === "completed" ? "success" : "info"}
+                >
+                  {attempt.outcome?.replaceAll("_", " ") ?? attempt.status}
+                </StatusPill>
+              </div>
+              {attempt.notes ? (
+                <p className="mt-3 text-sm text-slate-600">{attempt.notes}</p>
+              ) : null}
+              <details
+                className="mt-4 rounded-lg border p-4"
+                open={attempt.status !== "completed"}
+              >
+                <summary className="cursor-pointer text-sm font-semibold">
+                  Retest controls
+                </summary>
+                <div className="mt-4 grid gap-4 lg:grid-cols-2">
+                  {attempt.status !== "completed" ? (
+                    <form
+                      action={scheduleRetestAction}
+                      className="space-y-3 rounded-lg bg-muted p-4"
+                    >
+                      <input
+                        type="hidden"
+                        name="attemptId"
+                        value={attempt.id}
+                      />
+                      <input
+                        type="hidden"
+                        name="engagementId"
+                        value={engagementId}
+                      />
+                      <h4 className="text-sm font-semibold">
+                        Schedule and assign
+                      </h4>
+                      <Field label="Assignee">
+                        <select
+                          className={field}
+                          name="assignedTo"
+                          required
+                          defaultValue={attempt.assignedTo ?? ""}
+                        >
+                          <option value="">Select tester</option>
+                          {workspace.members.map((member) => (
+                            <option key={member.userId} value={member.userId}>
+                              {member.name}
+                            </option>
+                          ))}
+                        </select>
+                      </Field>
+                      <Field label="Scheduled for">
+                        <input
+                          className={field}
+                          type="datetime-local"
+                          name="scheduledFor"
+                          required
+                        />
+                      </Field>
+                      <Button type="submit" variant="secondary">
+                        Save schedule
+                      </Button>
+                    </form>
+                  ) : null}
+                  <form
+                    action={addRetestNoteAction}
+                    className="space-y-3 rounded-lg bg-muted p-4"
+                  >
+                    <input type="hidden" name="attemptId" value={attempt.id} />
+                    <input
+                      type="hidden"
+                      name="engagementId"
+                      value={engagementId}
+                    />
+                    <h4 className="text-sm font-semibold">Add note</h4>
+                    <Field label="Visibility">
+                      <select
+                        className={field}
+                        name="visibility"
+                        defaultValue="internal"
+                      >
+                        <option value="internal">Internal only</option>
+                        <option value="client">Shared with client</option>
+                      </select>
+                    </Field>
+                    <Field label="Note">
+                      <textarea
+                        className={area}
+                        name="body"
+                        required
+                        rows={3}
+                      />
+                    </Field>
+                    <Button type="submit" variant="secondary">
+                      Add note
+                    </Button>
+                  </form>
+                  <form
+                    action={attachRetestEvidenceAction}
+                    className="space-y-3 rounded-lg bg-muted p-4"
+                  >
+                    <input type="hidden" name="attemptId" value={attempt.id} />
+                    <input
+                      type="hidden"
+                      name="engagementId"
+                      value={engagementId}
+                    />
+                    <h4 className="text-sm font-semibold">Attach evidence</h4>
+                    <Field label="Evidence">
+                      <select className={field} name="evidenceId" required>
+                        <option value="">Select evidence</option>
+                        {retests.availableEvidence.map((item) => (
+                          <option key={item.id} value={item.id}>
+                            {item.filename}
+                          </option>
+                        ))}
+                      </select>
+                    </Field>
+                    <Button type="submit" variant="secondary">
+                      Attach
+                    </Button>
+                  </form>
+                  {attempt.status !== "completed" ? (
+                    <form
+                      action={completeRetestAction}
+                      className="space-y-3 rounded-lg bg-muted p-4"
+                    >
+                      <input
+                        type="hidden"
+                        name="attemptId"
+                        value={attempt.id}
+                      />
+                      <input
+                        type="hidden"
+                        name="engagementId"
+                        value={engagementId}
+                      />
+                      <h4 className="text-sm font-semibold">Complete retest</h4>
+                      <Field label="Outcome">
+                        <select className={field} name="outcome" required>
+                          <option value="fixed">Fixed</option>
+                          <option value="partially_remediated">
+                            Partially remediated
+                          </option>
+                          <option value="not_remediated">Not remediated</option>
+                          <option value="risk_accepted">Risk accepted</option>
+                          <option value="unable_to_verify">
+                            Unable to verify
+                          </option>
+                        </select>
+                      </Field>
+                      <Field label="Comparison with original finding">
+                        <textarea
+                          className={area}
+                          name="comparison"
+                          required
+                          rows={3}
+                        />
+                      </Field>
+                      <Field label="Outcome notes">
+                        <textarea className={area} name="notes" rows={2} />
+                      </Field>
+                      <Button type="submit">
+                        Complete and create report revision
+                      </Button>
+                    </form>
+                  ) : null}
+                </div>
+              </details>
+              {attachments.length || notes.length ? (
+                <div className="mt-4 grid gap-4 text-xs text-slate-600 sm:grid-cols-2">
+                  <div>
+                    <h4 className="font-semibold text-slate-800">Evidence</h4>
+                    <ul className="mt-1 space-y-1">
+                      {attachments.map((item) => (
+                        <li key={item.evidenceId}>
+                          {item.filename} · {item.classification}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                  <div>
+                    <h4 className="font-semibold text-slate-800">Notes</h4>
+                    <ul className="mt-1 space-y-1">
+                      {notes.map((note) => (
+                        <li key={note.id}>
+                          <span className="font-medium">{note.visibility}</span>{" "}
+                          · {note.body}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              ) : null}
+            </article>
+          );
+        })}
+      </RecordList>
+    </Stack>
+  );
 }
 
 type Workspace = NonNullable<

@@ -6,7 +6,7 @@
 
 DingoDocs is an open source, self-hosted penetration testing engagement and reporting platform. It keeps scope, assets, evidence, findings, review, reporting, client remediation, and retesting inside one auditable organisation boundary.
 
-The current implementation establishes the production foundation and core engagement workspace: Next.js 16, Better Auth, PostgreSQL through Drizzle, organisation-aware RBAC, tenant-scoped repositories, append-only audit events, local/S3-compatible storage, background jobs, a responsive application shell, and working client and engagement creation flows.
+The current implementation establishes the production foundation and complete assessment workflow: Next.js 16, Better Auth, PostgreSQL through Drizzle, organisation-aware RBAC, tenant-scoped repositories, append-only audit events, local/S3-compatible storage, background jobs, engagement delivery, reporting, and a restricted client remediation and retesting portal.
 
 ## Quick start
 
@@ -61,7 +61,7 @@ See [Architecture](docs/architecture.md), [Deployment](docs/deployment.md), [Adm
 
 ## Project status
 
-DingoDocs is under active development. The engagement workspace, secure evidence lifecycle, formal finding workflow, report rendering, authentication hardening, retention operations, audit model, and local/S3-compatible storage are implemented. Scanner adapters and expanded client remediation/retesting experiences remain subsequent delivery phases.
+DingoDocs is under active development. The engagement workspace, secure evidence lifecycle, formal finding workflow, report rendering, authentication hardening, retention operations, audit model, client remediation and retesting, and local/S3-compatible storage are implemented. Scanner adapters and global search remain subsequent delivery phases.
 
 ## Licence
 

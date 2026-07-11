@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { apiError } from "@/lib/api/responses";
 import {
-  requireOrganisationContext,
+  requireInternalOrganisationContext,
   requirePermission,
 } from "@/lib/permissions/require";
 import { storage } from "@/lib/storage";
@@ -29,7 +29,7 @@ export async function POST(
         ],
       )
       .parse(value);
-    const organisation = await requireOrganisationContext();
+    const organisation = await requireInternalOrganisationContext();
     const workspace = await getReportWorkspace(organisation.organisationId, id);
     const permission = await requirePermission("data:export", {
       engagementId: workspace.report.engagementId,

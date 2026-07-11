@@ -153,6 +153,7 @@ export const reportVersions = pgTable(
     status: reportStatusEnum("status").notNull().default("draft"),
     content: jsonb("content").$type<Record<string, unknown>>().notNull(),
     immutable: boolean("immutable").notNull().default(false),
+    clientVisible: boolean("client_visible").notNull().default(false),
     storageKeyPdf: text("storage_key_pdf"),
     storageKeyDocx: text("storage_key_docx"),
     exportKeys: jsonb("export_keys")
@@ -174,6 +175,10 @@ export const reportVersions = pgTable(
       onDelete: "set null",
     }),
     approvedAt: timestamp("approved_at", { withTimezone: true }),
+    clientApprovedBy: uuid("client_approved_by").references(() => users.id, {
+      onDelete: "set null",
+    }),
+    clientApprovedAt: timestamp("client_approved_at", { withTimezone: true }),
     publishedAt: timestamp("published_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
