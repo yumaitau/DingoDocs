@@ -1,0 +1,150 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-07-11T16:25:00+10:00",
+  "title": "Design System: DingoDocs",
+  "extensions": {
+    "colorMeta": {
+      "harbour-600": {
+        "role": "primary",
+        "displayName": "Harbour Blue",
+        "canonical": "oklch(0.495 0.14 247)",
+        "tonalRamp": [
+          "oklch(0.25 0.08 247)",
+          "oklch(0.32 0.10 247)",
+          "oklch(0.415 0.119 248)",
+          "oklch(0.495 0.14 247)",
+          "oklch(0.575 0.142 245)",
+          "oklch(0.74 0.09 243)",
+          "oklch(0.892 0.056 241)",
+          "oklch(0.975 0.012 241)"
+        ]
+      },
+      "paper": {
+        "role": "neutral",
+        "displayName": "Cool Paper",
+        "canonical": "oklch(0.995 0.003 245)",
+        "tonalRamp": [
+          "oklch(0.20 0.008 245)",
+          "oklch(0.32 0.008 245)",
+          "oklch(0.46 0.007 245)",
+          "oklch(0.60 0.006 245)",
+          "oklch(0.74 0.005 245)",
+          "oklch(0.86 0.004 245)",
+          "oklch(0.94 0.003 245)",
+          "oklch(0.995 0.003 245)"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "headline": {
+        "displayName": "Route Headline",
+        "purpose": "Route titles and workspace identity."
+      },
+      "body": {
+        "displayName": "Working Body",
+        "purpose": "Controls, tables, forms, and explanatory text."
+      }
+    },
+    "shadows": [
+      {
+        "name": "transient-high",
+        "value": "0 24px 80px rgba(28,45,65,0.22)",
+        "purpose": "Command palette only."
+      },
+      {
+        "name": "transient-low",
+        "value": "0 16px 50px rgba(28,45,65,0.08)",
+        "purpose": "Temporary isolated workflow surfaces."
+      }
+    ],
+    "motion": [
+      {
+        "name": "state",
+        "value": "180ms cubic-bezier(0.22,1,0.36,1)",
+        "purpose": "Colour, border, opacity, and transform feedback only."
+      }
+    ],
+    "breakpoints": [
+      { "name": "sm", "value": "640px" },
+      { "name": "lg", "value": "1024px" },
+      { "name": "xl", "value": "1280px" }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The single clear action in a working area.",
+      "html": "<button class=\"ds-btn-primary\">Create engagement</button>",
+      "css": ".ds-btn-primary{height:36px;padding:8px 12px;border:0;border-radius:6px;background:oklch(0.495 0.14 247);color:oklch(0.995 0.003 245);font:500 14px Geist,system-ui;transition:background 180ms cubic-bezier(.22,1,.36,1)}.ds-btn-primary:hover{background:oklch(0.415 0.119 248)}.ds-btn-primary:focus-visible{outline:3px solid oklch(0.575 0.142 245);outline-offset:2px}"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Supporting action with quiet structure.",
+      "html": "<button class=\"ds-btn-secondary\">More actions</button>",
+      "css": ".ds-btn-secondary{height:36px;padding:8px 12px;border:1px solid oklch(0.893 0.016 245);border-radius:6px;background:oklch(0.995 0.003 245);color:oklch(0.393 0.032 249);font:500 14px Geist,system-ui}.ds-btn-secondary:hover{background:oklch(0.938 0.014 245)}.ds-btn-secondary:focus-visible{outline:3px solid oklch(0.575 0.142 245);outline-offset:2px}"
+    },
+    {
+      "name": "Text Input",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Familiar, readable form control.",
+      "html": "<input class=\"ds-input\" placeholder=\"Search engagements\" />",
+      "css": ".ds-input{height:44px;width:100%;padding:8px 12px;border:1px solid oklch(0.893 0.016 245);border-radius:6px;background:oklch(0.995 0.003 245);color:oklch(0.205 0.025 249);font:400 14px Geist,system-ui}.ds-input:focus{border-color:oklch(0.575 0.142 245);outline:3px solid oklch(0.892 0.056 241);outline-offset:1px}"
+    },
+    {
+      "name": "Status Chip",
+      "kind": "chip",
+      "description": "Colour-redundant workflow state.",
+      "html": "<span class=\"ds-chip\"><span></span>QA approved</span>",
+      "css": ".ds-chip{display:inline-flex;align-items:center;gap:6px;padding:2px 8px;border:1px solid #bfdbfe;border-radius:999px;background:#eff6ff;color:#1e40af;font:500 12px Geist,system-ui}.ds-chip span{width:6px;height:6px;border-radius:50%;background:currentColor}"
+    },
+    {
+      "name": "Active Navigation",
+      "kind": "nav",
+      "description": "Quiet active state in the persistent sidebar.",
+      "html": "<a class=\"ds-nav\" href=\"#\">Engagements</a>",
+      "css": ".ds-nav{display:flex;height:36px;align-items:center;padding:0 10px;border-radius:6px;background:oklch(0.975 0.012 241);color:oklch(0.415 0.119 248);font:500 14px Geist,system-ui;text-decoration:none}.ds-nav:hover{background:oklch(0.944 0.027 241)}.ds-nav:focus-visible{outline:3px solid oklch(0.575 0.142 245);outline-offset:2px}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Quiet Operations Room",
+    "overview": "DingoDocs feels like a well-run assessment room in daylight: focused, calm, and immediately legible. Cool tinted neutrals support long working sessions; Harbour Blue marks action, focus, and selection without washing the interface in brand colour.",
+    "keyCharacteristics": [
+      "Calm, precise, and operational",
+      "Dense where comparison matters, spacious where decisions matter",
+      "Keyboard-first and WCAG 2.2 AA",
+      "Responsive from mobile to wide desktop",
+      "Familiar controls with visible security and workflow state"
+    ],
+    "rules": [
+      {
+        "name": "The Ten Percent Rule",
+        "body": "Harbour Blue occupies no more than ten percent of a typical working screen. Its rarity preserves meaning.",
+        "section": "colors"
+      },
+      {
+        "name": "The Redundancy Rule",
+        "body": "Severity and workflow state always use text or iconography as well as colour.",
+        "section": "colors"
+      },
+      {
+        "name": "The Lift-on-Demand Rule",
+        "body": "Resting content has no decorative shadow. A surface lifts only when it temporarily overlaps another surface.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do reserve Harbour Blue 600 for meaningful action, active selection, and focus.",
+      "Do maintain a three-pixel visible focus outline and complete keyboard paths."
+    ],
+    "donts": [
+      "Don't use legacy enterprise layouts or generic admin-template styling.",
+      "Don't use neon-on-black palettes, terminal decoration, glowing threat maps, or fear-driven copy.",
+      "Don't communicate severity, status, or validation through colour alone."
+    ]
+  }
+}

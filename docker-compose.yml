@@ -1,0 +1,85 @@
+name: dingodocs
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      DATABASE_URL: postgres://dingodocs:dingodocs@postgres:5432/dingodocs
+      BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?Set BETTER_AUTH_SECRET in .env}
+      BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://localhost:3000}
+      APP_URL: ${APP_URL:-http://localhost:3000}
+      STORAGE_PROVIDER: ${STORAGE_PROVIDER:-local}
+      LOCAL_STORAGE_ROOT: /app/storage/data
+      SMTP_HOST: mailpit
+      SMTP_PORT: 1025
+      CRON_TIMEZONE: ${CRON_TIMEZONE:-Australia/Sydney}
+    ports:
+      - "3000:3000"
+    volumes:
+      - app_storage:/app/storage/data
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        ["CMD", "wget", "-q", "--spider", "http://localhost:3000/api/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: migrator
+    environment:
+      DATABASE_URL: postgres://dingodocs:dingodocs@postgres:5432/dingodocs
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: dingodocs
+      POSTGRES_USER: dingodocs
+      POSTGRES_PASSWORD: dingodocs
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dingodocs -d dingodocs"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  minio:
+    image: minio/minio:RELEASE.2025-04-22T22-12-26Z
+    profiles: ["s3"]
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: dingodocs
+      MINIO_ROOT_PASSWORD: dingodocs-local-only
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+
+  mailpit:
+    image: axllent/mailpit:v1.27
+    ports:
+      - "1025:1025"
+      - "8025:8025"
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  app_storage:
+  minio_data:
