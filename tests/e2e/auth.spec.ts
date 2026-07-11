@@ -59,4 +59,5 @@ async function signIn(page: Page) {
       `Sign-in failed with ${signInResponse.status()}: ${await signInResponse.text()}`,
     );
   }
+  await expect(page).toHaveURL(/\/dashboard/);
 }
