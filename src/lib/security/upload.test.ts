@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { validateUpload } from "./upload";
+import { validateContentSignature, validateUpload } from "./upload";
 
 describe("upload validation", () => {
   it("normalises filenames and creates an opaque key", () => {
@@ -27,5 +27,29 @@ describe("upload validation", () => {
         filename: "huge.png",
       }),
     ).toThrow("between");
+  });
+
+  it("rejects a file whose signature does not match its media type", () => {
+    expect(() =>
+      validateContentSignature(
+        new TextEncoder().encode("not an image"),
+        "image/png",
+      ),
+    ).toThrow("does not match");
+  });
+
+  it("accepts JSON and common image signatures", () => {
+    expect(
+      validateContentSignature(
+        new TextEncoder().encode('{"finding":"WEB-001"}'),
+        "application/json",
+      ),
+    ).toBe("application/json");
+    expect(
+      validateContentSignature(
+        new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+        "image/png",
+      ),
+    ).toBe("image/png");
   });
 });

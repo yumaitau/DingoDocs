@@ -38,7 +38,7 @@ export class S3StorageProvider implements StorageProvider {
     let size = 0;
     const source =
       input.body instanceof Uint8Array
-        ? Readable.from(input.body)
+        ? Readable.from([Buffer.from(input.body)])
         : Readable.from(input.body as unknown as AsyncIterable<Uint8Array>);
     const meter = new Transform({
       transform(chunk: Buffer, _encoding, callback) {

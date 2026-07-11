@@ -49,5 +49,13 @@ export async function processNextJobs(limit: number) {
 
 async function runJob(job: JobRow) {
   if (job.type === "health.noop") return;
+  if (job.type === "evidence.scan") {
+    const evidenceId = job.payload.evidenceId;
+    if (typeof evidenceId !== "string")
+      throw new Error("Evidence scan job is missing evidenceId");
+    const { scanEvidenceJob } = await import("@/server/services/evidence");
+    await scanEvidenceJob(evidenceId);
+    return;
+  }
   throw new Error(`No handler registered for job type ${job.type}`);
 }
