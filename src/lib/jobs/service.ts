@@ -57,5 +57,23 @@ async function runJob(job: JobRow) {
     await scanEvidenceJob(evidenceId);
     return;
   }
+  if (job.type === "report.generate") {
+    const reportVersionId = job.payload.reportVersionId;
+    const formats = job.payload.formats;
+    if (
+      typeof reportVersionId !== "string" ||
+      !Array.isArray(formats) ||
+      !formats.every((format) =>
+        ["pdf", "docx", "html", "markdown", "json"].includes(String(format)),
+      )
+    )
+      throw new Error("Report generation job payload is invalid");
+    const { generateReportJob } = await import("@/server/services/reports");
+    await generateReportJob(
+      reportVersionId,
+      formats as Array<"pdf" | "docx" | "html" | "markdown" | "json">,
+    );
+    return;
+  }
   throw new Error(`No handler registered for job type ${job.type}`);
 }

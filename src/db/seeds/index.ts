@@ -13,6 +13,7 @@ import {
   organisationMembers,
   organisations,
   reportTemplates,
+  reportVersions,
   reports,
   scopeItems,
   scopeVersions,
@@ -32,6 +33,7 @@ const ids = {
   finding: "0197f30f-122c-7000-8000-000000000009",
   reportTemplate: "0197f30f-122c-7000-8000-000000000010",
   report: "0197f30f-122c-7000-8000-000000000011",
+  reportVersion: "0197f30f-122c-7000-8000-000000000013",
   task: "0197f30f-122c-7000-8000-000000000012",
 } as const;
 
@@ -232,11 +234,72 @@ async function main() {
         version: 1,
         definition: {
           sections: [
-            { type: "cover" },
-            { type: "executive-summary" },
-            { type: "findings" },
+            { id: "cover", type: "cover" },
+            {
+              id: "executive-summary",
+              type: "executive_summary",
+              title: "Executive summary",
+              content:
+                "This report presents the outcomes of {{engagement.name}} for {{client.name}}.",
+            },
+            {
+              id: "severity-chart",
+              type: "chart",
+              title: "Finding severity overview",
+              condition: { field: "hasFindings", operator: "truthy" },
+            },
+            { id: "scope", type: "scope", title: "Assessment scope" },
+            { id: "assets", type: "assets", title: "Assessed assets" },
+            { id: "findings", type: "findings", title: "Detailed findings" },
+            {
+              id: "evidence",
+              type: "evidence",
+              title: "Evidence register",
+              condition: { field: "hasEvidence", operator: "truthy" },
+            },
+            {
+              id: "appendix",
+              type: "appendix",
+              title: "Appendix: report controls",
+              content:
+                "This document is controlled according to the classification shown in its header and footer.",
+              options: { pageBreakBefore: true },
+            },
           ],
-          theme: { accent: "harbour-blue" },
+          reusableContent: {
+            methodology:
+              "Testing followed a risk-based methodology and the approved Rules of Engagement.",
+          },
+          variables: {},
+          branding: {
+            organisationName: "Dingo Security",
+            primaryColour: "#174b6b",
+            accentColour: "#d59b2d",
+          },
+          typography: {
+            bodyFont: "Arial",
+            headingFont: "Arial",
+            bodySize: 11,
+          },
+          header: {
+            left: "Dingo Security",
+            right: "Confidential",
+            showRule: true,
+          },
+          footer: {
+            left: "{{engagement.reference}}",
+            showPageNumbers: true,
+          },
+          watermark: "CONFIDENTIAL",
+          classification: "Confidential",
+          approvals: [
+            { role: "peer_reviewer", required: true },
+            { role: "quality_assurance", required: true },
+          ],
+          signatures: [
+            { label: "Prepared by", role: "Lead consultant" },
+            { label: "Approved by", role: "Quality assurance" },
+          ],
         },
         createdBy: ids.user,
       })
@@ -249,9 +312,115 @@ async function main() {
         clientId: ids.client,
         engagementId: ids.engagement,
         templateId: ids.reportTemplate,
+        templateVersion: 1,
         title: "Northstar Customer Portal Assessment",
         status: "internal_review",
         createdBy: ids.user,
+      })
+      .onConflictDoNothing();
+    await tx
+      .insert(reportVersions)
+      .values({
+        id: ids.reportVersion,
+        organisationId: ids.organisation,
+        reportId: ids.report,
+        version: 1,
+        status: "internal_review",
+        createdBy: ids.user,
+        content: {
+          reportId: ids.report,
+          reportVersionId: ids.reportVersion,
+          version: 1,
+          title: "Northstar Customer Portal Assessment",
+          organisationName: "Dingo Security",
+          clientName: "Northstar Systems",
+          engagementName: "Northstar customer portal assessment",
+          engagementReference: "ENG-2026-001",
+          classification: "Confidential",
+          generatedAt: new Date().toISOString(),
+          theme: {
+            primaryColour: "#174b6b",
+            accentColour: "#d59b2d",
+            bodyFont: "Arial",
+            headingFont: "Arial",
+            bodySize: 11,
+            headerLeft: "Dingo Security",
+            headerRight: "Confidential",
+            footerLeft: "ENG-2026-001",
+            showPageNumbers: true,
+            watermark: "CONFIDENTIAL",
+          },
+          sections: [
+            { definition: { id: "cover", type: "cover" } },
+            {
+              definition: {
+                id: "executive-summary",
+                type: "executive_summary",
+                title: "Executive summary",
+              },
+              content:
+                "This report presents the outcomes of the Northstar customer portal assessment.",
+            },
+            {
+              definition: {
+                id: "scope",
+                type: "scope",
+                title: "Assessment scope",
+              },
+            },
+            {
+              definition: {
+                id: "findings",
+                type: "findings",
+                title: "Detailed findings",
+              },
+            },
+          ],
+          findings: [
+            {
+              identifier: "WEB-001",
+              title: "Missing object-level authorisation exposes invoices",
+              severity: "high",
+              status: "ready_for_review",
+              executiveSummary:
+                "Authenticated users can retrieve invoices belonging to other customer accounts.",
+              technicalDetail:
+                "Changing the invoice identifier returns records without verifying tenant ownership.",
+              businessImpact: "Customer invoice data may be disclosed.",
+              remediation:
+                "Authorise every invoice lookup against the authenticated account.",
+              cvssVector:
+                "CVSS:4.0/AV:N/AC:L/AT:N/PR:L/UI:N/VC:H/VI:N/VA:N/SC:N/SI:N/SA:N",
+            },
+          ],
+          scope: [
+            {
+              name: "Customer portal",
+              value: "https://portal.northstar.example",
+              status: "in_scope",
+            },
+          ],
+          assets: [
+            {
+              name: "Customer Portal",
+              type: "application",
+              identifier: "portal.northstar.example",
+              criticality: "high",
+            },
+          ],
+          evidence: [],
+          severityCounts: {
+            critical: 0,
+            high: 1,
+            medium: 0,
+            low: 0,
+            informational: 0,
+          },
+          signatures: [
+            { label: "Prepared by", role: "Lead consultant" },
+            { label: "Approved by", role: "Quality assurance" },
+          ],
+        },
       })
       .onConflictDoNothing();
     await tx
