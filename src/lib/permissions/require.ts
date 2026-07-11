@@ -26,6 +26,20 @@ export async function requireOrganisationContext() {
   return { userId: session.user.id, ...organisation };
 }
 
+export async function requireInternalOrganisationContext() {
+  const context = await requireOrganisationContext();
+  if (
+    context.role === "client_user" ||
+    context.role === "client_administrator"
+  ) {
+    throw new PermissionDeniedError(
+      "data:export",
+      "client accounts must use the restricted client portal",
+    );
+  }
+  return context;
+}
+
 export async function rolesForOperation(input: {
   userId: string;
   organisationId: string;

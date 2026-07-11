@@ -50,6 +50,20 @@
       "when": 1783774434902,
       "tag": "0006_damp_lockjaw",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1783775199043,
+      "tag": "0007_icy_piledriver",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1783776142083,
+      "tag": "0008_graceful_patch",
+      "breakpoints": true
     }
   ]
 }

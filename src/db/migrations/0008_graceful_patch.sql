@@ -1,0 +1,5 @@
+ALTER TABLE "retest_attempts" ADD CONSTRAINT "retest_attempts_updated_report_version_id_report_versions_id_fk" FOREIGN KEY ("updated_report_version_id") REFERENCES "public"."report_versions"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+ALTER TABLE "remediation_updates" ADD CONSTRAINT "remediation_updates_status_check" CHECK ("remediation_updates"."status" in ('open', 'in_progress', 'remediated', 'partially_remediated', 'not_remediated', 'risk_accepted'));--> statement-breakpoint
+ALTER TABLE "retest_attempts" ADD CONSTRAINT "retest_attempts_status_check" CHECK ("retest_attempts"."status" in ('requested', 'scheduled', 'in_progress', 'completed', 'cancelled'));--> statement-breakpoint
+ALTER TABLE "retest_attempts" ADD CONSTRAINT "retest_attempts_outcome_check" CHECK ("retest_attempts"."outcome" is null or "retest_attempts"."outcome" in ('fixed', 'partially_remediated', 'not_remediated', 'risk_accepted', 'unable_to_verify'));--> statement-breakpoint
+ALTER TABLE "retest_notes" ADD CONSTRAINT "retest_notes_visibility_check" CHECK ("retest_notes"."visibility" in ('internal', 'client'));

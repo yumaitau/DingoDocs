@@ -32,6 +32,10 @@ erDiagram
   FINDING_TEMPLATE ||--o{ FINDING : snapshots
   FINDING ||--o{ FINDING_VERSION : versions
   FINDING ||--o{ FINDING_TRANSITION : transitions
+  FINDING ||--o{ REMEDIATION_UPDATE : records
+  FINDING ||--o{ RETEST_ATTEMPT : verifies
+  RETEST_ATTEMPT ||--o{ RETEST_NOTE : documents
+  RETEST_ATTEMPT }o--o{ EVIDENCE : supports
   ENGAGEMENT ||--o{ EVIDENCE : preserves
   EVIDENCE }o--o{ FINDING : supports
   ENGAGEMENT ||--o{ REPORT : generates
@@ -51,6 +55,10 @@ Email/password, magic-link, TOTP, session revocation data, and OAuth proxy found
 Every organisation-owned table contains `organisation_id`. An active-organisation cookie is a hint, never authority. `resolveActiveOrganisation` checks that hint against current membership and falls back only to another valid membership. Server operations call `requirePermission`; repository lookups accept a server-derived tenant scope and combine it with record identifiers.
 
 Client-provided organisation identifiers are not accepted as authority. Cross-client and cross-engagement access is further constrained through membership, classification, publication state, and evidence visibility in the relevant services.
+
+Client roles have a separate `/portal` route group and cannot render the internal application layout. Portal services derive access through the current user, client contact, and engagement-contact grant in one tenant-scoped join. Findings require both a publication timestamp and explicit client visibility; report visibility is version-specific. Approved scope, client-visible evidence and comments, and client-visible retest notes are selected independently, so internal notes and QA content are never loaded and then filtered in the browser. The same role boundary rejects browser sessions and client-owned keys at organisation-wide REST endpoints.
+
+Remediation updates and retest requests are append-only. A retest request snapshots the original finding and remediation state, while completion creates a new finding version and, when a published report exists, a new draft report revision. Original report versions remain immutable.
 
 ## Background work
 

@@ -12,7 +12,7 @@ import {
 import type { ApiScope } from "@/lib/api/scopes";
 import type { Permission } from "@/lib/permissions/matrix";
 import {
-  requireOrganisationContext,
+  requireInternalOrganisationContext,
   requirePermission,
 } from "@/lib/permissions/require";
 
@@ -78,7 +78,7 @@ export async function authenticateApiRequest(
     );
   if (key.userId) {
     const [membership] = await db
-      .select({ id: organisationMembers.id })
+      .select({ id: organisationMembers.id, role: organisationMembers.role })
       .from(organisationMembers)
       .where(
         and(
@@ -90,6 +90,15 @@ export async function authenticateApiRequest(
       .limit(1);
     if (!membership)
       throw new ApiAuthenticationError("API key owner is no longer a member");
+    if (
+      membership.role === "client_user" ||
+      membership.role === "client_administrator"
+    )
+      throw new ApiAuthenticationError(
+        "Client accounts must use the restricted client portal",
+        403,
+        "client_portal_required",
+      );
   }
   await db
     .update(apiKeys)
@@ -106,7 +115,7 @@ export async function authenticateApiRequest(
 
 export async function apiReadContext(request: Request, scope: ApiScope) {
   const principal = await authenticateApiRequest(request, scope);
-  return principal ?? requireOrganisationContext();
+  return principal ?? requireInternalOrganisationContext();
 }
 
 export async function apiWriteContext(
@@ -116,7 +125,9 @@ export async function apiWriteContext(
   input?: { engagementId?: string },
 ) {
   const principal = await authenticateApiRequest(request, scope);
-  return principal ?? requirePermission(permission, input);
+  if (principal) return principal;
+  await requireInternalOrganisationContext();
+  return requirePermission(permission, input);
 }
 
 export async function createApiCredential(

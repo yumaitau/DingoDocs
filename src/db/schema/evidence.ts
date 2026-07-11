@@ -14,7 +14,7 @@ import { users } from "./auth";
 import { clients } from "./clients";
 import { engagements } from "./engagements";
 import { evidenceClassificationEnum } from "./enums";
-import { findings } from "./findings";
+import { findings, retestAttempts } from "./findings";
 import { organisations } from "./organisations";
 
 export const evidence = pgTable(
@@ -94,6 +94,27 @@ export const evidenceFindings = pgTable(
   },
   (table) => [
     uniqueIndex("evidence_findings_uq").on(table.evidenceId, table.findingId),
+  ],
+);
+
+export const retestEvidence = pgTable(
+  "retest_evidence",
+  {
+    organisationId: uuid("organisation_id")
+      .notNull()
+      .references(() => organisations.id, { onDelete: "cascade" }),
+    retestAttemptId: uuid("retest_attempt_id")
+      .notNull()
+      .references(() => retestAttempts.id, { onDelete: "cascade" }),
+    evidenceId: uuid("evidence_id")
+      .notNull()
+      .references(() => evidence.id, { onDelete: "cascade" }),
+  },
+  (table) => [
+    uniqueIndex("retest_evidence_uq").on(
+      table.retestAttemptId,
+      table.evidenceId,
+    ),
   ],
 );
 
