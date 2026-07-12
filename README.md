@@ -12,6 +12,23 @@ The current implementation establishes the production foundation and complete as
 
 ![DingoDocs sign-in screen](docs/screenshots/sign-in.png)
 
+<details>
+<summary>View the product tour</summary>
+
+| SOC-style dashboard | Engagement workflow |
+| --- | --- |
+| ![DingoDocs dashboard](docs/screenshots/dashboard.png) | ![DingoDocs engagements](docs/screenshots/engagements.png) |
+
+| Finding workflow | Report workspace |
+| --- | --- |
+| ![DingoDocs finding workflow](docs/screenshots/findings.png) | ![DingoDocs reports](docs/screenshots/reports.png) |
+
+| Integrations and automation |
+| --- |
+| ![DingoDocs integrations](docs/screenshots/integrations.png) |
+
+</details>
+
 ## Quick start
 
 Requirements: Node.js 20 or newer, pnpm 10, and Docker.

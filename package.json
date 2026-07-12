@@ -19,6 +19,7 @@
     "test:watch": "vitest",
     "test:e2e": "playwright test",
     "screenshot": "tsx scripts/capture-readme-screenshot.ts",
+    "screenshots": "tsx scripts/capture-readme-screenshots.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",
