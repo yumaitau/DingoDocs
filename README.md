@@ -8,6 +8,10 @@ DingoDocs is an open source, self-hosted penetration testing engagement and repo
 
 The current implementation establishes the production foundation and complete assessment workflow: Next.js 16, Better Auth, PostgreSQL through Drizzle, organisation-aware RBAC, tenant-scoped repositories, append-only audit events, local/S3-compatible storage, background jobs, engagement delivery, reporting, and a restricted client remediation and retesting portal.
 
+## Interface preview
+
+![DingoDocs sign-in screen](docs/screenshots/sign-in.png)
+
 ## Quick start
 
 Requirements: Node.js 20 or newer, pnpm 10, and Docker.
