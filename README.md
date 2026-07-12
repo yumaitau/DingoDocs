@@ -6,7 +6,30 @@
 
 DingoDocs is an open source, self-hosted penetration testing engagement and reporting platform. It keeps scope, assets, evidence, findings, review, reporting, client remediation, and retesting inside one auditable organisation boundary.
 
-The current implementation establishes the production foundation and complete assessment workflow: Next.js 16, Better Auth, PostgreSQL through Drizzle, organisation-aware RBAC, tenant-scoped repositories, append-only audit events, local/S3-compatible storage, background jobs, engagement delivery, reporting, and a restricted client remediation and retesting portal.
+The game-changing workflow is the built-in MCP server: pen testers can stay in their CLI and send terminal output, files, finding write-ups, and evidence links into DingoDocs as they work. Each tool call uses a scoped API credential, preserves tenant boundaries, and lands in the same auditable workflow as the web app.
+
+The platform also provides the complete assessment workflow: Next.js 16, Better Auth, PostgreSQL through Drizzle, organisation-aware RBAC, tenant-scoped repositories, append-only audit events, local/S3-compatible storage, background jobs, engagement delivery, reporting, and a restricted client remediation and retesting portal.
+
+## MCP for pen testers
+
+Connect any MCP-capable CLI agent to DingoDocs in seconds. Create a personal or service credential in **Integrations and automation** with `engagements:read`, `findings:read`, `findings:write`, and `evidence:write`, then add this server to your MCP client:
+
+```json
+{
+  "mcpServers": {
+    "dingodocs": {
+      "command": "pnpm",
+      "args": ["mcp"],
+      "env": {
+        "DINGODOCS_URL": "http://localhost:3000",
+        "DINGODOCS_API_KEY": "dd_pat_replace-with-your-one-time-secret"
+      }
+    }
+  }
+}
+```
+
+From the terminal, the server exposes `list_engagements`, `list_findings`, `capture_evidence`, `create_finding_write_up`, `update_finding_write_up`, and `attach_evidence_to_finding`. Evidence can be captured directly from command output or a local file, so the write-up grows alongside the test instead of after it.
 
 ## Interface preview
 
@@ -15,16 +38,16 @@ The current implementation establishes the production foundation and complete as
 <details>
 <summary>View the product tour</summary>
 
-| SOC-style dashboard | Engagement workflow |
-| --- | --- |
+| SOC-style dashboard                                    | Engagement workflow                                        |
+| ------------------------------------------------------ | ---------------------------------------------------------- |
 | ![DingoDocs dashboard](docs/screenshots/dashboard.png) | ![DingoDocs engagements](docs/screenshots/engagements.png) |
 
-| Finding workflow | Report workspace |
-| --- | --- |
+| Finding workflow                                             | Report workspace                                   |
+| ------------------------------------------------------------ | -------------------------------------------------- |
 | ![DingoDocs finding workflow](docs/screenshots/findings.png) | ![DingoDocs reports](docs/screenshots/reports.png) |
 
-| Integrations and automation |
-| --- |
+| Integrations and automation                                  |
+| ------------------------------------------------------------ |
 | ![DingoDocs integrations](docs/screenshots/integrations.png) |
 
 </details>
@@ -66,6 +89,7 @@ pnpm lint            Run ESLint
 pnpm typecheck       Run strict TypeScript checks
 pnpm test            Run unit and configured integration tests
 pnpm test:e2e        Run Playwright tests
+pnpm mcp             Start the DingoDocs MCP server over stdio
 pnpm db:generate     Generate a Drizzle migration
 pnpm db:migrate      Apply migrations
 pnpm db:seed         Load local demonstration data

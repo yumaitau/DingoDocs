@@ -80,9 +80,33 @@ export default async function IntegrationsPage() {
     <>
       <PageHeader
         title="Integrations and automation"
-        description="Scoped credentials, signed webhooks, redacted notifications, and explicitly opted-in AI drafts."
+        description="Capture pen-test write-ups and evidence from the CLI with scoped MCP tools, alongside webhooks and automation."
       />
       <div className="grid gap-6 px-4 py-6 sm:px-6 xl:grid-cols-2 lg:px-8">
+        <section className="rounded-xl border border-cyan-200 bg-cyan-50 p-5 xl:col-span-2">
+          <p className="text-xs font-semibold uppercase tracking-wide text-cyan-800">
+            Built for the terminal
+          </p>
+          <h2 className="mt-1 text-xl font-semibold text-slate-950">
+            MCP server for live testing notes
+          </h2>
+          <p className="mt-2 max-w-3xl text-sm text-slate-700">
+            Give your CLI agent a scoped DingoDocs credential and send evidence,
+            finding write-ups, and review-ready updates as you work. Every
+            mutation uses the same tenant boundaries and audit trail as the web
+            app.
+          </p>
+          <pre className="mt-4 overflow-x-auto rounded-lg bg-slate-950 p-4 text-xs text-cyan-100">
+            <code>{`DINGODOCS_URL=http://localhost:3000
+DINGODOCS_API_KEY=dd_pat_… pnpm mcp`}</code>
+          </pre>
+          <p className="mt-3 text-xs text-cyan-900">
+            Tools include <code>capture_evidence</code>,{" "}
+            <code>create_finding_write_up</code>,{" "}
+            <code>update_finding_write_up</code>, and{" "}
+            <code>attach_evidence_to_finding</code>.
+          </p>
+        </section>
         <section className="rounded-xl border bg-paper p-5">
           <h2 className="font-semibold">API credentials</h2>
           <p className="mt-1 text-sm text-slate-500">

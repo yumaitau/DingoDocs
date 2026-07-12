@@ -35,6 +35,26 @@ import {
 } from "@/features/findings/workflow";
 
 export type FindingActor = { organisationId: string; userId: string };
+export type FindingNarrativeInput = {
+  title: string;
+  severity: "informational" | "low" | "medium" | "high" | "critical";
+  likelihood?: string;
+  impact?: string;
+  cvssVector?: string;
+  cvssScore?: string;
+  executiveSummary?: string;
+  technicalDetail?: string;
+  reproductionSteps?: string;
+  proofOfConcept?: string;
+  businessImpact?: string;
+  technicalImpact?: string;
+  remediation?: string;
+  verificationGuidance?: string;
+  references?: string[];
+  mappings?: FrameworkMapping[];
+  clientOwner?: string;
+  dueAt?: Date;
+};
 export type FindingTemplateInput = {
   stableKey?: string;
   title: string;
@@ -344,6 +364,85 @@ export async function createFindingFromTemplate(
   });
 }
 
+export async function createFindingDraft(
+  actor: FindingActor,
+  input: FindingNarrativeInput & {
+    engagementId: string;
+    identifier: string;
+    assetIds?: string[];
+    sourceProvenance?: Record<string, unknown>;
+  },
+) {
+  const cvssScore = validateFindingNarrative(input);
+  return db.transaction(async (tx) => {
+    await requireEngagement(tx, actor.organisationId, input.engagementId);
+    const [finding] = await tx
+      .insert(findings)
+      .values({
+        organisationId: actor.organisationId,
+        engagementId: input.engagementId,
+        identifier: input.identifier.trim(),
+        title: input.title.trim(),
+        severity: input.severity,
+        likelihood: input.likelihood?.trim(),
+        impact: input.impact?.trim(),
+        cvssVector: input.cvssVector?.trim(),
+        cvssScore: cvssScore?.toFixed(1),
+        executiveSummary: input.executiveSummary?.trim(),
+        technicalDetail: input.technicalDetail?.trim(),
+        reproductionSteps: input.reproductionSteps?.trim(),
+        proofOfConcept: input.proofOfConcept?.trim(),
+        businessImpact: input.businessImpact?.trim(),
+        technicalImpact: input.technicalImpact?.trim(),
+        remediation: input.remediation?.trim(),
+        verificationGuidance: input.verificationGuidance?.trim(),
+        references: input.references ?? [],
+        mappings: input.mappings ?? [],
+        clientOwner: input.clientOwner?.trim(),
+        dueAt: input.dueAt,
+        authorId: actor.userId,
+        sourceProvenance: input.sourceProvenance ?? {},
+      })
+      .returning();
+    if (!finding) throw new Error("Unable to create finding");
+    const linkedAssets = await requireAssets(
+      tx,
+      actor.organisationId,
+      input.engagementId,
+      input.assetIds ?? [],
+    );
+    if (linkedAssets.length) {
+      await tx.insert(findingAssets).values(
+        linkedAssets.map(({ id }) => ({
+          organisationId: actor.organisationId,
+          findingId: finding.id,
+          assetId: id,
+        })),
+      );
+    }
+    await tx.insert(findingVersions).values({
+      organisationId: actor.organisationId,
+      findingId: finding.id,
+      version: finding.version,
+      snapshot: findingSnapshot(finding),
+      changedBy: actor.userId,
+      changeSummary: "Created as a draft",
+    });
+    await tx.insert(auditEvents).values({
+      organisationId: actor.organisationId,
+      actorId: actor.userId,
+      action: "finding.created",
+      targetType: "finding",
+      targetId: finding.id,
+      metadata: {
+        engagementId: input.engagementId,
+        sourceProvenance: input.sourceProvenance ?? {},
+      },
+    });
+    return finding;
+  });
+}
+
 export async function compareFindingTemplate(
   actor: Pick<FindingActor, "organisationId">,
   findingId: string,
@@ -437,37 +536,12 @@ export async function updateFindingFromLatestTemplate(
 
 export async function updateFindingNarrative(
   actor: FindingActor,
-  input: {
+  input: FindingNarrativeInput & {
     findingId: string;
-    title: string;
-    severity: "informational" | "low" | "medium" | "high" | "critical";
-    likelihood?: string;
-    impact?: string;
-    cvssVector?: string;
-    cvssScore?: string;
-    executiveSummary?: string;
-    technicalDetail?: string;
-    reproductionSteps?: string;
-    proofOfConcept?: string;
-    businessImpact?: string;
-    technicalImpact?: string;
-    remediation?: string;
-    verificationGuidance?: string;
-    references?: string[];
-    mappings?: FrameworkMapping[];
-    clientOwner?: string;
-    dueAt?: Date;
     changeSummary: string;
   },
 ) {
-  if (input.cvssVector && !input.cvssVector.startsWith("CVSS:4.0/"))
-    throw new Error("CVSS vector must use CVSS v4.0");
-  const cvssScore = input.cvssScore ? Number(input.cvssScore) : undefined;
-  if (
-    cvssScore !== undefined &&
-    (!Number.isFinite(cvssScore) || cvssScore < 0 || cvssScore > 10)
-  )
-    throw new Error("CVSS score must be between 0 and 10");
+  const cvssScore = validateFindingNarrative(input);
   return db.transaction(async (tx) => {
     const finding = await requireFinding(
       tx,
@@ -519,6 +593,47 @@ export async function updateFindingNarrative(
       },
     });
     return updated;
+  });
+}
+
+export async function patchFindingNarrative(
+  actor: FindingActor,
+  input: Partial<FindingNarrativeInput> & {
+    findingId: string;
+    changeSummary: string;
+  },
+) {
+  const current = await requireFinding(
+    db,
+    actor.organisationId,
+    input.findingId,
+  );
+  return updateFindingNarrative(actor, {
+    findingId: input.findingId,
+    title: input.title ?? current.title,
+    severity: input.severity ?? current.severity,
+    likelihood: input.likelihood ?? current.likelihood ?? undefined,
+    impact: input.impact ?? current.impact ?? undefined,
+    cvssVector: input.cvssVector ?? current.cvssVector ?? undefined,
+    cvssScore: input.cvssScore ?? current.cvssScore ?? undefined,
+    executiveSummary:
+      input.executiveSummary ?? current.executiveSummary ?? undefined,
+    technicalDetail:
+      input.technicalDetail ?? current.technicalDetail ?? undefined,
+    reproductionSteps:
+      input.reproductionSteps ?? current.reproductionSteps ?? undefined,
+    proofOfConcept: input.proofOfConcept ?? current.proofOfConcept ?? undefined,
+    businessImpact: input.businessImpact ?? current.businessImpact ?? undefined,
+    technicalImpact:
+      input.technicalImpact ?? current.technicalImpact ?? undefined,
+    remediation: input.remediation ?? current.remediation ?? undefined,
+    verificationGuidance:
+      input.verificationGuidance ?? current.verificationGuidance ?? undefined,
+    references: input.references ?? current.references,
+    mappings: input.mappings ?? current.mappings,
+    clientOwner: input.clientOwner ?? current.clientOwner ?? undefined,
+    dueAt: input.dueAt ?? current.dueAt ?? undefined,
+    changeSummary: input.changeSummary,
   });
 }
 
@@ -918,6 +1033,21 @@ function normaliseTemplate(input: FindingTemplateInput) {
     assessmentTypes: input.assessmentTypes ?? [],
     mappings: input.mappings ?? [],
   };
+}
+
+function validateFindingNarrative(input: {
+  cvssVector?: string;
+  cvssScore?: string;
+}) {
+  if (input.cvssVector && !input.cvssVector.startsWith("CVSS:4.0/"))
+    throw new Error("CVSS vector must use CVSS v4.0");
+  const cvssScore = input.cvssScore ? Number(input.cvssScore) : undefined;
+  if (
+    cvssScore !== undefined &&
+    (!Number.isFinite(cvssScore) || cvssScore < 0 || cvssScore > 10)
+  )
+    throw new Error("CVSS score must be between 0 and 10");
+  return cvssScore;
 }
 
 function templateInputFromRow(

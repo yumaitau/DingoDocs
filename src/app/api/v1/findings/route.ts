@@ -3,8 +3,10 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/db";
 import { findings } from "@/db/schema";
-import { apiReadContext } from "@/lib/api/authentication";
+import { createFindingInput } from "@/lib/api/finding-input";
+import { apiReadContext, apiWriteContext } from "@/lib/api/authentication";
 import { apiError } from "@/lib/api/responses";
+import { createFindingDraft } from "@/server/services/findings";
 
 const querySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
@@ -78,6 +80,36 @@ export async function GET(request: Request) {
       },
       requestId,
     });
+  } catch (error) {
+    return apiError(error, requestId);
+  }
+}
+
+export async function POST(request: Request) {
+  const requestId = request.headers.get("x-request-id");
+  try {
+    const context = await apiWriteContext(
+      request,
+      "findings:write",
+      "finding:create",
+    );
+    if (!context.userId)
+      throw new Error("API key does not have an attributable owner");
+    const input = createFindingInput.parse(await request.json());
+    const created = await createFindingDraft(
+      { organisationId: context.organisationId, userId: context.userId },
+      {
+        ...input,
+        dueAt: input.dueAt
+          ? new Date(`${input.dueAt}T23:59:59.999Z`)
+          : undefined,
+        sourceProvenance: {
+          channel:
+            request.headers.get("x-dingodocs-source") === "mcp" ? "mcp" : "api",
+        },
+      },
+    );
+    return NextResponse.json({ data: created, requestId }, { status: 201 });
   } catch (error) {
     return apiError(error, requestId);
   }
