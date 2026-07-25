@@ -35,7 +35,7 @@
     "@better-auth/passkey": "1.6.25",
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",
-    "@hookform/resolvers": "^5.4.0",
+    "@hookform/resolvers": "^5.4.2",
     "@modelcontextprotocol/sdk": "^1.29.0",
     "@opentelemetry/api": "^1.9.1",
     "@radix-ui/react-dialog": "^1.1.22",
