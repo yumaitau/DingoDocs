@@ -18,11 +18,7 @@ const standardResponses = {
   "401": { $ref: "#/components/responses/AuthenticationError" },
   "403": { $ref: "#/components/responses/PermissionError" },
 };
-const paginated = (
-  resource: string,
-  scope: string,
-  parameters: object[] = [],
-) => ({
+const paginated = (resource: string, scope: string, parameters: object[] = []) => ({
   summary: `List ${resource}`,
   security: [{ bearerAuth: [scope] }, { cookieAuth: [] }],
   parameters: [...paginationParameters, ...parameters],
@@ -135,6 +131,179 @@ export function GET() {
           },
         ]),
       },
+      "/engagements/{id}": {
+        get: {
+          summary: "Get an engagement",
+          security: [{ bearerAuth: ["engagements:read"] }, { cookieAuth: [] }],
+          parameters: [
+            {
+              name: "id",
+              in: "path",
+              required: true,
+              schema: { type: "string", format: "uuid" },
+            },
+          ],
+          responses: {
+            "200": { description: "Engagement" },
+            "404": { description: "Engagement not found in the active tenant" },
+            ...standardResponses,
+          },
+        },
+      },
+      "/engagements/{id}/notes": {
+        get: {
+          summary: "List engagement notes",
+          security: [{ bearerAuth: ["engagements:read"] }, { cookieAuth: [] }],
+          parameters: [
+            {
+              name: "id",
+              in: "path",
+              required: true,
+              schema: { type: "string", format: "uuid" },
+            },
+          ],
+          responses: { "200": { description: "Notes" }, ...standardResponses },
+        },
+        post: {
+          summary: "Create a testing-journal note",
+          security: [{ bearerAuth: ["notes:write"] }, { cookieAuth: [] }],
+          parameters: [
+            {
+              name: "id",
+              in: "path",
+              required: true,
+              schema: { type: "string", format: "uuid" },
+            },
+          ],
+          responses: {
+            "201": { description: "Note created" },
+            ...standardResponses,
+          },
+        },
+      },
+      "/engagements/{id}/timeline": {
+        get: {
+          summary: "List testing timeline events",
+          security: [{ bearerAuth: ["engagements:read"] }, { cookieAuth: [] }],
+          parameters: [
+            {
+              name: "id",
+              in: "path",
+              required: true,
+              schema: { type: "string", format: "uuid" },
+            },
+          ],
+          responses: { "200": { description: "Timeline" }, ...standardResponses },
+        },
+        post: {
+          summary: "Record a testing timeline event",
+          security: [{ bearerAuth: ["notes:write"] }, { cookieAuth: [] }],
+          parameters: [
+            {
+              name: "id",
+              in: "path",
+              required: true,
+              schema: { type: "string", format: "uuid" },
+            },
+          ],
+          responses: {
+            "201": { description: "Timeline entry created" },
+            ...standardResponses,
+          },
+        },
+      },
+      "/engagements/{id}/assets": {
+        get: {
+          summary: "List engagement assets",
+          security: [{ bearerAuth: ["engagements:read"] }, { cookieAuth: [] }],
+          parameters: [
+            {
+              name: "id",
+              in: "path",
+              required: true,
+              schema: { type: "string", format: "uuid" },
+            },
+          ],
+          responses: { "200": { description: "Assets" }, ...standardResponses },
+        },
+        post: {
+          summary: "Create an engagement asset",
+          security: [{ bearerAuth: ["engagements:write"] }, { cookieAuth: [] }],
+          parameters: [
+            {
+              name: "id",
+              in: "path",
+              required: true,
+              schema: { type: "string", format: "uuid" },
+            },
+          ],
+          responses: {
+            "201": { description: "Asset created" },
+            ...standardResponses,
+          },
+        },
+      },
+      "/engagements/{id}/scope": {
+        get: {
+          summary: "Read the current scope version and items",
+          security: [{ bearerAuth: ["engagements:read"] }, { cookieAuth: [] }],
+          parameters: [
+            {
+              name: "id",
+              in: "path",
+              required: true,
+              schema: { type: "string", format: "uuid" },
+            },
+          ],
+          responses: { "200": { description: "Scope" }, ...standardResponses },
+        },
+      },
+      "/engagements/{id}/imports": {
+        post: {
+          summary:
+            "Preview or ingest scanner output as draft findings, a testing-journal note, and a timeline event",
+          security: [{ bearerAuth: ["imports:write"] }, { cookieAuth: [] }],
+          parameters: [
+            {
+              name: "id",
+              in: "path",
+              required: true,
+              schema: { type: "string", format: "uuid" },
+            },
+          ],
+          requestBody: {
+            required: true,
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/ScannerIngest" },
+              },
+            },
+          },
+          responses: {
+            "201": { description: "Scanner output ingested as drafts" },
+            ...standardResponses,
+          },
+        },
+      },
+      "/findings/{id}": {
+        get: {
+          summary: "Get a finding",
+          security: [{ bearerAuth: ["findings:read"] }, { cookieAuth: [] }],
+          parameters: [
+            {
+              name: "id",
+              in: "path",
+              required: true,
+              schema: { type: "string", format: "uuid" },
+            },
+          ],
+          responses: {
+            "200": { description: "Finding" },
+            "404": { description: "Finding not found in the active tenant" },
+            ...standardResponses,
+          },
+        },
+      },
       "/engagements/{id}/evidence": {
         post: {
           summary: "Upload validated evidence",
@@ -204,6 +373,19 @@ export function GET() {
             startDate: { type: "string", format: "date" },
             endDate: { type: "string", format: "date" },
             objectives: { type: "string", maxLength: 10000 },
+          },
+        },
+        ScannerIngest: {
+          type: "object",
+          additionalProperties: false,
+          required: ["adapter", "content"],
+          properties: {
+            adapter: {
+              enum: ["nmap", "nessus", "openvas", "zap", "burp", "nuclei", "csv", "json"],
+            },
+            filename: { type: "string", maxLength: 240 },
+            content: { type: "string", maxLength: 2000000 },
+            mode: { enum: ["preview", "ingest"], default: "ingest" },
           },
         },
         PaginatedResponse: {

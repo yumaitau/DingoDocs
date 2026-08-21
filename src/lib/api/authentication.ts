@@ -3,18 +3,10 @@ import "server-only";
 import { createHash, randomBytes } from "node:crypto";
 import { and, eq, gt, isNull, or } from "drizzle-orm";
 import { db } from "@/db";
-import {
-  apiKeys,
-  auditEvents,
-  organisationMembers,
-  serviceAccounts,
-} from "@/db/schema";
+import { apiKeys, auditEvents, organisationMembers, serviceAccounts } from "@/db/schema";
 import type { ApiScope } from "@/lib/api/scopes";
 import type { Permission } from "@/lib/permissions/matrix";
-import {
-  requireInternalOrganisationContext,
-  requirePermission,
-} from "@/lib/permissions/require";
+import { requireInternalOrganisationContext, requirePermission } from "@/lib/permissions/require";
 
 export { apiScopes, type ApiScope } from "@/lib/api/scopes";
 
@@ -29,8 +21,7 @@ export class ApiAuthenticationError extends Error {
   }
 }
 
-const tokenHash = (token: string) =>
-  createHash("sha256").update(token).digest("hex");
+const tokenHash = (token: string) => createHash("sha256").update(token).digest("hex");
 
 export type ApiPrincipal = {
   organisationId: string;
@@ -42,7 +33,7 @@ export type ApiPrincipal = {
 
 export async function authenticateApiRequest(
   request: Request,
-  requiredScope: ApiScope,
+  requiredScope?: ApiScope,
 ): Promise<ApiPrincipal | null> {
   const authorization = request.headers.get("authorization");
   if (!authorization) return null;
@@ -70,7 +61,7 @@ export async function authenticateApiRequest(
     .limit(1);
   if (!key || (key.serviceAccountId && key.serviceDisabledAt))
     throw new ApiAuthenticationError("API key is invalid or expired");
-  if (!key.scopes.includes(requiredScope))
+  if (requiredScope && !key.scopes.includes(requiredScope))
     throw new ApiAuthenticationError(
       `API key does not grant ${requiredScope}`,
       403,
@@ -88,22 +79,15 @@ export async function authenticateApiRequest(
         ),
       )
       .limit(1);
-    if (!membership)
-      throw new ApiAuthenticationError("API key owner is no longer a member");
-    if (
-      membership.role === "client_user" ||
-      membership.role === "client_administrator"
-    )
+    if (!membership) throw new ApiAuthenticationError("API key owner is no longer a member");
+    if (membership.role === "client_user" || membership.role === "client_administrator")
       throw new ApiAuthenticationError(
         "Client accounts must use the restricted client portal",
         403,
         "client_portal_required",
       );
   }
-  await db
-    .update(apiKeys)
-    .set({ lastUsedAt: new Date() })
-    .where(eq(apiKeys.id, key.id));
+  await db.update(apiKeys).set({ lastUsedAt: new Date() }).where(eq(apiKeys.id, key.id));
   return {
     organisationId: key.organisationId,
     apiKeyId: key.id,
@@ -111,6 +95,18 @@ export async function authenticateApiRequest(
     serviceAccountId: key.serviceAccountId ?? undefined,
     scopes: key.scopes,
   };
+}
+
+export async function requireApiBearer(request: Request) {
+  const principal = await authenticateApiRequest(request);
+  if (!principal) throw new ApiAuthenticationError("Bearer API key is required");
+  return principal;
+}
+
+export function bearerToken(request: Request) {
+  const authorization = request.headers.get("authorization");
+  const match = /^Bearer ([A-Za-z0-9_-]{20,})$/.exec(authorization ?? "");
+  return match?.[1];
 }
 
 export async function apiReadContext(request: Request, scope: ApiScope) {
@@ -145,8 +141,7 @@ export async function createApiCredential(
   return db.transaction(async (tx) => {
     let serviceAccountId: string | undefined;
     if (input.kind === "service") {
-      if (!input.serviceAccountName?.trim())
-        throw new Error("Service account name is required");
+      if (!input.serviceAccountName?.trim()) throw new Error("Service account name is required");
       const [account] = await tx
         .insert(serviceAccounts)
         .values({

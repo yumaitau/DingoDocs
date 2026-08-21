@@ -34,6 +34,24 @@ describe("scanner import adapters", () => {
         },
       ],
     }),
+    nuclei: `${JSON.stringify({
+      "template-id": "CVE-2021-41773",
+      info: {
+        name: "Apache Path Traversal",
+        severity: "critical",
+        description: "A path traversal in Apache httpd.",
+        remediation: "Upgrade Apache httpd.",
+        reference: ["https://nvd.nist.gov/vuln/detail/CVE-2021-41773"],
+      },
+      host: "https://nuclei.test",
+      port: "443",
+      type: "http",
+    })}\n${JSON.stringify({
+      "template-id": "exposed-panel",
+      info: { name: "Exposed admin panel", severity: "medium" },
+      host: "10.0.0.8",
+      port: "8080",
+    })}`,
   } as const;
   const titles: Record<string, string> = {
     nmap: "Open https service",
@@ -43,6 +61,7 @@ describe("scanner import adapters", () => {
     burp: "Burp issue",
     csv: "CSV issue",
     json: "JSON issue",
+    nuclei: "Apache Path Traversal",
   };
   for (const [adapter, fixture] of Object.entries(fixtures)) {
     it(`normalizes ${adapter}`, () => {
@@ -63,5 +82,16 @@ describe("scanner import adapters", () => {
         ),
       ),
     ).toThrow("not permitted");
+  });
+  it("normalizes nuclei JSONL hosts and keeps informational-safe severity mapping", () => {
+    const items = parseScannerImport("nuclei", new TextEncoder().encode(fixtures.nuclei as string));
+    expect(items).toHaveLength(2);
+    expect(items[0]).toMatchObject({
+      title: "Apache Path Traversal",
+      severity: "critical",
+      assetIdentifier: "nuclei.test",
+      port: 443,
+    });
+    expect(items[1]?.severity).toBe("medium");
   });
 });

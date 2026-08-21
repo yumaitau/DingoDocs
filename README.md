@@ -6,13 +6,13 @@
 
 DingoDocs is an open source, self-hosted penetration testing engagement and reporting platform. It keeps scope, assets, evidence, findings, review, reporting, client remediation, and retesting inside one auditable organisation boundary.
 
-The game-changing workflow is the built-in MCP server: pen testers can stay in their CLI and send terminal output, files, finding write-ups, and evidence links into DingoDocs as they work. Each tool call uses a scoped API credential, preserves tenant boundaries, and lands in the same auditable workflow as the web app.
+The game-changing workflow is the built-in MCP server: pen testers and automated scanners can stay in the CLI and send terminal output, files, testing-journal notes, timeline events, finding write-ups, and evidence into DingoDocs as the engagement happens. Stdio MCP (`pnpm mcp`) and HTTP MCP (`POST /api/mcp`) are facades over the tenant-scoped REST API. Scanner ingest creates **draft** findings only — nothing is auto-published to the client.
 
-The platform also provides the complete assessment workflow: Next.js 16, Better Auth, PostgreSQL through Drizzle, organisation-aware RBAC, tenant-scoped repositories, append-only audit events, local/S3-compatible storage, background jobs, engagement delivery, reporting, and a restricted client remediation and retesting portal.
+The platform also provides the complete assessment workflow: Next.js 16, Better Auth, PostgreSQL through Drizzle, organisation-aware RBAC, tenant-scoped repositories, append-only audit events, local/S3-compatible storage, background jobs, engagement delivery, white-label professional reporting, and a restricted client remediation and retesting portal.
 
-## MCP for pen testers
+## MCP for pen testers and scanners
 
-Connect any MCP-capable CLI agent to DingoDocs in seconds. Create a personal or service credential in **Integrations and automation** with `engagements:read`, `findings:read`, `findings:write`, and `evidence:write`, then add this server to your MCP client:
+Connect any MCP-capable CLI agent to DingoDocs in seconds. Create a personal or service credential in **Integrations and automation** with `engagements:read`, `engagements:write`, `findings:read`, `findings:write`, `evidence:write`, `notes:write`, and `imports:write`, then add this server to your MCP client:
 
 ```json
 {
@@ -29,7 +29,20 @@ Connect any MCP-capable CLI agent to DingoDocs in seconds. Create a personal or 
 }
 ```
 
-From the terminal, the server exposes `list_engagements`, `list_findings`, `capture_evidence`, `create_finding_write_up`, `update_finding_write_up`, and `attach_evidence_to_finding`. Evidence can be captured directly from command output or a local file, so the write-up grows alongside the test instead of after it.
+Unattended scanners can call the same tools over HTTP JSON-RPC:
+
+```bash
+curl -H "Authorization: Bearer $DINGODOCS_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"tools/call","params":{"name":"ingest_scanner_results","arguments":{"engagementId":"<uuid>","adapter":"nuclei","filename":"nuclei.jsonl","content":"<scanner output>"}}}' \
+  https://dingodocs.example/api/mcp
+```
+
+From the terminal, the server exposes `list_engagements`, `get_engagement`, `list_findings`, `get_finding`, `add_testing_note`, `add_timeline_entry`, `list_notes`, `list_assets`, `create_asset`, `list_scope`, `ingest_scanner_results`, `preview_scanner_import`, `capture_evidence`, `create_finding_write_up`, `update_finding_write_up`, and `attach_evidence_to_finding`. Nuclei, Nmap, Nessus, OpenVAS, ZAP, Burp, CSV, and JSON outputs can land as draft findings plus a testing-journal note while the test is still running.
+
+## White-label penetration test reports
+
+Report templates ship with a full pentest structure: cover, document control, confidentiality notice, table of contents, executive summary, severity classification, scope, methodology, technical findings, prioritised recommendations, assessed assets, evidence register, glossary, and contacts. Set `branding.whiteLabel`, consultancy colours, and PNG/JPEG logo data URIs so client-facing PDF, DOCX, HTML, and Markdown exports carry your brand — not a product mark. Logos are accepted as data URIs only; remote URLs are rejected.
 
 ## Interface preview
 

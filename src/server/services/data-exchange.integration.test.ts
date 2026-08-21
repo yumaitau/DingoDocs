@@ -161,24 +161,13 @@ run("scanner exchange, backup, and tenant-safe PostgreSQL search", () => {
     if (!modules) return;
     await modules.db
       .delete(modules.auditEvents)
-      .where(
-        modules.inArray(modules.auditEvents.organisationId, [
-          ids.orgA,
-          ids.orgB,
-        ]),
-      );
+      .where(modules.inArray(modules.auditEvents.organisationId, [ids.orgA, ids.orgB]));
     await modules.db
       .delete(modules.organisations)
       .where(modules.inArray(modules.organisations.id, [ids.orgA, ids.orgB]));
     await modules.db
       .delete(modules.users)
-      .where(
-        modules.inArray(modules.users.id, [
-          ids.admin,
-          ids.clientUser,
-          ids.outsider,
-        ]),
-      );
+      .where(modules.inArray(modules.users.id, [ids.admin, ids.clientUser, ids.outsider]));
     await modules.sqlClient.end();
     await rm(root, { recursive: true, force: true });
     delete process.env.LOCAL_STORAGE_ROOT;
@@ -229,15 +218,51 @@ run("scanner exchange, backup, and tenant-safe PostgreSQL search", () => {
       mediaType: "text/csv",
       bytes,
     });
-    expect(
-      duplicate.items.find((item) => item.title === "Imported issue"),
-    ).toMatchObject({ action: "duplicate", selected: false });
+    expect(duplicate.items.find((item) => item.title === "Imported issue")).toMatchObject({
+      action: "duplicate",
+      selected: false,
+    });
     await expect(
       modules.applyScannerImport(
         { organisationId: ids.orgB, userId: ids.outsider },
         { importRunId, selectedItemIds: [] },
       ),
     ).rejects.toBeInstanceOf(modules.ExchangeScopeError);
+  });
+
+  it("ingests scanner output as draft findings with a testing-journal note", async () => {
+    const bytes = new TextEncoder().encode(
+      JSON.stringify({
+        "template-id": "exposed-panel",
+        info: {
+          name: "Exposed admin panel",
+          severity: "medium",
+          description: "Admin console is reachable.",
+        },
+        host: "https://portal.test",
+        port: "443",
+      }),
+    );
+    const ingested = await modules.ingestScannerImport(admin, {
+      engagementId: ids.engagementA,
+      adapter: "nuclei",
+      filename: "nuclei.json",
+      bytes,
+    });
+    expect(ingested.publication).toBe("draft");
+    expect(ingested.applied).toHaveLength(1);
+    expect(ingested.note.kind).toBe("testing_journal");
+    expect(ingested.note.visibility).toBe("team");
+    expect(ingested.summary.note).toContain("remain draft");
+    const [finding] = await modules.db
+      .select()
+      .from(modules.findings)
+      .where(modules.eq(modules.findings.id, ingested.applied[0]!.findingId));
+    expect(finding).toMatchObject({
+      title: "Exposed admin panel",
+      status: "draft",
+      severity: "medium",
+    });
   });
 
   it("exports required organisation domains and a migration-safe superset without storage locators", async () => {
@@ -277,15 +302,10 @@ run("scanner exchange, backup, and tenant-safe PostgreSQL search", () => {
         "Internal Needle Note",
       ]),
     );
-    expect(internal.map((item) => item.title)).not.toContain(
-      "Other Needle Finding",
-    );
+    expect(internal.map((item) => item.title)).not.toContain("Other Needle Finding");
     const portal = await modules.globalSearch(client, "Needle");
     expect(portal.map((item) => item.title)).toEqual(
-      expect.arrayContaining([
-        "Shared Needle Assessment",
-        "SHARED-1 · Shared Needle Finding",
-      ]),
+      expect.arrayContaining(["Shared Needle Assessment", "SHARED-1 · Shared Needle Finding"]),
     );
     expect(portal.map((item) => item.title)).not.toEqual(
       expect.arrayContaining([
@@ -301,13 +321,12 @@ run("scanner exchange, backup, and tenant-safe PostgreSQL search", () => {
 });
 
 async function load() {
-  const [{ db, sqlClient }, schema, exchange, search, drizzle] =
-    await Promise.all([
-      import("@/db"),
-      import("@/db/schema"),
-      import("./data-exchange"),
-      import("./global-search"),
-      import("drizzle-orm"),
-    ]);
+  const [{ db, sqlClient }, schema, exchange, search, drizzle] = await Promise.all([
+    import("@/db"),
+    import("@/db/schema"),
+    import("./data-exchange"),
+    import("./global-search"),
+    import("drizzle-orm"),
+  ]);
   return { db, sqlClient, ...schema, ...exchange, ...search, ...drizzle };
 }

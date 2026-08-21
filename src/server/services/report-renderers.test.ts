@@ -34,6 +34,82 @@ describe("report renderers", () => {
     expect(pdf.byteLength).toBeGreaterThan(2_000);
     expect(docx.byteLength).toBeGreaterThan(2_000);
   });
+
+  it("renders a white-label pentest report without product branding", async () => {
+    const report = model();
+    report.whiteLabel = true;
+    report.tagline = "Confidential security assessment";
+    report.organisationName = "Harbour Advisory";
+    report.documentControl = [
+      { field: "Client", value: "Northstar Systems" },
+      { field: "Version", value: "1" },
+    ];
+    report.severityRatings = [
+      { severity: "High", cvss: "7.0 – 8.9", meaning: "Serious weakness." },
+    ];
+    report.glossary = [{ term: "CVSS", definition: "Severity score." }];
+    report.contacts = [
+      { role: "Prepared by", name: "Lead consultant", email: "lead@harbour.test" },
+    ];
+    report.recommendations = [
+      {
+        identifier: "WEB-001",
+        title: "Missing object authorisation",
+        severity: "high",
+        remediation: "Scope every lookup to the active account.",
+      },
+    ];
+    report.sections = [
+      ...report.sections.slice(0, 2),
+      {
+        definition: {
+          id: "confidentiality",
+          type: "confidentiality",
+          title: "Confidentiality and distribution",
+        },
+        content: "This report is confidential.",
+      },
+      {
+        definition: {
+          id: "toc",
+          type: "table_of_contents",
+          title: "Table of contents",
+        },
+      },
+      {
+        definition: {
+          id: "ratings",
+          type: "severity_ratings",
+          title: "Severity classification",
+        },
+      },
+      {
+        definition: {
+          id: "recommendations",
+          type: "recommendations",
+          title: "Prioritised recommendations",
+        },
+      },
+      {
+        definition: { id: "glossary", type: "glossary", title: "Glossary" },
+      },
+      {
+        definition: { id: "contacts", type: "contacts", title: "Contacts" },
+      },
+      ...report.sections.slice(2),
+    ];
+    const html = renderReportHtml(report);
+    const markdown = renderReportMarkdown(report);
+    expect(html).toContain("Confidential security assessment");
+    expect(html).toContain("Harbour Advisory");
+    expect(html).toContain("Table of contents");
+    expect(html).toContain("Prioritised recommendations");
+    expect(html).not.toMatch(/DingoDocs/i);
+    expect(markdown).toContain("Severity classification");
+    expect(markdown).not.toMatch(/DingoDocs/i);
+    const pdf = await renderReport(report, "pdf");
+    expect(Buffer.from(pdf.subarray(0, 4)).toString()).toBe("%PDF");
+  });
 });
 
 function model(): ReportDocumentModel {
@@ -141,8 +217,7 @@ function model(): ReportDocumentModel {
         filename: "proof.png",
         mediaType: "image/png",
         classification: "restricted",
-        sha256:
-          "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        sha256: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
       },
     ],
     severityCounts: {

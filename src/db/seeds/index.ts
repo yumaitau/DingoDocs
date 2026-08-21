@@ -20,6 +20,7 @@ import {
   tasks,
   users,
 } from "@/db/schema";
+import { professionalPentestTemplate } from "@/lib/reports/professional-template";
 
 const ids = {
   user: "0197f30f-122c-7000-8000-000000000001",
@@ -165,13 +166,11 @@ async function main() {
         stableKey: "missing-object-authorisation",
         version: 1,
         title: "Missing object-level authorisation",
-        summary:
-          "Object identifiers can be modified to access another user's records.",
+        summary: "Object identifiers can be modified to access another user's records.",
         technicalDescription:
           "The application does not consistently verify that the authenticated principal owns the requested object.",
         severity: "high",
-        remediation:
-          "Enforce object-level authorisation on every server-side data access path.",
+        remediation: "Enforce object-level authorisation on every server-side data access path.",
         references: ["https://owasp.org/API-Security/"],
         tags: ["access-control", "api"],
         assessmentTypes: ["Web Application Assessment", "API Assessment"],
@@ -189,8 +188,7 @@ async function main() {
         templateVersion: 1,
         templateSnapshot: {
           title: "Missing object-level authorisation",
-          summary:
-            "Object identifiers can be modified to access another user's records.",
+          summary: "Object identifiers can be modified to access another user's records.",
           executiveDescription: null,
           technicalDescription:
             "The application does not consistently verify that the authenticated principal owns the requested object.",
@@ -199,8 +197,7 @@ async function main() {
           likelihood: null,
           severity: "high",
           riskRationale: null,
-          remediation:
-            "Enforce object-level authorisation on every server-side data access path.",
+          remediation: "Enforce object-level authorisation on every server-side data access path.",
           verificationSteps: null,
           references: ["https://owasp.org/API-Security/"],
           tags: ["access-control", "api"],
@@ -213,8 +210,7 @@ async function main() {
         severity: "high",
         likelihood: "likely",
         impact: "major",
-        cvssVector:
-          "CVSS:4.0/AV:N/AC:L/AT:N/PR:L/UI:N/VC:H/VI:N/VA:N/SC:N/SI:N/SA:N",
+        cvssVector: "CVSS:4.0/AV:N/AC:L/AT:N/PR:L/UI:N/VC:H/VI:N/VA:N/SC:N/SI:N/SA:N",
         executiveSummary:
           "Authenticated users can retrieve invoices belonging to other customer accounts.",
         technicalDetail:
@@ -232,75 +228,13 @@ async function main() {
         organisationId: ids.organisation,
         name: "Technical Penetration Test Report",
         version: 1,
-        definition: {
-          sections: [
-            { id: "cover", type: "cover" },
-            {
-              id: "executive-summary",
-              type: "executive_summary",
-              title: "Executive summary",
-              content:
-                "This report presents the outcomes of {{engagement.name}} for {{client.name}}.",
-            },
-            {
-              id: "severity-chart",
-              type: "chart",
-              title: "Finding severity overview",
-              condition: { field: "hasFindings", operator: "truthy" },
-            },
-            { id: "scope", type: "scope", title: "Assessment scope" },
-            { id: "assets", type: "assets", title: "Assessed assets" },
-            { id: "findings", type: "findings", title: "Detailed findings" },
-            {
-              id: "evidence",
-              type: "evidence",
-              title: "Evidence register",
-              condition: { field: "hasEvidence", operator: "truthy" },
-            },
-            {
-              id: "appendix",
-              type: "appendix",
-              title: "Appendix: report controls",
-              content:
-                "This document is controlled according to the classification shown in its header and footer.",
-              options: { pageBreakBefore: true },
-            },
-          ],
-          reusableContent: {
-            methodology:
-              "Testing followed a risk-based methodology and the approved Rules of Engagement.",
-          },
-          variables: {},
+        definition: professionalPentestTemplate({
           branding: {
             organisationName: "Dingo Security",
-            primaryColour: "#174b6b",
-            accentColour: "#d59b2d",
+            whiteLabel: true,
+            tagline: "Confidential security assessment",
           },
-          typography: {
-            bodyFont: "Arial",
-            headingFont: "Arial",
-            bodySize: 11,
-          },
-          header: {
-            left: "Dingo Security",
-            right: "Confidential",
-            showRule: true,
-          },
-          footer: {
-            left: "{{engagement.reference}}",
-            showPageNumbers: true,
-          },
-          watermark: "CONFIDENTIAL",
-          classification: "Confidential",
-          approvals: [
-            { role: "peer_reviewer", required: true },
-            { role: "quality_assurance", required: true },
-          ],
-          signatures: [
-            { label: "Prepared by", role: "Lead consultant" },
-            { label: "Approved by", role: "Quality assurance" },
-          ],
-        },
+        }),
         createdBy: ids.user,
       })
       .onConflictDoNothing();
@@ -387,10 +321,8 @@ async function main() {
               technicalDetail:
                 "Changing the invoice identifier returns records without verifying tenant ownership.",
               businessImpact: "Customer invoice data may be disclosed.",
-              remediation:
-                "Authorise every invoice lookup against the authenticated account.",
-              cvssVector:
-                "CVSS:4.0/AV:N/AC:L/AT:N/PR:L/UI:N/VC:H/VI:N/VA:N/SC:N/SI:N/SA:N",
+              remediation: "Authorise every invoice lookup against the authenticated account.",
+              cvssVector: "CVSS:4.0/AV:N/AC:L/AT:N/PR:L/UI:N/VC:H/VI:N/VA:N/SC:N/SI:N/SA:N",
             },
           ],
           scope: [

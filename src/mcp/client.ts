@@ -34,6 +34,9 @@ export type FindingWriteUpPatch = Omit<
   changeSummary: string;
 };
 
+export type ScannerAdapter =
+  "nmap" | "nessus" | "openvas" | "zap" | "burp" | "nuclei" | "csv" | "json";
+
 export class DingoDocsApiClient {
   constructor(
     private readonly baseUrl: string,
@@ -48,14 +51,26 @@ export class DingoDocsApiClient {
     return new DingoDocsApiClient(baseUrl, apiKey);
   }
 
+  static fromRequest(request: Request, apiKey: string) {
+    return new DingoDocsApiClient(new URL(request.url).origin, apiKey);
+  }
+
   listEngagements() {
     return this.request<unknown[]>("engagements?pageSize=100");
+  }
+
+  getEngagement(engagementId: string) {
+    return this.request<unknown>(`engagements/${engagementId}`);
   }
 
   listFindings(engagementId?: string) {
     const query = new URLSearchParams({ pageSize: "100" });
     if (engagementId) query.set("engagementId", engagementId);
     return this.request<unknown[]>(`findings?${query}`);
+  }
+
+  getFinding(findingId: string) {
+    return this.request<unknown>(`findings/${findingId}`);
   }
 
   createFinding(input: FindingWriteUp) {
@@ -72,6 +87,96 @@ export class DingoDocsApiClient {
     });
   }
 
+  listNotes(engagementId: string) {
+    return this.request<unknown[]>(`engagements/${engagementId}/notes`);
+  }
+
+  addNote(input: {
+    engagementId: string;
+    title: string;
+    body: string;
+    kind?: "note" | "testing_journal";
+    visibility?: "private" | "team" | "client";
+    assetIds?: string[];
+  }) {
+    const { engagementId, ...body } = input;
+    return this.request<unknown>(`engagements/${engagementId}/notes`, {
+      method: "POST",
+      body: JSON.stringify({
+        kind: "testing_journal",
+        visibility: "team",
+        ...body,
+      }),
+    });
+  }
+
+  listTimeline(engagementId: string) {
+    return this.request<unknown[]>(`engagements/${engagementId}/timeline`);
+  }
+
+  addTimelineEntry(input: {
+    engagementId: string;
+    phase: string;
+    description: string;
+    occurredAt?: string;
+    commands?: string;
+    clientVisible?: boolean;
+  }) {
+    const { engagementId, ...body } = input;
+    return this.request<unknown>(`engagements/${engagementId}/timeline`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  }
+
+  listAssets(engagementId: string) {
+    return this.request<unknown[]>(`engagements/${engagementId}/assets`);
+  }
+
+  createAsset(input: {
+    engagementId: string;
+    name: string;
+    type: string;
+    identifier: string;
+    environment?: string;
+    owner?: string;
+    criticality?: string;
+  }) {
+    const { engagementId, ...body } = input;
+    return this.request<unknown>(`engagements/${engagementId}/assets`, {
+      method: "POST",
+      body: JSON.stringify(body),
+    });
+  }
+
+  listScope(engagementId: string) {
+    return this.request<unknown>(`engagements/${engagementId}/scope`);
+  }
+
+  async ingestScannerResults(input: {
+    engagementId: string;
+    adapter: ScannerAdapter;
+    filename?: string;
+    content?: string;
+    filePath?: string;
+    mode?: "preview" | "ingest";
+  }) {
+    if (Boolean(input.content) === Boolean(input.filePath))
+      throw new Error("Provide exactly one of content or filePath");
+    const content = input.filePath ? await readFile(input.filePath, "utf8") : (input.content ?? "");
+    const filename =
+      input.filename ?? (input.filePath ? basename(input.filePath) : "scanner-output.txt");
+    return this.request<unknown>(`engagements/${input.engagementId}/imports`, {
+      method: "POST",
+      body: JSON.stringify({
+        adapter: input.adapter,
+        filename,
+        content,
+        mode: input.mode ?? "ingest",
+      }),
+    });
+  }
+
   async captureEvidence(input: {
     engagementId: string;
     classification: "internal" | "restricted" | "client_visible";
@@ -85,16 +190,14 @@ export class DingoDocsApiClient {
       throw new Error("Provide exactly one of content or filePath");
     const form = new FormData();
     const filename =
-      input.filename ??
-      (input.filePath ? basename(input.filePath) : "terminal-output.txt");
+      input.filename ?? (input.filePath ? basename(input.filePath) : "terminal-output.txt");
     const mediaType = input.mediaType ?? "text/plain";
     const bytes = input.filePath
       ? await readFile(input.filePath)
       : Buffer.from(input.content ?? "", "utf8");
     form.append("files", new File([bytes], filename, { type: mediaType }));
     form.set("classification", input.classification);
-    if (input.restrictionReason)
-      form.set("restrictionReason", input.restrictionReason);
+    if (input.restrictionReason) form.set("restrictionReason", input.restrictionReason);
     return this.request<unknown>(`engagements/${input.engagementId}/evidence`, {
       method: "POST",
       body: form,
@@ -127,8 +230,7 @@ export class DingoDocsApiClient {
           ? body.error.message
           : `DingoDocs API request failed with ${response.status}`,
       );
-    if (!body || !("data" in body))
-      throw new Error("DingoDocs API returned an invalid response");
+    if (!body || !("data" in body)) throw new Error("DingoDocs API returned an invalid response");
     return body.data;
   }
 }
