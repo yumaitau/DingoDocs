@@ -18,7 +18,11 @@ const standardResponses = {
   "401": { $ref: "#/components/responses/AuthenticationError" },
   "403": { $ref: "#/components/responses/PermissionError" },
 };
-const paginated = (resource: string, scope: string, parameters: object[] = []) => ({
+const paginated = (
+  resource: string,
+  scope: string,
+  parameters: object[] = [],
+) => ({
   summary: `List ${resource}`,
   security: [{ bearerAuth: [scope] }, { cookieAuth: [] }],
   parameters: [...paginationParameters, ...parameters],
@@ -193,7 +197,10 @@ export function GET() {
               schema: { type: "string", format: "uuid" },
             },
           ],
-          responses: { "200": { description: "Timeline" }, ...standardResponses },
+          responses: {
+            "200": { description: "Timeline" },
+            ...standardResponses,
+          },
         },
         post: {
           summary: "Record a testing timeline event",
@@ -381,7 +388,16 @@ export function GET() {
           required: ["adapter", "content"],
           properties: {
             adapter: {
-              enum: ["nmap", "nessus", "openvas", "zap", "burp", "nuclei", "csv", "json"],
+              enum: [
+                "nmap",
+                "nessus",
+                "openvas",
+                "zap",
+                "burp",
+                "nuclei",
+                "csv",
+                "json",
+              ],
             },
             filename: { type: "string", maxLength: 240 },
             content: { type: "string", maxLength: 2000000 },

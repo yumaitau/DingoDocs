@@ -1,11 +1,24 @@
 import { z } from "zod";
 import type { ApiScope } from "../lib/api/scopes";
-import { DingoDocsApiClient, type FindingWriteUp, type FindingWriteUpPatch } from "./client";
+import {
+  DingoDocsApiClient,
+  type FindingWriteUp,
+  type FindingWriteUpPatch,
+} from "./client";
 
 const severity = z.enum(["informational", "low", "medium", "high", "critical"]);
 const classification = z.enum(["internal", "restricted", "client_visible"]);
 const optionalText = z.string().trim().min(1).max(20_000).optional();
-const adapter = z.enum(["nmap", "nessus", "openvas", "zap", "burp", "nuclei", "csv", "json"]);
+const adapter = z.enum([
+  "nmap",
+  "nessus",
+  "openvas",
+  "zap",
+  "burp",
+  "nuclei",
+  "csv",
+  "json",
+]);
 const mappings = z
   .array(
     z.object({
@@ -55,14 +68,18 @@ export type McpToolDefinition = {
     openWorldHint: boolean;
   };
   inputSchema: z.ZodObject<z.ZodRawShape>;
-  call: (api: DingoDocsApiClient, input: Record<string, unknown>) => Promise<unknown>;
+  call: (
+    api: DingoDocsApiClient,
+    input: Record<string, unknown>,
+  ) => Promise<unknown>;
 };
 
 export const mcpTools: McpToolDefinition[] = [
   {
     name: "list_engagements",
     title: "List engagements",
-    description: "List the engagements accessible to this scoped DingoDocs credential.",
+    description:
+      "List the engagements accessible to this scoped DingoDocs credential.",
     requiredScopes: ["engagements:read"],
     annotations: { readOnlyHint: true, openWorldHint: false },
     inputSchema: z.object({}),
@@ -71,7 +88,8 @@ export const mcpTools: McpToolDefinition[] = [
   {
     name: "get_engagement",
     title: "Get an engagement",
-    description: "Read one engagement by id, including current status and dates.",
+    description:
+      "Read one engagement by id, including current status and dates.",
     requiredScopes: ["engagements:read"],
     annotations: { readOnlyHint: true, openWorldHint: false },
     inputSchema: z.object({ engagementId: z.string().uuid() }),
@@ -85,7 +103,9 @@ export const mcpTools: McpToolDefinition[] = [
     annotations: { readOnlyHint: true, openWorldHint: false },
     inputSchema: z.object({ engagementId: z.string().uuid().optional() }),
     call: (api, input) =>
-      api.listFindings(typeof input.engagementId === "string" ? input.engagementId : undefined),
+      api.listFindings(
+        typeof input.engagementId === "string" ? input.engagementId : undefined,
+      ),
   },
   {
     name: "get_finding",
@@ -287,7 +307,15 @@ export const mcpTools: McpToolDefinition[] = [
       api.ingestScannerResults({
         ...(input as {
           engagementId: string;
-          adapter: "nmap" | "nessus" | "openvas" | "zap" | "burp" | "nuclei" | "csv" | "json";
+          adapter:
+            | "nmap"
+            | "nessus"
+            | "openvas"
+            | "zap"
+            | "burp"
+            | "nuclei"
+            | "csv"
+            | "json";
           filename?: string;
           content?: string;
           filePath?: string;
@@ -317,7 +345,15 @@ export const mcpTools: McpToolDefinition[] = [
       api.ingestScannerResults({
         ...(input as {
           engagementId: string;
-          adapter: "nmap" | "nessus" | "openvas" | "zap" | "burp" | "nuclei" | "csv" | "json";
+          adapter:
+            | "nmap"
+            | "nessus"
+            | "openvas"
+            | "zap"
+            | "burp"
+            | "nuclei"
+            | "csv"
+            | "json";
           filename?: string;
           content?: string;
           filePath?: string;
@@ -346,7 +382,9 @@ export const mcpTools: McpToolDefinition[] = [
       restrictionReason: z.string().trim().min(1).max(2_000).optional(),
     }),
     call: (api, input) =>
-      api.captureEvidence(input as Parameters<DingoDocsApiClient["captureEvidence"]>[0]),
+      api.captureEvidence(
+        input as Parameters<DingoDocsApiClient["captureEvidence"]>[0],
+      ),
   },
   {
     name: "attach_evidence_to_finding",

@@ -166,11 +166,13 @@ async function main() {
         stableKey: "missing-object-authorisation",
         version: 1,
         title: "Missing object-level authorisation",
-        summary: "Object identifiers can be modified to access another user's records.",
+        summary:
+          "Object identifiers can be modified to access another user's records.",
         technicalDescription:
           "The application does not consistently verify that the authenticated principal owns the requested object.",
         severity: "high",
-        remediation: "Enforce object-level authorisation on every server-side data access path.",
+        remediation:
+          "Enforce object-level authorisation on every server-side data access path.",
         references: ["https://owasp.org/API-Security/"],
         tags: ["access-control", "api"],
         assessmentTypes: ["Web Application Assessment", "API Assessment"],
@@ -188,7 +190,8 @@ async function main() {
         templateVersion: 1,
         templateSnapshot: {
           title: "Missing object-level authorisation",
-          summary: "Object identifiers can be modified to access another user's records.",
+          summary:
+            "Object identifiers can be modified to access another user's records.",
           executiveDescription: null,
           technicalDescription:
             "The application does not consistently verify that the authenticated principal owns the requested object.",
@@ -197,7 +200,8 @@ async function main() {
           likelihood: null,
           severity: "high",
           riskRationale: null,
-          remediation: "Enforce object-level authorisation on every server-side data access path.",
+          remediation:
+            "Enforce object-level authorisation on every server-side data access path.",
           verificationSteps: null,
           references: ["https://owasp.org/API-Security/"],
           tags: ["access-control", "api"],
@@ -210,7 +214,8 @@ async function main() {
         severity: "high",
         likelihood: "likely",
         impact: "major",
-        cvssVector: "CVSS:4.0/AV:N/AC:L/AT:N/PR:L/UI:N/VC:H/VI:N/VA:N/SC:N/SI:N/SA:N",
+        cvssVector:
+          "CVSS:4.0/AV:N/AC:L/AT:N/PR:L/UI:N/VC:H/VI:N/VA:N/SC:N/SI:N/SA:N",
         executiveSummary:
           "Authenticated users can retrieve invoices belonging to other customer accounts.",
         technicalDetail:
@@ -321,8 +326,10 @@ async function main() {
               technicalDetail:
                 "Changing the invoice identifier returns records without verifying tenant ownership.",
               businessImpact: "Customer invoice data may be disclosed.",
-              remediation: "Authorise every invoice lookup against the authenticated account.",
-              cvssVector: "CVSS:4.0/AV:N/AC:L/AT:N/PR:L/UI:N/VC:H/VI:N/VA:N/SC:N/SI:N/SA:N",
+              remediation:
+                "Authorise every invoice lookup against the authenticated account.",
+              cvssVector:
+                "CVSS:4.0/AV:N/AC:L/AT:N/PR:L/UI:N/VC:H/VI:N/VA:N/SC:N/SI:N/SA:N",
             },
           ],
           scope: [

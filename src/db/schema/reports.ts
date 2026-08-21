@@ -98,7 +98,9 @@ export const reportTemplates = pgTable(
     createdBy: uuid("created_by").references(() => users.id, {
       onDelete: "set null",
     }),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
     supersededAt: timestamp("superseded_at", { withTimezone: true }),
   },
   (table) => [
@@ -107,7 +109,10 @@ export const reportTemplates = pgTable(
       table.name,
       table.version,
     ),
-    index("report_templates_org_client_idx").on(table.organisationId, table.clientId),
+    index("report_templates_org_client_idx").on(
+      table.organisationId,
+      table.clientId,
+    ),
   ],
 );
 
@@ -134,8 +139,12 @@ export const reports = pgTable(
     createdBy: uuid("created_by").references(() => users.id, {
       onDelete: "set null",
     }),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-    updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
+    updatedAt: timestamp("updated_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
   },
   (table) => [
     index("reports_org_engagement_status_idx").on(
@@ -187,10 +196,15 @@ export const reportVersions = pgTable(
     }),
     clientApprovedAt: timestamp("client_approved_at", { withTimezone: true }),
     publishedAt: timestamp("published_at", { withTimezone: true }),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
   },
   (table) => [
-    uniqueIndex("report_versions_report_version_uq").on(table.reportId, table.version),
+    uniqueIndex("report_versions_report_version_uq").on(
+      table.reportId,
+      table.version,
+    ),
     index("report_versions_org_idx").on(table.organisationId),
   ],
 );
@@ -214,9 +228,16 @@ export const reportTransitions = pgTable(
       onDelete: "set null",
     }),
     comment: text("comment"),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
   },
-  (table) => [index("report_transitions_org_report_idx").on(table.organisationId, table.reportId)],
+  (table) => [
+    index("report_transitions_org_report_idx").on(
+      table.organisationId,
+      table.reportId,
+    ),
+  ],
 );
 
 export const reportReviews = pgTable(
@@ -234,9 +255,14 @@ export const reportReviews = pgTable(
     }),
     decision: text("decision").notNull(),
     comment: text("comment"),
-    createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
+    createdAt: timestamp("created_at", { withTimezone: true })
+      .notNull()
+      .defaultNow(),
   },
   (table) => [
-    index("report_reviews_org_version_idx").on(table.organisationId, table.reportVersionId),
+    index("report_reviews_org_version_idx").on(
+      table.organisationId,
+      table.reportVersionId,
+    ),
   ],
 );

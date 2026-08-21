@@ -38,7 +38,10 @@ export async function handleMcpJsonRpc(
     return error(id, -32600, "Invalid Request");
   }
   if (isJsonRpcNotification(request)) {
-    if (request.method === "notifications/initialized" || request.method === "initialized")
+    if (
+      request.method === "notifications/initialized" ||
+      request.method === "initialized"
+    )
       return null;
     return null;
   }
@@ -68,11 +71,17 @@ export async function handleMcpJsonRpc(
       const name = String(request.params?.name ?? "");
       const tool = getMcpTool(name);
       if (!tool) return error(id, -32601, `Unknown tool: ${name}`);
-      const missing = tool.requiredScopes.filter((scope) => !principal.scopes.includes(scope));
+      const missing = tool.requiredScopes.filter(
+        (scope) => !principal.scopes.includes(scope),
+      );
       if (missing.length)
-        return result(id, textResult(`API key does not grant ${missing.join(", ")}`, true));
+        return result(
+          id,
+          textResult(`API key does not grant ${missing.join(", ")}`, true),
+        );
       const rawArgs =
-        request.params?.arguments && typeof request.params.arguments === "object"
+        request.params?.arguments &&
+        typeof request.params.arguments === "object"
           ? (request.params.arguments as Record<string, unknown>)
           : {};
       if (!options.allowFilePath && typeof rawArgs.filePath === "string")
@@ -100,7 +109,10 @@ export async function handleMcpJsonRpc(
   } catch (cause) {
     return result(
       id,
-      textResult(cause instanceof Error ? cause.message : "DingoDocs MCP request failed", true),
+      textResult(
+        cause instanceof Error ? cause.message : "DingoDocs MCP request failed",
+        true,
+      ),
     );
   }
 }
@@ -117,10 +129,17 @@ export function textResult(data: unknown, isError: boolean) {
   };
 }
 
-function result(id: string | number | null, value: unknown): McpJsonRpcResponse {
+function result(
+  id: string | number | null,
+  value: unknown,
+): McpJsonRpcResponse {
   return { jsonrpc: "2.0", id, result: value };
 }
 
-function error(id: string | number | null, code: number, message: string): McpJsonRpcResponse {
+function error(
+  id: string | number | null,
+  code: number,
+  message: string,
+): McpJsonRpcResponse {
   return { jsonrpc: "2.0", id, error: { code, message } };
 }

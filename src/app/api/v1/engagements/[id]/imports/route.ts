@@ -18,15 +18,24 @@ const jsonSchema = z.object({
   mode: z.enum(["preview", "ingest"]).default("ingest"),
 });
 
-export async function POST(request: Request, context: { params: Promise<{ id: string }> }) {
+export async function POST(
+  request: Request,
+  context: { params: Promise<{ id: string }> },
+) {
   const requestId = request.headers.get("x-request-id");
   try {
     const { id: engagementId } = await context.params;
     z.string().uuid().parse(engagementId);
-    const principal = await apiWriteContext(request, "imports:write", "finding:create", {
-      engagementId,
-    });
-    if (!principal.userId) throw new Error("API key does not have an attributable owner");
+    const principal = await apiWriteContext(
+      request,
+      "imports:write",
+      "finding:create",
+      {
+        engagementId,
+      },
+    );
+    if (!principal.userId)
+      throw new Error("API key does not have an attributable owner");
     const actor = {
       organisationId: principal.organisationId,
       userId: principal.userId,
@@ -84,7 +93,9 @@ export async function POST(request: Request, context: { params: Promise<{ id: st
 
 async function fromFormData(request: Request) {
   const form = await request.formData();
-  const file = z.instanceof(File).parse(form.get("file") ?? form.get("content"));
+  const file = z
+    .instanceof(File)
+    .parse(form.get("file") ?? form.get("content"));
   return jsonSchema.parse({
     adapter: form.get("adapter"),
     filename: file.name || form.get("filename") || "scanner-output.txt",

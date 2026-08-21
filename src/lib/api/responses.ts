@@ -41,7 +41,9 @@ export function apiError(error: unknown, requestId?: string | null) {
       {
         status: error.status,
         headers:
-          error.status === 401 ? { "www-authenticate": 'Bearer realm="DingoDocs API"' } : undefined,
+          error.status === 401
+            ? { "www-authenticate": 'Bearer realm="DingoDocs API"' }
+            : undefined,
       },
     );
   if (error instanceof PermissionDeniedError)
@@ -89,5 +91,8 @@ export function apiError(error: unknown, requestId?: string | null) {
 }
 
 export function apiNotFound(requestId?: string | null, message = "Not found") {
-  return NextResponse.json({ error: { code: "not_found", message }, requestId }, { status: 404 });
+  return NextResponse.json(
+    { error: { code: "not_found", message }, requestId },
+    { status: 404 },
+  );
 }

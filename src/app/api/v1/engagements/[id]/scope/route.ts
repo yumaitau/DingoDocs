@@ -6,7 +6,10 @@ import { scopeItems, scopeVersions } from "@/db/schema";
 import { apiReadContext } from "@/lib/api/authentication";
 import { apiError } from "@/lib/api/responses";
 
-export async function GET(request: Request, context: { params: Promise<{ id: string }> }) {
+export async function GET(
+  request: Request,
+  context: { params: Promise<{ id: string }> },
+) {
   const requestId = request.headers.get("x-request-id");
   try {
     const { id } = await context.params;

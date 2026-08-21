@@ -4,7 +4,10 @@ import { apiReadContext } from "@/lib/api/authentication";
 import { apiError } from "@/lib/api/responses";
 import { getImportPreview } from "@/server/services/data-exchange";
 
-export async function GET(request: Request, context: { params: Promise<{ id: string }> }) {
+export async function GET(
+  request: Request,
+  context: { params: Promise<{ id: string }> },
+) {
   const requestId = request.headers.get("x-request-id");
   try {
     const { id } = await context.params;

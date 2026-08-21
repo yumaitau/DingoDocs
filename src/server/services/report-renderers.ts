@@ -116,7 +116,10 @@ export const reportMediaTypes: Record<ReportFormat, string> = {
   json: "application/json; charset=utf-8",
 };
 
-export async function renderReport(model: ReportDocumentModel, format: ReportFormat) {
+export async function renderReport(
+  model: ReportDocumentModel,
+  format: ReportFormat,
+) {
   if (format === "pdf") return renderReportPdf(model);
   if (format === "docx") return renderReportDocx(model);
   if (format === "html") return bytes(renderReportHtml(model));
@@ -128,7 +131,9 @@ export function renderReportHtml(model: ReportDocumentModel) {
   const primary = safeColour(model.theme.primaryColour, "#174b6b");
   const accent = safeColour(model.theme.accentColour, "#d59b2d");
   const sections = model.sections
-    .map(({ definition, content }) => renderHtmlSection(model, definition, content))
+    .map(({ definition, content }) =>
+      renderHtmlSection(model, definition, content),
+    )
     .join("\n");
   const customCss = sanitiseCss(model.theme.customCss ?? "");
   return `<!doctype html>
@@ -206,17 +211,25 @@ export function renderReportMarkdown(model: ReportDocumentModel) {
       output.push(
         ...markdownTable(
           ["Severity", "Findings"],
-          Object.entries(model.severityCounts).map(([key, value]) => [key, String(value)]),
+          Object.entries(model.severityCounts).map(([key, value]) => [
+            key,
+            String(value),
+          ]),
         ),
       );
     const extra = structuredSection(model, definition.type);
-    if (extra?.kind === "table") output.push(...markdownTable(extra.headers, extra.rows));
-    if (extra?.kind === "list") output.push(...extra.items.map((item) => item), "");
+    if (extra?.kind === "table")
+      output.push(...markdownTable(extra.headers, extra.rows));
+    if (extra?.kind === "list")
+      output.push(...extra.items.map((item) => item), "");
   }
   if (model.signatures.length) {
     output.push("## Approvals and signatures", "");
     for (const signature of model.signatures)
-      output.push(`____________________  ${signature.label} - ${signature.role}`, "");
+      output.push(
+        `____________________  ${signature.label} - ${signature.role}`,
+        "",
+      );
   }
   return output.join("\n");
 }
@@ -275,7 +288,12 @@ async function renderReportPdf(model: ReportDocumentModel) {
           .font("Helvetica")
           .fontSize(11)
           .text(model.tagline);
-      document.moveDown().fillColor(primary).font("Helvetica-Bold").fontSize(30).text(model.title);
+      document
+        .moveDown()
+        .fillColor(primary)
+        .font("Helvetica-Bold")
+        .fontSize(30)
+        .text(model.title);
       document
         .moveDown()
         .fillColor("#52606d")
@@ -311,7 +329,11 @@ async function renderReportPdf(model: ReportDocumentModel) {
       .font("Helvetica-Bold")
       .fontSize(19)
       .text(definition.title ?? titleFor(definition.type));
-    document.moveDown(0.5).fillColor("#263746").font("Helvetica").fontSize(10.5);
+    document
+      .moveDown(0.5)
+      .fillColor("#263746")
+      .font("Helvetica")
+      .fontSize(10.5);
     if (content) document.text(content, { paragraphGap: 8 });
     renderPdfDataSection(document, model, definition.type, primary, accent);
   }
@@ -362,10 +384,15 @@ async function renderReportPdf(model: ReportDocumentModel) {
       align: "right",
       lineBreak: false,
     });
-    document.text(model.theme.footerLeft ?? model.engagementReference, 72, 710, {
-      width: 260,
-      lineBreak: false,
-    });
+    document.text(
+      model.theme.footerLeft ?? model.engagementReference,
+      72,
+      710,
+      {
+        width: 260,
+        lineBreak: false,
+      },
+    );
     if (model.theme.showPageNumbers)
       document.text(`Page ${page + 1} of ${range.count}`, 280, 710, {
         width: 260,
@@ -623,8 +650,11 @@ function renderHtmlSection(
 ) {
   if (definition.type === "cover")
     return `<section class="cover">${model.logoDataUri ? `<img class="logo" alt="" src="${escapeHtml(model.logoDataUri)}">` : ""}<p class="kicker">${escapeHtml(model.organisationName)}</p>${model.tagline ? `<p class="meta">${escapeHtml(model.tagline)}</p>` : ""}<h1>${escapeHtml(model.title)}</h1><p class="meta">${escapeHtml(model.clientName)} | ${escapeHtml(model.engagementReference)}</p>${model.startDate || model.endDate ? `<p class="meta">Testing window: ${escapeHtml(model.startDate ?? "not recorded")} – ${escapeHtml(model.endDate ?? "not recorded")}</p>` : ""}<p class="classification">${escapeHtml(model.classification)}</p></section>`;
-  if (definition.type === "page_break") return `<div class="section page-break"></div>`;
-  let body = content ? `<p>${escapeHtml(content).replaceAll("\n", "<br>")}</p>` : "";
+  if (definition.type === "page_break")
+    return `<div class="section page-break"></div>`;
+  let body = content
+    ? `<p>${escapeHtml(content).replaceAll("\n", "<br>")}</p>`
+    : "";
   if (definition.type === "findings")
     body += model.findings
       .map(
@@ -640,7 +670,12 @@ function renderHtmlSection(
   if (definition.type === "assets")
     body += htmlTable(
       ["Asset", "Type", "Identifier", "Criticality"],
-      model.assets.map((item) => [item.name, item.type, item.identifier, item.criticality ?? ""]),
+      model.assets.map((item) => [
+        item.name,
+        item.type,
+        item.identifier,
+        item.criticality ?? "",
+      ]),
     );
   if (definition.type === "evidence")
     body += htmlTable(
@@ -662,7 +697,10 @@ function renderHtmlSection(
   if (definition.type === "risk_matrix")
     body += htmlTable(
       ["Severity", "Findings"],
-      Object.entries(model.severityCounts).map(([key, value]) => [key, String(value)]),
+      Object.entries(model.severityCounts).map(([key, value]) => [
+        key,
+        String(value),
+      ]),
     );
   const extra = structuredSection(model, definition.type);
   if (extra?.kind === "table") body += htmlTable(extra.headers, extra.rows);
@@ -687,7 +725,10 @@ function renderPdfDataSection(
         .font("Helvetica-Bold")
         .fontSize(9)
         .text(finding.severity.toUpperCase());
-      document.fillColor(primary).fontSize(13).text(`${finding.identifier}: ${finding.title}`);
+      document
+        .fillColor(primary)
+        .fontSize(13)
+        .text(`${finding.identifier}: ${finding.title}`);
       document
         .fillColor("#263746")
         .font("Helvetica")
@@ -723,13 +764,20 @@ function renderPdfDataSection(
     pdfRows(
       document,
       ["File", "Type", "Classification"],
-      model.evidence.map((item) => [item.filename, item.mediaType, item.classification]),
+      model.evidence.map((item) => [
+        item.filename,
+        item.mediaType,
+        item.classification,
+      ]),
     );
   if (type === "chart" || type === "risk_matrix")
     pdfRows(
       document,
       ["Severity", "Findings"],
-      Object.entries(model.severityCounts).map(([key, value]) => [key, String(value)]),
+      Object.entries(model.severityCounts).map(([key, value]) => [
+        key,
+        String(value),
+      ]),
     );
   const extra = structuredSection(model, type);
   if (extra?.kind === "table") pdfRows(document, extra.headers, extra.rows);
@@ -783,7 +831,12 @@ function docxDataSection(
     return [
       docxTable(
         ["Asset", "Type", "Identifier", "Criticality"],
-        model.assets.map((item) => [item.name, item.type, item.identifier, item.criticality ?? ""]),
+        model.assets.map((item) => [
+          item.name,
+          item.type,
+          item.identifier,
+          item.criticality ?? "",
+        ]),
         primary,
       ),
     ];
@@ -804,13 +857,18 @@ function docxDataSection(
     return [
       docxTable(
         ["Severity", "Findings"],
-        Object.entries(model.severityCounts).map(([key, value]) => [key, String(value)]),
+        Object.entries(model.severityCounts).map(([key, value]) => [
+          key,
+          String(value),
+        ]),
         primary,
       ),
     ];
   const extra = structuredSection(model, type);
-  if (extra?.kind === "table") return [docxTable(extra.headers, extra.rows, primary)];
-  if (extra?.kind === "list") return extra.items.map((item) => new Paragraph({ text: item }));
+  if (extra?.kind === "table")
+    return [docxTable(extra.headers, extra.rows, primary)];
+  if (extra?.kind === "list")
+    return extra.items.map((item) => new Paragraph({ text: item }));
   return [];
 }
 
@@ -836,7 +894,9 @@ function docxTable(headers: string[], rows: string[][], primary: string) {
               margins: { top: 100, bottom: 100, left: 120, right: 120 },
               children: [
                 new Paragraph({
-                  children: [new TextRun({ text: header, bold: true, color: primary })],
+                  children: [
+                    new TextRun({ text: header, bold: true, color: primary }),
+                  ],
                 }),
               ],
             }),
@@ -866,11 +926,18 @@ function markdownTable(headers: string[], rows: string[][]) {
   return [
     `| ${headers.join(" | ")} |`,
     `| ${headers.map(() => "---").join(" | ")} |`,
-    ...rows.map((row) => `| ${row.map((cell) => cell.replaceAll("|", "\\|")).join(" | ")} |`),
+    ...rows.map(
+      (row) =>
+        `| ${row.map((cell) => cell.replaceAll("|", "\\|")).join(" | ")} |`,
+    ),
     "",
   ];
 }
-function pdfRows(document: PDFKit.PDFDocument, headers: string[], rows: string[][]) {
+function pdfRows(
+  document: PDFKit.PDFDocument,
+  headers: string[],
+  rows: string[][],
+) {
   const x = 72;
   const width = 468;
   const columnWidth = width / headers.length;
@@ -956,13 +1023,20 @@ function structuredSection(
     return {
       kind: "table",
       headers: ["Field", "Value"],
-      rows: (model.documentControl ?? []).map((item) => [item.field, item.value]),
+      rows: (model.documentControl ?? []).map((item) => [
+        item.field,
+        item.value,
+      ]),
     };
   if (type === "severity_ratings")
     return {
       kind: "table",
       headers: ["Severity", "CVSS", "Meaning"],
-      rows: (model.severityRatings ?? []).map((item) => [item.severity, item.cvss, item.meaning]),
+      rows: (model.severityRatings ?? []).map((item) => [
+        item.severity,
+        item.cvss,
+        item.meaning,
+      ]),
     };
   if (type === "recommendations")
     return {
@@ -996,7 +1070,9 @@ function structuredSection(
 }
 
 function titleFor(type: ReportSectionDefinition["type"]) {
-  return type.replaceAll("_", " ").replace(/\b\w/g, (letter) => letter.toUpperCase());
+  return type
+    .replaceAll("_", " ")
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
 }
 function bytes(value: string) {
   return new TextEncoder().encode(value);
@@ -1005,7 +1081,9 @@ function escapeHtml(value: string) {
   return value.replace(
     /[&<>"']/g,
     (character) =>
-      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[character]!,
+      ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[
+        character
+      ]!,
   );
 }
 function safeColour(value: string, fallback: string) {

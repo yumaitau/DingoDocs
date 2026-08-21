@@ -1,11 +1,18 @@
 import { and, desc, eq, isNull } from "drizzle-orm";
 import { BookOpen, Plus } from "lucide-react";
 import { db } from "@/db";
-import { clients, reportTemplates, type ReportTemplateDefinition } from "@/db/schema";
+import {
+  clients,
+  reportTemplates,
+  type ReportTemplateDefinition,
+} from "@/db/schema";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { requireOrganisationContext } from "@/lib/permissions/require";
-import { createReportTemplateAction, reviseReportTemplateAction } from "@/server/actions/reports";
+import {
+  createReportTemplateAction,
+  reviseReportTemplateAction,
+} from "@/server/actions/reports";
 import { professionalPentestTemplate } from "@/lib/reports/professional-template";
 
 export default async function TemplatesPage() {
@@ -19,7 +26,12 @@ export default async function TemplatesPage() {
     db
       .select({ id: clients.id, name: clients.name })
       .from(clients)
-      .where(and(eq(clients.organisationId, context.organisationId), isNull(clients.deletedAt)))
+      .where(
+        and(
+          eq(clients.organisationId, context.organisationId),
+          isNull(clients.deletedAt),
+        ),
+      )
       .orderBy(clients.name),
   ]);
   return (
@@ -35,13 +47,17 @@ export default async function TemplatesPage() {
             <h2 className="font-semibold">New report template</h2>
           </div>
           <p className="mt-1 text-sm text-slate-500">
-            Starts from a client-ready penetration test structure: cover, document control,
-            confidentiality, table of contents, executive summary, severity ratings, scope,
-            methodology, findings, recommendations, glossary, and contacts. Set{" "}
-            <code>branding.whiteLabel</code> and logo data URIs to issue the report in your
-            consultancy brand.
+            Starts from a client-ready penetration test structure: cover,
+            document control, confidentiality, table of contents, executive
+            summary, severity ratings, scope, methodology, findings,
+            recommendations, glossary, and contacts. Set{" "}
+            <code>branding.whiteLabel</code> and logo data URIs to issue the
+            report in your consultancy brand.
           </p>
-          <form action={createReportTemplateAction} className="mt-4 grid gap-3 md:grid-cols-2">
+          <form
+            action={createReportTemplateAction}
+            className="mt-4 grid gap-3 md:grid-cols-2"
+          >
             <label className="text-sm font-medium">
               Template name
               <input className={field} name="name" required />
@@ -81,11 +97,16 @@ export default async function TemplatesPage() {
         </section>
         <div className="grid gap-4 xl:grid-cols-2">
           {rows.map((template) => (
-            <article key={template.id} className="rounded-xl border bg-paper p-5">
+            <article
+              key={template.id}
+              className="rounded-xl border bg-paper p-5"
+            >
               <BookOpen className="size-5 text-[var(--harbour-600)]" />
               <div className="mt-4 flex items-center justify-between gap-3">
                 <h2 className="font-semibold">{template.name}</h2>
-                <span className="font-mono text-xs text-slate-500">v{template.version}</span>
+                <span className="font-mono text-xs text-slate-500">
+                  v{template.version}
+                </span>
               </div>
               <p className="mt-1 text-xs text-slate-500">
                 {template.clientId ? "Client-specific" : "Organisation"} ·{" "}
@@ -94,14 +115,19 @@ export default async function TemplatesPage() {
               </p>
               <div className="mt-4 flex flex-wrap gap-2 text-xs">
                 {template.definition.sections.map((section) => (
-                  <span key={section.id} className="rounded-full bg-muted px-2 py-1">
+                  <span
+                    key={section.id}
+                    className="rounded-full bg-muted px-2 py-1"
+                  >
                     {section.type.replaceAll("_", " ")}
                   </span>
                 ))}
               </div>
               {!template.supersededAt ? (
                 <details className="mt-5 rounded-lg border p-4">
-                  <summary className="cursor-pointer font-medium">Create revised version</summary>
+                  <summary className="cursor-pointer font-medium">
+                    Create revised version
+                  </summary>
                   <form
                     action={reviseReportTemplateAction.bind(null, template.id)}
                     className="mt-3 space-y-3"
@@ -112,7 +138,11 @@ export default async function TemplatesPage() {
                         className={`${area} min-h-[30rem] font-mono text-xs`}
                         name="definition"
                         required
-                        defaultValue={JSON.stringify(template.definition, null, 2)}
+                        defaultValue={JSON.stringify(
+                          template.definition,
+                          null,
+                          2,
+                        )}
                       />
                     </label>
                     <label className="text-sm font-medium">
@@ -123,7 +153,9 @@ export default async function TemplatesPage() {
                         defaultValue={template.customCss ?? ""}
                       />
                     </label>
-                    <Button type="submit">Create v{template.version + 1}</Button>
+                    <Button type="submit">
+                      Create v{template.version + 1}
+                    </Button>
                   </form>
                 </details>
               ) : null}
@@ -143,4 +175,5 @@ export default async function TemplatesPage() {
 const field =
   "mt-1 min-h-11 w-full rounded-md border bg-paper px-3 text-sm outline-none focus:border-[var(--harbour-500)]";
 const area = `${field} min-h-24 py-2`;
-const starterDefinition: ReportTemplateDefinition = professionalPentestTemplate();
+const starterDefinition: ReportTemplateDefinition =
+  professionalPentestTemplate();

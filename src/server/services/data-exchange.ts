@@ -45,7 +45,10 @@ import {
 } from "@/lib/imports/adapters";
 import { summariseScannerIngest } from "@/lib/imports/ingest-summary";
 import { uploadEvidence } from "./evidence";
-import { createTimelineEntry, createWorkspaceNote } from "./engagement-workspace";
+import {
+  createTimelineEntry,
+  createWorkspaceNote,
+} from "./engagement-workspace";
 
 export type ExchangeActor = { organisationId: string; userId: string };
 export class ExchangeScopeError extends Error {
@@ -89,7 +92,10 @@ export async function previewScannerImport(
       allowDuplicate: true,
     },
   );
-  await db.update(evidence).set({ immutable: true }).where(eq(evidence.id, source.id));
+  await db
+    .update(evidence)
+    .set({ immutable: true })
+    .where(eq(evidence.id, source.id));
   const existing = await db
     .select({ fingerprint: findings.sourceFingerprint })
     .from(findings)
@@ -104,13 +110,17 @@ export async function previewScannerImport(
         isNull(findings.deletedAt),
       ),
     );
-  const duplicate = new Set(existing.map((row) => row.fingerprint).filter(Boolean));
+  const duplicate = new Set(
+    existing.map((row) => row.fingerprint).filter(Boolean),
+  );
   const actions = normalized.map((item) => {
     const action = duplicate.has(item.fingerprint) ? "duplicate" : "create";
     duplicate.add(item.fingerprint);
     return action;
   });
-  const duplicateCount = actions.filter((action) => action === "duplicate").length;
+  const duplicateCount = actions.filter(
+    (action) => action === "duplicate",
+  ).length;
   return db.transaction(async (tx) => {
     const [run] = await tx
       .insert(importRuns)
@@ -286,7 +296,9 @@ export async function applyScannerImport(
         and(
           eq(importItems.importRunId, run.id),
           eq(importItems.action, "create"),
-          selectedIds.length ? notInArray(importItems.id, selectedIds) : undefined,
+          selectedIds.length
+            ? notInArray(importItems.id, selectedIds)
+            : undefined,
         ),
       );
     await tx
@@ -324,7 +336,12 @@ export async function getImportPreview(
   const [run] = await db
     .select()
     .from(importRuns)
-    .where(and(eq(importRuns.id, importRunId), eq(importRuns.organisationId, actor.organisationId)))
+    .where(
+      and(
+        eq(importRuns.id, importRunId),
+        eq(importRuns.organisationId, actor.organisationId),
+      ),
+    )
     .limit(1);
   if (!run) throw new ExchangeScopeError();
   const items = await db
@@ -355,7 +372,8 @@ export async function ingestScannerImport(
     engagementId: input.engagementId,
     adapter: input.adapter,
     filename: input.filename,
-    mediaType: input.mediaType ?? mediaTypeForImport(input.filename, input.bytes),
+    mediaType:
+      input.mediaType ?? mediaTypeForImport(input.filename, input.bytes),
     bytes: input.bytes,
   });
   const selectedItemIds = preview.items
@@ -457,8 +475,14 @@ export async function exportOrganisation(
   ] = await Promise.all([
     db.select().from(organisations).where(eq(organisations.id, organisationId)),
     db.select().from(clients).where(eq(clients.organisationId, organisationId)),
-    db.select().from(engagements).where(eq(engagements.organisationId, organisationId)),
-    db.select().from(findings).where(eq(findings.organisationId, organisationId)),
+    db
+      .select()
+      .from(engagements)
+      .where(eq(engagements.organisationId, organisationId)),
+    db
+      .select()
+      .from(findings)
+      .where(eq(findings.organisationId, organisationId)),
     db
       .select({
         id: evidence.id,
@@ -480,8 +504,14 @@ export async function exportOrganisation(
       .from(evidence)
       .where(eq(evidence.organisationId, organisationId)),
     db.select().from(assets).where(eq(assets.organisationId, organisationId)),
-    db.select().from(scopeVersions).where(eq(scopeVersions.organisationId, organisationId)),
-    db.select().from(scopeItems).where(eq(scopeItems.organisationId, organisationId)),
+    db
+      .select()
+      .from(scopeVersions)
+      .where(eq(scopeVersions.organisationId, organisationId)),
+    db
+      .select()
+      .from(scopeItems)
+      .where(eq(scopeItems.organisationId, organisationId)),
     db.select().from(reports).where(eq(reports.organisationId, organisationId)),
     db
       .select({
@@ -505,10 +535,19 @@ export async function exportOrganisation(
       .from(reportVersions)
       .where(eq(reportVersions.organisationId, organisationId)),
     db.select().from(tasks).where(eq(tasks.organisationId, organisationId)),
-    db.select().from(auditEvents).where(eq(auditEvents.organisationId, organisationId)),
-    db.select().from(timeEntries).where(eq(timeEntries.organisationId, organisationId)),
+    db
+      .select()
+      .from(auditEvents)
+      .where(eq(auditEvents.organisationId, organisationId)),
+    db
+      .select()
+      .from(timeEntries)
+      .where(eq(timeEntries.organisationId, organisationId)),
     db.select().from(notes).where(eq(notes.organisationId, organisationId)),
-    db.select().from(findingTemplates).where(eq(findingTemplates.organisationId, organisationId)),
+    db
+      .select()
+      .from(findingTemplates)
+      .where(eq(findingTemplates.organisationId, organisationId)),
     db
       .select({
         userId: organisationMembers.userId,
@@ -530,7 +569,10 @@ export async function exportOrganisation(
   const migrationData =
     mode === "migration"
       ? await Promise.all([
-          db.select().from(clientContacts).where(eq(clientContacts.organisationId, organisationId)),
+          db
+            .select()
+            .from(clientContacts)
+            .where(eq(clientContacts.organisationId, organisationId)),
           db
             .select()
             .from(engagementContacts)
@@ -539,7 +581,10 @@ export async function exportOrganisation(
             .select()
             .from(engagementMembers)
             .where(eq(engagementMembers.organisationId, organisationId)),
-          db.select().from(comments).where(eq(comments.organisationId, organisationId)),
+          db
+            .select()
+            .from(comments)
+            .where(eq(comments.organisationId, organisationId)),
           db
             .select()
             .from(findingVersions)
@@ -556,14 +601,26 @@ export async function exportOrganisation(
             .select()
             .from(reportTransitions)
             .where(eq(reportTransitions.organisationId, organisationId)),
-          db.select().from(reportReviews).where(eq(reportReviews.organisationId, organisationId)),
+          db
+            .select()
+            .from(reportReviews)
+            .where(eq(reportReviews.organisationId, organisationId)),
           db
             .select()
             .from(remediationUpdates)
             .where(eq(remediationUpdates.organisationId, organisationId)),
-          db.select().from(retestAttempts).where(eq(retestAttempts.organisationId, organisationId)),
-          db.select().from(retestNotes).where(eq(retestNotes.organisationId, organisationId)),
-          db.select().from(retestEvidence).where(eq(retestEvidence.organisationId, organisationId)),
+          db
+            .select()
+            .from(retestAttempts)
+            .where(eq(retestAttempts.organisationId, organisationId)),
+          db
+            .select()
+            .from(retestNotes)
+            .where(eq(retestNotes.organisationId, organisationId)),
+          db
+            .select()
+            .from(retestEvidence)
+            .where(eq(retestEvidence.organisationId, organisationId)),
         ])
       : null;
   const payload = {

@@ -25,7 +25,9 @@ describe("professional pentest template", () => {
     );
     expect(template.branding.whiteLabel).toBe(true);
     expect(template.branding.organisationName).toBe("Harbour Advisory");
-    expect(template.reusableContent?.methodology).toMatch(/Rules of Engagement/);
+    expect(template.reusableContent?.methodology).toMatch(
+      /Rules of Engagement/,
+    );
     const ids = template.sections.map((section) => section.id);
     expect(new Set(ids).size).toBe(ids.length);
   });

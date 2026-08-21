@@ -163,9 +163,12 @@ export class DingoDocsApiClient {
   }) {
     if (Boolean(input.content) === Boolean(input.filePath))
       throw new Error("Provide exactly one of content or filePath");
-    const content = input.filePath ? await readFile(input.filePath, "utf8") : (input.content ?? "");
+    const content = input.filePath
+      ? await readFile(input.filePath, "utf8")
+      : (input.content ?? "");
     const filename =
-      input.filename ?? (input.filePath ? basename(input.filePath) : "scanner-output.txt");
+      input.filename ??
+      (input.filePath ? basename(input.filePath) : "scanner-output.txt");
     return this.request<unknown>(`engagements/${input.engagementId}/imports`, {
       method: "POST",
       body: JSON.stringify({
@@ -190,14 +193,16 @@ export class DingoDocsApiClient {
       throw new Error("Provide exactly one of content or filePath");
     const form = new FormData();
     const filename =
-      input.filename ?? (input.filePath ? basename(input.filePath) : "terminal-output.txt");
+      input.filename ??
+      (input.filePath ? basename(input.filePath) : "terminal-output.txt");
     const mediaType = input.mediaType ?? "text/plain";
     const bytes = input.filePath
       ? await readFile(input.filePath)
       : Buffer.from(input.content ?? "", "utf8");
     form.append("files", new File([bytes], filename, { type: mediaType }));
     form.set("classification", input.classification);
-    if (input.restrictionReason) form.set("restrictionReason", input.restrictionReason);
+    if (input.restrictionReason)
+      form.set("restrictionReason", input.restrictionReason);
     return this.request<unknown>(`engagements/${input.engagementId}/evidence`, {
       method: "POST",
       body: form,
@@ -230,7 +235,8 @@ export class DingoDocsApiClient {
           ? body.error.message
           : `DingoDocs API request failed with ${response.status}`,
       );
-    if (!body || !("data" in body)) throw new Error("DingoDocs API returned an invalid response");
+    if (!body || !("data" in body))
+      throw new Error("DingoDocs API returned an invalid response");
     return body.data;
   }
 }

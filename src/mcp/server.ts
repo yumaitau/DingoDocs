@@ -10,7 +10,9 @@ function textResult(data: unknown) {
   };
 }
 
-function withErrors(handler: (input: Record<string, unknown>) => Promise<unknown>) {
+function withErrors(
+  handler: (input: Record<string, unknown>) => Promise<unknown>,
+) {
   return async (input: Record<string, unknown>) => {
     try {
       return textResult(await handler(input));
@@ -20,7 +22,10 @@ function withErrors(handler: (input: Record<string, unknown>) => Promise<unknown
         content: [
           {
             type: "text" as const,
-            text: error instanceof Error ? error.message : "DingoDocs MCP request failed",
+            text:
+              error instanceof Error
+                ? error.message
+                : "DingoDocs MCP request failed",
           },
         ],
         isError: true,

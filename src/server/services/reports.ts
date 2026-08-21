@@ -32,7 +32,11 @@ import {
   DEFAULT_PENTEST_GLOSSARY,
   DEFAULT_SEVERITY_RATINGS,
 } from "@/lib/reports/professional-template";
-import { renderReport, reportMediaTypes, type ReportDocumentModel } from "./report-renderers";
+import {
+  renderReport,
+  reportMediaTypes,
+  type ReportDocumentModel,
+} from "./report-renderers";
 
 export type ReportActor = { organisationId: string; userId: string };
 export type ReportStatus = typeof reports.$inferSelect.status;
@@ -57,7 +61,8 @@ export class ReportScopeError extends Error {
 }
 
 export function validateReportTemplate(definition: ReportTemplateDefinition) {
-  if (!definition.sections.length) throw new Error("A report template requires sections");
+  if (!definition.sections.length)
+    throw new Error("A report template requires sections");
   const ids = new Set<string>();
   for (const section of definition.sections) {
     if (!section.id?.trim() || ids.has(section.id))
@@ -132,7 +137,11 @@ export async function reviseReportTemplate(
 ) {
   validateReportTemplate(input.definition);
   return db.transaction(async (tx) => {
-    const template = await requireTemplate(tx, actor.organisationId, templateId);
+    const template = await requireTemplate(
+      tx,
+      actor.organisationId,
+      templateId,
+    );
     const [latest] = await tx
       .select()
       .from(reportTemplates)
@@ -181,8 +190,15 @@ export async function createReport(
   actor: ReportActor,
   input: { engagementId: string; templateId: string; title: string },
 ) {
-  const template = await requireTemplate(db, actor.organisationId, input.templateId);
-  const engagement = await requireEngagement(actor.organisationId, input.engagementId);
+  const template = await requireTemplate(
+    db,
+    actor.organisationId,
+    input.templateId,
+  );
+  const engagement = await requireEngagement(
+    actor.organisationId,
+    input.engagementId,
+  );
   if (template.clientId && template.clientId !== engagement.clientId)
     throw new ReportScopeError("Template belongs to another client");
   const reportId = randomUUID();
@@ -238,17 +254,34 @@ export async function createReport(
   });
 }
 
-export async function createReportRevision(actor: ReportActor, reportId: string) {
+export async function createReportRevision(
+  actor: ReportActor,
+  reportId: string,
+) {
   return db.transaction(async (tx) => {
     const report = await requireReport(tx, actor.organisationId, reportId);
-    const current = await requireCurrentVersion(tx, actor.organisationId, report);
+    const current = await requireCurrentVersion(
+      tx,
+      actor.organisationId,
+      report,
+    );
     if (!current.immutable && report.status !== "published")
-      throw new Error("Create a revision only after a report has been published");
+      throw new Error(
+        "Create a revision only after a report has been published",
+      );
     const version = report.currentVersion + 1;
     const id = randomUUID();
-    if (!report.templateId) throw new Error("A report template is required to create a revision");
-    const template = await requireTemplate(tx, actor.organisationId, report.templateId);
-    const engagement = await requireEngagement(actor.organisationId, report.engagementId);
+    if (!report.templateId)
+      throw new Error("A report template is required to create a revision");
+    const template = await requireTemplate(
+      tx,
+      actor.organisationId,
+      report.templateId,
+    );
+    const engagement = await requireEngagement(
+      actor.organisationId,
+      report.engagementId,
+    );
     const content = await buildReportModel({
       organisationId: actor.organisationId,
       reportId: report.id,
@@ -295,11 +328,22 @@ export async function transitionReport(
   input: { reportId: string; toStatus: ReportStatus; comment?: string },
 ) {
   return db.transaction(async (tx) => {
-    const report = await requireReport(tx, actor.organisationId, input.reportId);
-    const version = await requireCurrentVersion(tx, actor.organisationId, report);
-    if (version.immutable) throw new Error("Published report versions are immutable");
+    const report = await requireReport(
+      tx,
+      actor.organisationId,
+      input.reportId,
+    );
+    const version = await requireCurrentVersion(
+      tx,
+      actor.organisationId,
+      report,
+    );
+    if (version.immutable)
+      throw new Error("Published report versions are immutable");
     if (!reportWorkflow[report.status].includes(input.toStatus))
-      throw new Error(`Report cannot transition from ${report.status} to ${input.toStatus}`);
+      throw new Error(
+        `Report cannot transition from ${report.status} to ${input.toStatus}`,
+      );
     if (input.toStatus === "changes_requested" && !input.comment?.trim())
       throw new Error("Changes requested requires a comment");
     if (input.toStatus === "qa_approved" && version.createdBy === actor.userId)
@@ -320,7 +364,9 @@ export async function transitionReport(
       .set({
         status: input.toStatus,
         immutable: input.toStatus === "published",
-        approvedBy: ["qa_approved", "approved", "published"].includes(input.toStatus)
+        approvedBy: ["qa_approved", "approved", "published"].includes(
+          input.toStatus,
+        )
           ? actor.userId
           : version.approvedBy,
         approvedAt: input.toStatus === "approved" ? now : version.approvedAt,
@@ -346,7 +392,10 @@ export async function transitionReport(
     await tx.insert(auditEvents).values({
       organisationId: actor.organisationId,
       actorId: actor.userId,
-      action: input.toStatus === "published" ? "report.published" : "report.transitioned",
+      action:
+        input.toStatus === "published"
+          ? "report.published"
+          : "report.transitioned",
       targetType: "report",
       targetId: report.id,
       previousValues: { status: report.status },
@@ -364,7 +413,8 @@ export async function queueReportGeneration(
 ) {
   const report = await requireReport(db, actor.organisationId, reportId);
   const version = await requireCurrentVersion(db, actor.organisationId, report);
-  if (version.immutable) throw new Error("Published report versions are immutable");
+  if (version.immutable)
+    throw new Error("Published report versions are immutable");
   const selected = [...new Set(formats)];
   await db.transaction(async (tx) => {
     await tx
@@ -403,7 +453,11 @@ export async function generateReportJob(
     .where(eq(reportVersions.id, reportVersionId))
     .limit(1);
   if (!version) return;
-  const [report] = await db.select().from(reports).where(eq(reports.id, version.reportId)).limit(1);
+  const [report] = await db
+    .select()
+    .from(reports)
+    .where(eq(reports.id, version.reportId))
+    .limit(1);
   if (!report) return;
   await db
     .update(reportVersions)
@@ -414,7 +468,10 @@ export async function generateReportJob(
   const storedKeys: string[] = [];
   try {
     for (const format of formats) {
-      const output = await renderReport(version.content as ReportDocumentModel, format);
+      const output = await renderReport(
+        version.content as ReportDocumentModel,
+        format,
+      );
       const key = `${version.organisationId}/${report.clientId}/${report.id}/v${version.version}/${randomUUID()}.${format === "markdown" ? "md" : format}`;
       const stored = await provider.put({
         key,
@@ -446,20 +503,28 @@ export async function generateReportJob(
       .set({
         renderStatus: "failed",
         renderError:
-          error instanceof Error ? error.message.slice(0, 2_000) : "Unknown render failure",
+          error instanceof Error
+            ? error.message.slice(0, 2_000)
+            : "Unknown render failure",
       })
       .where(eq(reportVersions.id, version.id));
     throw error;
   }
 }
 
-export async function getReportWorkspace(organisationId: string, reportId: string) {
+export async function getReportWorkspace(
+  organisationId: string,
+  reportId: string,
+) {
   const report = await requireReport(db, organisationId, reportId);
   const versions = await db
     .select()
     .from(reportVersions)
     .where(
-      and(eq(reportVersions.organisationId, organisationId), eq(reportVersions.reportId, reportId)),
+      and(
+        eq(reportVersions.organisationId, organisationId),
+        eq(reportVersions.reportId, reportId),
+      ),
     )
     .orderBy(desc(reportVersions.version));
   const transitions = await db
@@ -474,7 +539,9 @@ export async function getReportWorkspace(organisationId: string, reportId: strin
     .orderBy(asc(reportTransitions.createdAt));
   return {
     report,
-    current: versions.find((version) => version.version === report.currentVersion)!,
+    current: versions.find(
+      (version) => version.version === report.currentVersion,
+    )!,
     versions,
     transitions,
   };
@@ -495,7 +562,8 @@ export async function getReportExport(
     )
     .limit(1);
   const key = version?.exportKeys[input.format];
-  if (!version || !key) throw new ReportScopeError("Report export is unavailable");
+  if (!version || !key)
+    throw new ReportScopeError("Report export is unavailable");
   await db.insert(auditEvents).values({
     organisationId: actor.organisationId,
     actorId: actor.userId,
@@ -522,76 +590,82 @@ async function buildReportModel(input: {
   engagement: EngagementRow;
   template: TemplateRow;
 }): Promise<ReportDocumentModel> {
-  const [organisationRows, clientRows, scopeVersionRows, assetRows, findingRows, evidenceRows] =
-    await Promise.all([
-      db
-        .select({
-          name: organisations.name,
-          branding: organisations.branding,
-        })
-        .from(organisations)
-        .where(eq(organisations.id, input.organisationId))
-        .limit(1),
-      db
-        .select({
-          name: clients.name,
-          branding: clients.branding,
-          address: clients.address,
-        })
-        .from(clients)
-        .where(
-          and(
-            eq(clients.id, input.engagement.clientId),
-            eq(clients.organisationId, input.organisationId),
-          ),
-        )
-        .limit(1),
-      db
-        .select({ id: scopeVersions.id })
-        .from(scopeVersions)
-        .where(
-          and(
-            eq(scopeVersions.organisationId, input.organisationId),
-            eq(scopeVersions.engagementId, input.engagement.id),
-            eq(scopeVersions.status, "approved"),
-          ),
-        )
-        .orderBy(desc(scopeVersions.version))
-        .limit(1),
-      db
-        .select()
-        .from(assets)
-        .where(
-          and(
-            eq(assets.organisationId, input.organisationId),
-            eq(assets.engagementId, input.engagement.id),
-            isNull(assets.deletedAt),
-          ),
-        )
-        .orderBy(asc(assets.name)),
-      db
-        .select()
-        .from(findings)
-        .where(
-          and(
-            eq(findings.organisationId, input.organisationId),
-            eq(findings.engagementId, input.engagement.id),
-            isNull(findings.deletedAt),
-          ),
-        )
-        .orderBy(desc(findings.severity), asc(findings.identifier)),
-      db
-        .select()
-        .from(evidence)
-        .where(
-          and(
-            eq(evidence.organisationId, input.organisationId),
-            eq(evidence.engagementId, input.engagement.id),
-            isNull(evidence.deletedAt),
-          ),
-        )
-        .orderBy(asc(evidence.originalFilename)),
-    ]);
+  const [
+    organisationRows,
+    clientRows,
+    scopeVersionRows,
+    assetRows,
+    findingRows,
+    evidenceRows,
+  ] = await Promise.all([
+    db
+      .select({
+        name: organisations.name,
+        branding: organisations.branding,
+      })
+      .from(organisations)
+      .where(eq(organisations.id, input.organisationId))
+      .limit(1),
+    db
+      .select({
+        name: clients.name,
+        branding: clients.branding,
+        address: clients.address,
+      })
+      .from(clients)
+      .where(
+        and(
+          eq(clients.id, input.engagement.clientId),
+          eq(clients.organisationId, input.organisationId),
+        ),
+      )
+      .limit(1),
+    db
+      .select({ id: scopeVersions.id })
+      .from(scopeVersions)
+      .where(
+        and(
+          eq(scopeVersions.organisationId, input.organisationId),
+          eq(scopeVersions.engagementId, input.engagement.id),
+          eq(scopeVersions.status, "approved"),
+        ),
+      )
+      .orderBy(desc(scopeVersions.version))
+      .limit(1),
+    db
+      .select()
+      .from(assets)
+      .where(
+        and(
+          eq(assets.organisationId, input.organisationId),
+          eq(assets.engagementId, input.engagement.id),
+          isNull(assets.deletedAt),
+        ),
+      )
+      .orderBy(asc(assets.name)),
+    db
+      .select()
+      .from(findings)
+      .where(
+        and(
+          eq(findings.organisationId, input.organisationId),
+          eq(findings.engagementId, input.engagement.id),
+          isNull(findings.deletedAt),
+        ),
+      )
+      .orderBy(desc(findings.severity), asc(findings.identifier)),
+    db
+      .select()
+      .from(evidence)
+      .where(
+        and(
+          eq(evidence.organisationId, input.organisationId),
+          eq(evidence.engagementId, input.engagement.id),
+          isNull(evidence.deletedAt),
+        ),
+      )
+      .orderBy(asc(evidence.originalFilename)),
+  ]);
   const scopeRows = scopeVersionRows[0]
     ? await db
         .select()
@@ -610,7 +684,8 @@ async function buildReportModel(input: {
     ...organisationBranding,
     ...definition.branding,
   };
-  const organisationName = branding.organisationName ?? organisationRows[0]?.name ?? "Organisation";
+  const organisationName =
+    branding.organisationName ?? organisationRows[0]?.name ?? "Organisation";
   const clientName = clientRows[0]?.name ?? "Client";
   const whiteLabel = branding.whiteLabel === true;
   const startDate = input.engagement.startDate ?? "";
@@ -632,7 +707,10 @@ async function buildReportModel(input: {
     ...definition.variables,
   };
   const interpolate = (value?: string) =>
-    value?.replace(/\{\{\s*([\w.]+)\s*\}\}/g, (_match, key: string) => variables[key] ?? "") ?? "";
+    value?.replace(
+      /\{\{\s*([\w.]+)\s*\}\}/g,
+      (_match, key: string) => variables[key] ?? "",
+    ) ?? "";
   const severityCounts = Object.fromEntries(
     ["critical", "high", "medium", "low", "informational"].map((severity) => [
       severity,
@@ -727,7 +805,8 @@ async function buildReportModel(input: {
     ],
     recommendations,
     theme: {
-      primaryColour: branding.primaryColour ?? definition.branding.primaryColour,
+      primaryColour:
+        branding.primaryColour ?? definition.branding.primaryColour,
       accentColour: branding.accentColour ?? definition.branding.accentColour,
       bodyFont: definition.typography.bodyFont,
       headingFont: definition.typography.headingFont,
@@ -779,14 +858,17 @@ function resolveSectionContent(
   definition: ReportTemplateDefinition,
 ) {
   if (section.type === "reusable_content" || section.reusableKey)
-    return definition.reusableContent?.[section.reusableKey ?? ""] ?? section.content;
+    return (
+      definition.reusableContent?.[section.reusableKey ?? ""] ?? section.content
+    );
   if (section.type === "methodology")
     return (
       definition.reusableContent?.[section.reusableKey ?? "methodology"] ??
       section.content ??
       DEFAULT_METHODOLOGY
     );
-  if (section.type === "confidentiality") return section.content ?? DEFAULT_CONFIDENTIALITY_NOTICE;
+  if (section.type === "confidentiality")
+    return section.content ?? DEFAULT_CONFIDENTIALITY_NOTICE;
   return section.content;
 }
 
@@ -803,16 +885,29 @@ function conditionMatches(
 
 type Transaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
 type Queryable = typeof db | Transaction;
-async function requireTemplate(query: Queryable, organisationId: string, id: string) {
+async function requireTemplate(
+  query: Queryable,
+  organisationId: string,
+  id: string,
+) {
   const [row] = await query
     .select()
     .from(reportTemplates)
-    .where(and(eq(reportTemplates.id, id), eq(reportTemplates.organisationId, organisationId)))
+    .where(
+      and(
+        eq(reportTemplates.id, id),
+        eq(reportTemplates.organisationId, organisationId),
+      ),
+    )
     .limit(1);
   if (!row) throw new ReportScopeError();
   return row;
 }
-async function requireReport(query: Queryable, organisationId: string, id: string) {
+async function requireReport(
+  query: Queryable,
+  organisationId: string,
+  id: string,
+) {
   const [row] = await query
     .select()
     .from(reports)
@@ -871,5 +966,11 @@ async function assertClient(organisationId: string, id?: string) {
   if (!row) throw new ReportScopeError("Client is unavailable");
 }
 
-export const reportFormats: readonly ReportFormat[] = ["pdf", "docx", "html", "markdown", "json"];
+export const reportFormats: readonly ReportFormat[] = [
+  "pdf",
+  "docx",
+  "html",
+  "markdown",
+  "json",
+];
 export const reportStatuses = Object.keys(reportWorkflow) as ReportStatus[];

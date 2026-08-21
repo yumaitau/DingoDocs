@@ -49,7 +49,11 @@ describe("report renderers", () => {
     ];
     report.glossary = [{ term: "CVSS", definition: "Severity score." }];
     report.contacts = [
-      { role: "Prepared by", name: "Lead consultant", email: "lead@harbour.test" },
+      {
+        role: "Prepared by",
+        name: "Lead consultant",
+        email: "lead@harbour.test",
+      },
     ];
     report.recommendations = [
       {
@@ -217,7 +221,8 @@ function model(): ReportDocumentModel {
         filename: "proof.png",
         mediaType: "image/png",
         classification: "restricted",
-        sha256: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        sha256:
+          "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
       },
     ],
     severityCounts: {

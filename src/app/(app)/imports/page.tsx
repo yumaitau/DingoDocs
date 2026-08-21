@@ -17,7 +17,10 @@ export default async function ImportsPage() {
     })
     .from(engagements)
     .where(
-      and(eq(engagements.organisationId, context.organisationId), isNull(engagements.deletedAt)),
+      and(
+        eq(engagements.organisationId, context.organisationId),
+        isNull(engagements.deletedAt),
+      ),
     )
     .orderBy(asc(engagements.name));
   return (
@@ -30,9 +33,10 @@ export default async function ImportsPage() {
         <section className="rounded-xl border bg-paper p-5">
           <h2 className="font-semibold">Scanner import</h2>
           <p className="mt-1 text-sm text-slate-500">
-            The original file is preserved as internal evidence. Preview remains selective in the
-            UI. Scanner MCP ingest auto-applies new records as draft findings and writes a
-            testing-journal note; nothing is published to the client.
+            The original file is preserved as internal evidence. Preview remains
+            selective in the UI. Scanner MCP ingest auto-applies new records as
+            draft findings and writes a testing-journal note; nothing is
+            published to the client.
           </p>
           <form action={previewScannerImportAction} className="mt-5 space-y-4">
             <label className="block text-sm font-medium">
@@ -80,8 +84,8 @@ export default async function ImportsPage() {
         <section className="rounded-xl border bg-paper p-5">
           <h2 className="font-semibold">Organisation exports</h2>
           <p className="mt-1 text-sm text-slate-500">
-            Data exports include operational records and evidence metadata. Migration exports add
-            templates, notes, and member mappings.
+            Data exports include operational records and evidence metadata.
+            Migration exports add templates, notes, and member mappings.
           </p>
           <div className="mt-5 flex flex-wrap gap-3">
             <form action="/api/exports/organisation?mode=data" method="post">
@@ -89,7 +93,10 @@ export default async function ImportsPage() {
                 Download data export
               </Button>
             </form>
-            <form action="/api/exports/organisation?mode=migration" method="post">
+            <form
+              action="/api/exports/organisation?mode=migration"
+              method="post"
+            >
               <Button type="submit">Download migration export</Button>
             </form>
           </div>

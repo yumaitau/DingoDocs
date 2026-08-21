@@ -84,7 +84,10 @@ describe("scanner import adapters", () => {
     ).toThrow("not permitted");
   });
   it("normalizes nuclei JSONL hosts and keeps informational-safe severity mapping", () => {
-    const items = parseScannerImport("nuclei", new TextEncoder().encode(fixtures.nuclei as string));
+    const items = parseScannerImport(
+      "nuclei",
+      new TextEncoder().encode(fixtures.nuclei as string),
+    );
     expect(items).toHaveLength(2);
     expect(items[0]).toMatchObject({
       title: "Apache Path Traversal",

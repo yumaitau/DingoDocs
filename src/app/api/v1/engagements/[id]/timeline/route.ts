@@ -15,7 +15,10 @@ const createSchema = z.object({
   clientVisible: z.boolean().optional(),
 });
 
-export async function GET(request: Request, context: { params: Promise<{ id: string }> }) {
+export async function GET(
+  request: Request,
+  context: { params: Promise<{ id: string }> },
+) {
   const requestId = request.headers.get("x-request-id");
   try {
     const { id } = await context.params;
@@ -38,15 +41,24 @@ export async function GET(request: Request, context: { params: Promise<{ id: str
   }
 }
 
-export async function POST(request: Request, context: { params: Promise<{ id: string }> }) {
+export async function POST(
+  request: Request,
+  context: { params: Promise<{ id: string }> },
+) {
   const requestId = request.headers.get("x-request-id");
   try {
     const { id } = await context.params;
     z.string().uuid().parse(id);
-    const principal = await apiWriteContext(request, "notes:write", "finding:create", {
-      engagementId: id,
-    });
-    if (!principal.userId) throw new Error("API key does not have an attributable owner");
+    const principal = await apiWriteContext(
+      request,
+      "notes:write",
+      "finding:create",
+      {
+        engagementId: id,
+      },
+    );
+    if (!principal.userId)
+      throw new Error("API key does not have an attributable owner");
     const input = createSchema.parse(await request.json());
     const entry = await createTimelineEntry(
       { organisationId: principal.organisationId, userId: principal.userId },

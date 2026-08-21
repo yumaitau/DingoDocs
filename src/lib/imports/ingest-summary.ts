@@ -28,5 +28,10 @@ export function summariseScannerIngest(input: {
     ...lines,
   ].join("\n");
   const timeline = `${input.adapter} ingest from ${input.filename} applied ${input.appliedCount} draft finding${input.appliedCount === 1 ? "" : "s"} (${created.length} selected creates, ${duplicates.length} duplicates skipped).`;
-  return { note, timeline, created: created.length, duplicates: duplicates.length };
+  return {
+    note,
+    timeline,
+    created: created.length,
+    duplicates: duplicates.length,
+  };
 }
