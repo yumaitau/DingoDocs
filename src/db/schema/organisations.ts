@@ -22,7 +22,17 @@ export const organisations = pgTable(
     slug: text("slug").notNull(),
     name: text("name").notNull(),
     branding: jsonb("branding")
-      .$type<{ logoUrl?: string; accentColour?: string }>()
+      .$type<{
+        logoUrl?: string;
+        accentColour?: string;
+        primaryColour?: string;
+        tagline?: string;
+        address?: string;
+        website?: string;
+        contactEmail?: string;
+        contactPhone?: string;
+        whiteLabel?: boolean;
+      }>()
       .default({}),
     securityPolicy: jsonb("security_policy")
       .$type<SecurityPolicy>()

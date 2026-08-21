@@ -25,6 +25,13 @@ import {
 } from "@/db/schema";
 import { storage } from "@/lib/storage";
 import type { StorageProvider } from "@/lib/storage/types";
+import { safeLogoDataUri } from "@/lib/reports/branding";
+import {
+  DEFAULT_CONFIDENTIALITY_NOTICE,
+  DEFAULT_METHODOLOGY,
+  DEFAULT_PENTEST_GLOSSARY,
+  DEFAULT_SEVERITY_RATINGS,
+} from "@/lib/reports/professional-template";
 import {
   renderReport,
   reportMediaTypes,
@@ -592,12 +599,19 @@ async function buildReportModel(input: {
     evidenceRows,
   ] = await Promise.all([
     db
-      .select({ name: organisations.name })
+      .select({
+        name: organisations.name,
+        branding: organisations.branding,
+      })
       .from(organisations)
       .where(eq(organisations.id, input.organisationId))
       .limit(1),
     db
-      .select({ name: clients.name })
+      .select({
+        name: clients.name,
+        branding: clients.branding,
+        address: clients.address,
+      })
       .from(clients)
       .where(
         and(
@@ -665,18 +679,30 @@ async function buildReportModel(input: {
         .orderBy(asc(scopeItems.name))
     : [];
   const definition = input.template.definition;
+  const organisationBranding = organisationRows[0]?.branding ?? {};
+  const branding = {
+    ...organisationBranding,
+    ...definition.branding,
+  };
   const organisationName =
-    definition.branding.organisationName ??
-    organisationRows[0]?.name ??
-    "Organisation";
+    branding.organisationName ?? organisationRows[0]?.name ?? "Organisation";
   const clientName = clientRows[0]?.name ?? "Client";
+  const whiteLabel = branding.whiteLabel === true;
+  const startDate = input.engagement.startDate ?? "";
+  const endDate = input.engagement.endDate ?? "";
   const variables: Record<string, string> = {
     "organisation.name": organisationName,
+    "organisation.tagline": branding.tagline ?? "",
     "client.name": clientName,
     "engagement.name": input.engagement.name,
     "engagement.reference": input.engagement.reference,
+    "engagement.startDate": startDate,
+    "engagement.endDate": endDate,
+    "engagement.objectives": input.engagement.objectives ?? "",
+    "engagement.constraints": input.engagement.constraints ?? "",
     "report.title": input.title,
     "report.version": String(input.version),
+    "report.classification": definition.classification,
     "generated.date": new Date().toISOString().slice(0, 10),
     ...definition.variables,
   };
@@ -705,11 +731,15 @@ async function buildReportModel(input: {
         title: interpolate(section.title),
         content: undefined,
       },
-      content: interpolate(
-        section.type === "reusable_content"
-          ? definition.reusableContent?.[section.reusableKey ?? ""]
-          : section.content,
-      ),
+      content: interpolate(resolveSectionContent(section, definition)),
+    }));
+  const recommendations = findingRows
+    .filter((finding) => finding.remediation)
+    .map((finding) => ({
+      identifier: finding.identifier,
+      title: finding.title,
+      severity: finding.severity,
+      remediation: finding.remediation ?? "",
     }));
   return {
     reportId: input.reportId,
@@ -722,9 +752,62 @@ async function buildReportModel(input: {
     engagementReference: input.engagement.reference,
     classification: definition.classification,
     generatedAt: new Date().toISOString(),
+    whiteLabel,
+    tagline: branding.tagline,
+    logoDataUri: safeLogoDataUri(branding.logoUrl),
+    clientLogoDataUri: safeLogoDataUri(
+      definition.branding.clientLogoUrl ?? clientRows[0]?.branding?.logoUrl,
+    ),
+    startDate: input.engagement.startDate,
+    endDate: input.engagement.endDate,
+    preparedBy: branding.preparedBy,
+    address: branding.address ?? clientRows[0]?.address ?? undefined,
+    website: branding.website,
+    contactEmail: branding.contactEmail,
+    contactPhone: branding.contactPhone,
+    documentControl: [
+      { field: "Document title", value: input.title },
+      { field: "Version", value: String(input.version) },
+      { field: "Client", value: clientName },
+      {
+        field: "Engagement",
+        value: `${input.engagement.name} (${input.engagement.reference})`,
+      },
+      { field: "Classification", value: definition.classification },
+      { field: "Date of issue", value: variables["generated.date"] ?? "" },
+      {
+        field: "Testing window",
+        value:
+          startDate || endDate
+            ? `${startDate || "not recorded"} – ${endDate || "not recorded"}`
+            : "Not recorded",
+      },
+      { field: "Prepared by", value: branding.preparedBy ?? organisationName },
+    ],
+    severityRatings: DEFAULT_SEVERITY_RATINGS,
+    glossary: DEFAULT_PENTEST_GLOSSARY,
+    contacts: [
+      {
+        role: "Assessing organisation",
+        name: organisationName,
+        email: branding.contactEmail,
+        phone: branding.contactPhone,
+      },
+      ...(branding.preparedBy
+        ? [
+            {
+              role: "Prepared by",
+              name: branding.preparedBy,
+              email: branding.contactEmail,
+            },
+          ]
+        : []),
+    ],
+    recommendations,
     theme: {
-      primaryColour: definition.branding.primaryColour,
-      accentColour: definition.branding.accentColour,
+      primaryColour:
+        branding.primaryColour ?? definition.branding.primaryColour,
+      accentColour: branding.accentColour ?? definition.branding.accentColour,
       bodyFont: definition.typography.bodyFont,
       headingFont: definition.typography.headingFont,
       bodySize: definition.typography.bodySize,
@@ -768,6 +851,25 @@ async function buildReportModel(input: {
     severityCounts,
     signatures: definition.signatures ?? [],
   };
+}
+
+function resolveSectionContent(
+  section: ReportSectionDefinition,
+  definition: ReportTemplateDefinition,
+) {
+  if (section.type === "reusable_content" || section.reusableKey)
+    return (
+      definition.reusableContent?.[section.reusableKey ?? ""] ?? section.content
+    );
+  if (section.type === "methodology")
+    return (
+      definition.reusableContent?.[section.reusableKey ?? "methodology"] ??
+      section.content ??
+      DEFAULT_METHODOLOGY
+    );
+  if (section.type === "confidentiality")
+    return section.content ?? DEFAULT_CONFIDENTIALITY_NOTICE;
+  return section.content;
 }
 
 function conditionMatches(

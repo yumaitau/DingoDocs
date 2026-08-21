@@ -35,7 +35,15 @@ export type ReportSectionDefinition = {
     | "risk_matrix"
     | "evidence"
     | "appendix"
-    | "page_break";
+    | "page_break"
+    | "table_of_contents"
+    | "confidentiality"
+    | "document_control"
+    | "methodology"
+    | "severity_ratings"
+    | "recommendations"
+    | "glossary"
+    | "contacts";
   title?: string;
   content?: string;
   reusableKey?: string;
@@ -49,8 +57,16 @@ export type ReportTemplateDefinition = {
   branding: {
     organisationName?: string;
     logoUrl?: string;
+    clientLogoUrl?: string;
     primaryColour: string;
     accentColour: string;
+    whiteLabel?: boolean;
+    tagline?: string;
+    address?: string;
+    website?: string;
+    contactEmail?: string;
+    contactPhone?: string;
+    preparedBy?: string;
   };
   typography: {
     bodyFont: string;

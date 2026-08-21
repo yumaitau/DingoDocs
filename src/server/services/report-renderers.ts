@@ -21,6 +21,7 @@ import {
 } from "docx";
 import PDFDocument from "pdfkit";
 import type { ReportFormat, ReportSectionDefinition } from "@/db/schema";
+import { logoBytes } from "@/lib/reports/branding";
 
 export type ReportFindingModel = {
   identifier: string;
@@ -46,6 +47,32 @@ export type ReportDocumentModel = {
   engagementReference: string;
   classification: string;
   generatedAt: string;
+  whiteLabel?: boolean;
+  tagline?: string;
+  logoDataUri?: string;
+  clientLogoDataUri?: string;
+  startDate?: string | null;
+  endDate?: string | null;
+  preparedBy?: string;
+  address?: string;
+  website?: string;
+  contactEmail?: string;
+  contactPhone?: string;
+  documentControl?: Array<{ field: string; value: string }>;
+  severityRatings?: Array<{ severity: string; cvss: string; meaning: string }>;
+  glossary?: Array<{ term: string; definition: string }>;
+  contacts?: Array<{
+    role: string;
+    name: string;
+    email?: string;
+    phone?: string;
+  }>;
+  recommendations?: Array<{
+    identifier: string;
+    title: string;
+    severity: string;
+    remediation: string;
+  }>;
   theme: {
     primaryColour: string;
     accentColour: string;
@@ -112,7 +139,7 @@ export function renderReportHtml(model: ReportDocumentModel) {
   return `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${escapeHtml(model.title)}</title><style>
-:root{--primary:${primary};--accent:${accent}}*{box-sizing:border-box}body{margin:0;color:#17202a;background:#eef2f5;font-family:${safeFont(model.theme.bodyFont)},Arial,sans-serif;font-size:${model.theme.bodySize}px;line-height:1.55}.report{width:min(900px,100%);margin:0 auto;background:white;min-height:100vh;padding:64px 72px}.cover{min-height:780px;display:flex;flex-direction:column;justify-content:center;border-top:8px solid var(--primary)}.kicker{color:var(--accent);font-weight:700;text-transform:uppercase;letter-spacing:.12em}.cover h1{font:700 44px/1.12 ${safeFont(model.theme.headingFont)},Arial,sans-serif;color:var(--primary);margin:16px 0}.meta{color:#53616d}.classification{margin-top:auto;border:1px solid #cbd5dc;padding:10px;text-align:center;font-weight:700}.section{padding:32px 0;border-top:1px solid #dce3e8}.section.page-break{break-before:page}.section h2{font:700 26px/1.2 ${safeFont(model.theme.headingFont)},Arial,sans-serif;color:var(--primary)}.finding{margin:24px 0;padding:20px;border-left:5px solid var(--accent);background:#f7f9fa}.severity{display:inline-block;border-radius:999px;padding:3px 9px;background:#e8eef2;font-size:12px;font-weight:700;text-transform:uppercase}table{border-collapse:collapse;width:100%;margin:16px 0}th,td{border:1px solid #cbd5dc;padding:10px;text-align:left;vertical-align:top}th{background:#eef3f6;color:var(--primary)}.chart{display:flex;gap:12px;align-items:flex-end;height:180px}.bar{min-width:72px;background:var(--primary);color:white;text-align:center;padding:8px}.watermark{position:fixed;inset:45% 0 auto;transform:rotate(-28deg);text-align:center;font-size:70px;font-weight:700;color:rgba(80,90,100,.08);pointer-events:none}.signatures{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:40px;margin-top:50px}.signature{border-top:1px solid #475569;padding-top:8px}${customCss}
+:root{--primary:${primary};--accent:${accent}}*{box-sizing:border-box}body{margin:0;color:#17202a;background:#eef2f5;font-family:${safeFont(model.theme.bodyFont)},Arial,sans-serif;font-size:${model.theme.bodySize}px;line-height:1.55}.report{width:min(900px,100%);margin:0 auto;background:white;min-height:100vh;padding:64px 72px}.cover{min-height:780px;display:flex;flex-direction:column;justify-content:center;border-top:8px solid var(--primary)}.kicker{color:var(--accent);font-weight:700;text-transform:uppercase;letter-spacing:.12em}.cover h1{font:700 44px/1.12 ${safeFont(model.theme.headingFont)},Arial,sans-serif;color:var(--primary);margin:16px 0}.meta{color:#53616d}.classification{margin-top:auto;border:1px solid #cbd5dc;padding:10px;text-align:center;font-weight:700}.logo{max-height:56px;margin-bottom:18px}.toc{padding-left:20px}.section{padding:32px 0;border-top:1px solid #dce3e8}.section.page-break{break-before:page}.section h2{font:700 26px/1.2 ${safeFont(model.theme.headingFont)},Arial,sans-serif;color:var(--primary)}.finding{margin:24px 0;padding:20px;border-left:5px solid var(--accent);background:#f7f9fa}.severity{display:inline-block;border-radius:999px;padding:3px 9px;background:#e8eef2;font-size:12px;font-weight:700;text-transform:uppercase}table{border-collapse:collapse;width:100%;margin:16px 0}th,td{border:1px solid #cbd5dc;padding:10px;text-align:left;vertical-align:top}th{background:#eef3f6;color:var(--primary)}.chart{display:flex;gap:12px;align-items:flex-end;height:180px}.bar{min-width:72px;background:var(--primary);color:white;text-align:center;padding:8px}.watermark{position:fixed;inset:45% 0 auto;transform:rotate(-28deg);text-align:center;font-size:70px;font-weight:700;color:rgba(80,90,100,.08);pointer-events:none}.signatures{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:40px;margin-top:50px}.signature{border-top:1px solid #475569;padding-top:8px}${customCss}
 </style></head><body>${model.theme.watermark ? `<div class="watermark">${escapeHtml(model.theme.watermark)}</div>` : ""}<main class="report">${sections}${model.signatures.length ? `<section class="section"><h2>Approvals and signatures</h2><div class="signatures">${model.signatures.map((signature) => `<div class="signature">${escapeHtml(signature.label)} - ${escapeHtml(signature.role)}</div>`).join("")}</div></section>` : ""}</main></body></html>`;
 }
 
@@ -190,6 +217,11 @@ export function renderReportMarkdown(model: ReportDocumentModel) {
           ]),
         ),
       );
+    const extra = structuredSection(model, definition.type);
+    if (extra?.kind === "table")
+      output.push(...markdownTable(extra.headers, extra.rows));
+    if (extra?.kind === "list")
+      output.push(...extra.items.map((item) => item), "");
   }
   if (model.signatures.length) {
     output.push("## Approvals and signatures", "");
@@ -235,12 +267,27 @@ async function renderReportPdf(model: ReportDocumentModel) {
     )
       addPdfPage(document);
     if (definition.type === "cover") {
+      const logo = logoBytes(model.logoDataUri);
+      if (logo) {
+        try {
+          document.image(logo, 72, 72, { height: 48 });
+          document.moveDown(4);
+        } catch {
+          /* invalid or unsupported logo bytes are omitted */
+        }
+      } else document.moveDown(7);
       document
-        .moveDown(7)
         .fillColor(accent)
         .font("Helvetica-Bold")
         .fontSize(11)
         .text(model.organisationName.toUpperCase(), { characterSpacing: 1.5 });
+      if (model.tagline)
+        document
+          .moveDown(0.4)
+          .fillColor("#52606d")
+          .font("Helvetica")
+          .fontSize(11)
+          .text(model.tagline);
       document
         .moveDown()
         .fillColor(primary)
@@ -253,6 +300,13 @@ async function renderReportPdf(model: ReportDocumentModel) {
         .font("Helvetica")
         .fontSize(14)
         .text(`${model.clientName} | ${model.engagementReference}`);
+      if (model.startDate || model.endDate)
+        document
+          .moveDown(0.4)
+          .fontSize(11)
+          .text(
+            `Testing window: ${model.startDate ?? "not recorded"} – ${model.endDate ?? "not recorded"}`,
+          );
       document
         .moveDown(12)
         .strokeColor("#cbd5dc")
@@ -334,7 +388,10 @@ async function renderReportPdf(model: ReportDocumentModel) {
       model.theme.footerLeft ?? model.engagementReference,
       72,
       710,
-      { width: 260, lineBreak: false },
+      {
+        width: 260,
+        lineBreak: false,
+      },
     );
     if (model.theme.showPageNumbers)
       document.text(`Page ${page + 1} of ${range.count}`, 280, 710, {
@@ -371,6 +428,20 @@ async function renderReportDocx(model: ReportDocumentModel) {
           ],
         }),
       );
+      if (model.tagline)
+        children.push(
+          new Paragraph({
+            spacing: { after: 200 },
+            children: [
+              new TextRun({
+                text: model.tagline,
+                color: muted,
+                size: 22,
+                font: model.theme.bodyFont,
+              }),
+            ],
+          }),
+        );
       children.push(
         new Paragraph({
           spacing: { after: 240 },
@@ -578,7 +649,7 @@ function renderHtmlSection(
   content?: string,
 ) {
   if (definition.type === "cover")
-    return `<section class="cover"><p class="kicker">${escapeHtml(model.organisationName)}</p><h1>${escapeHtml(model.title)}</h1><p class="meta">${escapeHtml(model.clientName)} | ${escapeHtml(model.engagementReference)}</p><p class="classification">${escapeHtml(model.classification)}</p></section>`;
+    return `<section class="cover">${model.logoDataUri ? `<img class="logo" alt="" src="${escapeHtml(model.logoDataUri)}">` : ""}<p class="kicker">${escapeHtml(model.organisationName)}</p>${model.tagline ? `<p class="meta">${escapeHtml(model.tagline)}</p>` : ""}<h1>${escapeHtml(model.title)}</h1><p class="meta">${escapeHtml(model.clientName)} | ${escapeHtml(model.engagementReference)}</p>${model.startDate || model.endDate ? `<p class="meta">Testing window: ${escapeHtml(model.startDate ?? "not recorded")} – ${escapeHtml(model.endDate ?? "not recorded")}</p>` : ""}<p class="classification">${escapeHtml(model.classification)}</p></section>`;
   if (definition.type === "page_break")
     return `<div class="section page-break"></div>`;
   let body = content
@@ -631,6 +702,10 @@ function renderHtmlSection(
         String(value),
       ]),
     );
+  const extra = structuredSection(model, definition.type);
+  if (extra?.kind === "table") body += htmlTable(extra.headers, extra.rows);
+  if (extra?.kind === "list")
+    body += `<ol class="toc">${extra.items.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ol>`;
   return `<section class="section"><h2>${escapeHtml(definition.title ?? titleFor(definition.type))}</h2>${body}</section>`;
 }
 
@@ -704,6 +779,11 @@ function renderPdfDataSection(
         String(value),
       ]),
     );
+  const extra = structuredSection(model, type);
+  if (extra?.kind === "table") pdfRows(document, extra.headers, extra.rows);
+  if (extra?.kind === "list")
+    for (const item of extra.items)
+      document.moveDown(0.2).font("Helvetica").fontSize(10.5).text(item);
 }
 
 function docxDataSection(
@@ -784,6 +864,11 @@ function docxDataSection(
         primary,
       ),
     ];
+  const extra = structuredSection(model, type);
+  if (extra?.kind === "table")
+    return [docxTable(extra.headers, extra.rows, primary)];
+  if (extra?.kind === "list")
+    return extra.items.map((item) => new Paragraph({ text: item }));
   return [];
 }
 
@@ -912,6 +997,78 @@ function columnWidths(count: number) {
     index === count - 1 ? 9360 - base * (count - 1) : base,
   );
 }
+function structuredSection(
+  model: ReportDocumentModel,
+  type: ReportSectionDefinition["type"],
+):
+  | { kind: "table"; headers: string[]; rows: string[][] }
+  | { kind: "list"; items: string[] }
+  | null {
+  if (type === "table_of_contents")
+    return {
+      kind: "list",
+      items: model.sections
+        .filter(
+          (section) =>
+            section.definition.type !== "cover" &&
+            section.definition.type !== "page_break" &&
+            section.definition.type !== "table_of_contents",
+        )
+        .map(
+          (section, index) =>
+            `${index + 1}. ${section.definition.title ?? titleFor(section.definition.type)}`,
+        ),
+    };
+  if (type === "document_control")
+    return {
+      kind: "table",
+      headers: ["Field", "Value"],
+      rows: (model.documentControl ?? []).map((item) => [
+        item.field,
+        item.value,
+      ]),
+    };
+  if (type === "severity_ratings")
+    return {
+      kind: "table",
+      headers: ["Severity", "CVSS", "Meaning"],
+      rows: (model.severityRatings ?? []).map((item) => [
+        item.severity,
+        item.cvss,
+        item.meaning,
+      ]),
+    };
+  if (type === "recommendations")
+    return {
+      kind: "table",
+      headers: ["ID", "Finding", "Severity", "Recommendation"],
+      rows: (model.recommendations ?? []).map((item) => [
+        item.identifier,
+        item.title,
+        item.severity,
+        item.remediation,
+      ]),
+    };
+  if (type === "glossary")
+    return {
+      kind: "table",
+      headers: ["Term", "Definition"],
+      rows: (model.glossary ?? []).map((item) => [item.term, item.definition]),
+    };
+  if (type === "contacts")
+    return {
+      kind: "table",
+      headers: ["Role", "Name", "Email", "Phone"],
+      rows: (model.contacts ?? []).map((item) => [
+        item.role,
+        item.name,
+        item.email ?? "",
+        item.phone ?? "",
+      ]),
+    };
+  return null;
+}
+
 function titleFor(type: ReportSectionDefinition["type"]) {
   return type
     .replaceAll("_", " ")

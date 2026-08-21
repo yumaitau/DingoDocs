@@ -13,6 +13,7 @@ import {
   createReportTemplateAction,
   reviseReportTemplateAction,
 } from "@/server/actions/reports";
+import { professionalPentestTemplate } from "@/lib/reports/professional-template";
 
 export default async function TemplatesPage() {
   const context = await requireOrganisationContext();
@@ -46,9 +47,12 @@ export default async function TemplatesPage() {
             <h2 className="font-semibold">New report template</h2>
           </div>
           <p className="mt-1 text-sm text-slate-500">
-            The definition controls ordered and conditional sections, reusable
-            content, variables, typography, headers, footers, watermarks,
-            approvals, and signatures.
+            Starts from a client-ready penetration test structure: cover,
+            document control, confidentiality, table of contents, executive
+            summary, severity ratings, scope, methodology, findings,
+            recommendations, glossary, and contacts. Set{" "}
+            <code>branding.whiteLabel</code> and logo data URIs to issue the
+            report in your consultancy brand.
           </p>
           <form
             action={createReportTemplateAction}
@@ -171,67 +175,5 @@ export default async function TemplatesPage() {
 const field =
   "mt-1 min-h-11 w-full rounded-md border bg-paper px-3 text-sm outline-none focus:border-[var(--harbour-500)]";
 const area = `${field} min-h-24 py-2`;
-const starterDefinition: ReportTemplateDefinition = {
-  sections: [
-    { id: "cover", type: "cover" },
-    {
-      id: "executive-summary",
-      type: "executive_summary",
-      title: "Executive summary",
-      content:
-        "This report presents the outcomes of {{engagement.name}} for {{client.name}}.",
-    },
-    {
-      id: "methodology",
-      type: "reusable_content",
-      title: "Methodology",
-      reusableKey: "methodology",
-    },
-    {
-      id: "severity-chart",
-      type: "chart",
-      title: "Finding severity overview",
-      condition: { field: "hasFindings", operator: "truthy" },
-    },
-    { id: "scope", type: "scope", title: "Assessment scope" },
-    { id: "assets", type: "assets", title: "Assessed assets" },
-    { id: "findings", type: "findings", title: "Detailed findings" },
-    {
-      id: "evidence",
-      type: "evidence",
-      title: "Evidence register",
-      condition: { field: "hasEvidence", operator: "truthy" },
-    },
-    {
-      id: "appendix",
-      type: "appendix",
-      title: "Appendix: report controls",
-      content:
-        "This document is controlled according to the classification shown in its header and footer.",
-      options: { pageBreakBefore: true },
-    },
-  ],
-  reusableContent: {
-    methodology:
-      "Testing followed a risk-based methodology and the approved Rules of Engagement.",
-  },
-  variables: {},
-  branding: { primaryColour: "#174b6b", accentColour: "#d59b2d" },
-  typography: { bodyFont: "Arial", headingFont: "Arial", bodySize: 11 },
-  header: {
-    left: "{{organisation.name}}",
-    right: "Confidential",
-    showRule: true,
-  },
-  footer: { left: "{{engagement.reference}}", showPageNumbers: true },
-  watermark: "CONFIDENTIAL",
-  classification: "Confidential",
-  approvals: [
-    { role: "peer_reviewer", required: true },
-    { role: "quality_assurance", required: true },
-  ],
-  signatures: [
-    { label: "Prepared by", role: "Lead consultant" },
-    { label: "Approved by", role: "Quality assurance" },
-  ],
-};
+const starterDefinition: ReportTemplateDefinition =
+  professionalPentestTemplate();

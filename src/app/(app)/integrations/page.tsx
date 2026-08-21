@@ -91,20 +91,31 @@ export default async function IntegrationsPage() {
             MCP server for live testing notes
           </h2>
           <p className="mt-2 max-w-3xl text-sm text-slate-700">
-            Give your CLI agent a scoped DingoDocs credential and send evidence,
-            finding write-ups, and review-ready updates as you work. Every
-            mutation uses the same tenant boundaries and audit trail as the web
-            app.
+            Give your CLI agent or scanner a scoped credential and stream
+            evidence, testing-journal notes, timeline events, draft findings,
+            and Nuclei/Nmap/Nessus/ZAP/Burp imports as the engagement happens.
+            Every mutation uses the same tenant boundaries and audit trail as
+            the web app. Imported findings stay draft until a consultant
+            publishes them.
           </p>
           <pre className="mt-4 overflow-x-auto rounded-lg bg-slate-950 p-4 text-xs text-cyan-100">
-            <code>{`DINGODOCS_URL=http://localhost:3000
-DINGODOCS_API_KEY=dd_pat_… pnpm mcp`}</code>
+            <code>{`# stdio MCP (CLI agents)
+DINGODOCS_URL=http://localhost:3000
+DINGODOCS_API_KEY=dd_pat_… pnpm mcp
+
+# HTTP MCP (scanners and unattended tools)
+POST /api/mcp
+Authorization: Bearer dd_svc_…`}</code>
           </pre>
           <p className="mt-3 text-xs text-cyan-900">
-            Tools include <code>capture_evidence</code>,{" "}
-            <code>create_finding_write_up</code>,{" "}
-            <code>update_finding_write_up</code>, and{" "}
-            <code>attach_evidence_to_finding</code>.
+            Tools include <code>ingest_scanner_results</code>,{" "}
+            <code>add_testing_note</code>, <code>add_timeline_entry</code>,{" "}
+            <code>capture_evidence</code>, <code>create_finding_write_up</code>,
+            and <code>attach_evidence_to_finding</code>. Recommended scopes:{" "}
+            <code>engagements:read</code>, <code>engagements:write</code>,{" "}
+            <code>findings:read</code>, <code>findings:write</code>,{" "}
+            <code>evidence:write</code>, <code>notes:write</code>,{" "}
+            <code>imports:write</code>.
           </p>
         </section>
         <section className="rounded-xl border bg-paper p-5">
