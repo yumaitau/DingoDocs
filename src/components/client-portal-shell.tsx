@@ -51,6 +51,17 @@ export function ClientPortalShell({
               Engagements
             </Link>
             <Link
+              href="/account/preferences"
+              className={cn(
+                "rounded-md px-3 py-2 text-sm font-medium",
+                pathname === "/account/preferences"
+                  ? "bg-primary-soft text-[var(--harbour-700)]"
+                  : "text-slate-600 hover:bg-muted",
+              )}
+            >
+              Preferences
+            </Link>
+            <Link
               href="/portal/security"
               className={cn(
                 "rounded-md px-3 py-2 text-sm font-medium",

@@ -13,6 +13,7 @@ import { db } from "@/db";
 import { auditEvents } from "@/db/schema";
 import { sendAuthenticationEmail } from "@/lib/email/send";
 import { authProviderConfiguration } from "@/lib/auth/providers";
+import { DEFAULT_TIME_ZONE } from "@/lib/time-zone";
 
 const secret = process.env.BETTER_AUTH_SECRET;
 const providerConfiguration = authProviderConfiguration();
@@ -33,6 +34,15 @@ export const auth = betterAuth({
     process.env.TRUSTED_ORIGINS ?? "http://localhost:3000"
   ).split(","),
   database: drizzleAdapter(db, { provider: "pg", usePlural: true }),
+  user: {
+    additionalFields: {
+      timeZone: {
+        type: "string",
+        defaultValue: DEFAULT_TIME_ZONE,
+        input: false,
+      },
+    },
+  },
   databaseHooks: {
     session: {
       create: {

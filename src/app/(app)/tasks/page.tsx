@@ -6,7 +6,7 @@ import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { StatusPill } from "@/components/ui/status-pill";
 import { requireOrganisationContext } from "@/lib/permissions/require";
-import { formatDate } from "@/lib/utils";
+import { formatDateTime } from "@/lib/time-zone";
 
 export default async function TasksPage() {
   const context = await requireOrganisationContext();
@@ -63,7 +63,9 @@ export default async function TasksPage() {
                     {task.priority}
                   </StatusPill>
                   <span className="text-xs text-slate-500">
-                    {task.dueAt ? formatDate(task.dueAt) : "No due date"}
+                    {task.dueAt
+                      ? formatDateTime(task.dueAt, context.timeZone)
+                      : "No due date"}
                   </span>
                 </li>
               ))}

@@ -7,7 +7,7 @@ import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { StatusPill } from "@/components/ui/status-pill";
 import { requireOrganisationContext } from "@/lib/permissions/require";
-import { formatDate } from "@/lib/utils";
+import { formatDateTime } from "@/lib/time-zone";
 import { createReportAction } from "@/server/actions/reports";
 
 export default async function ReportsPage() {
@@ -130,7 +130,7 @@ export default async function ReportsPage() {
                       <p className="text-sm font-medium">{report.title}</p>
                       <p className="mt-1 text-xs text-slate-500">
                         Version {report.currentVersion} · Updated{" "}
-                        {formatDate(report.updatedAt)}
+                        {formatDateTime(report.updatedAt, context.timeZone)}
                       </p>
                     </div>
                   </div>

@@ -107,6 +107,36 @@ test("owner can reach every workspace and follow seeded assessment records", asy
   await expect(page.getByRole("link", { name: "Evidence" })).toBeVisible();
 });
 
+test("user time zone preference persists", async ({ page }, testInfo) => {
+  test.skip(
+    testInfo.project.name !== "chromium",
+    "Mutable preference runs once",
+  );
+  await signIn(page);
+  await page.goto("/account/preferences");
+  await expect(
+    page.getByRole("heading", { name: "Personal preferences" }),
+  ).toBeVisible();
+
+  const timeZone = page.getByLabel("Display time zone");
+  const save = async (value: string) => {
+    await timeZone.selectOption(value);
+    const response = page.waitForResponse(
+      (candidate) =>
+        candidate.request().method() === "POST" &&
+        new URL(candidate.url()).pathname === "/account/preferences",
+    );
+    await page.getByRole("button", { name: "Save time zone" }).click();
+    expect((await response).ok()).toBe(true);
+    await page.reload();
+    await expect(timeZone).toHaveValue(value);
+  };
+
+  await save("Australia/Sydney");
+  await save("Pacific/Auckland");
+  await save("Australia/Sydney");
+});
+
 test("owner can publish and execute a reusable assessment runbook", async ({
   page,
 }, testInfo) => {

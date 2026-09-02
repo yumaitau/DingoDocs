@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { requirePermission } from "@/lib/permissions/require";
+import { parseDateTimeInTimeZone } from "@/lib/time-zone";
 import {
   acknowledgeRules,
   addScopeItem,
@@ -256,7 +257,7 @@ export async function createTimelineEntryAction(
   await createTimelineEntry(actor(context), {
     engagementId,
     ...input,
-    occurredAt: new Date(input.occurredAt),
+    occurredAt: parseDateTimeInTimeZone(input.occurredAt, context.timeZone),
     clientVisible: input.clientVisible === "on",
   });
   refresh(engagementId);
@@ -281,7 +282,9 @@ export async function createWorkspaceTaskAction(
     engagementId,
     ...input,
     assigneeId: input.assigneeId || undefined,
-    dueAt: input.dueAt ? new Date(input.dueAt) : undefined,
+    dueAt: input.dueAt
+      ? parseDateTimeInTimeZone(input.dueAt, context.timeZone)
+      : undefined,
     assetIds: formData.getAll("assetIds").map(String),
   });
   refresh(engagementId);
@@ -305,7 +308,7 @@ export async function logWorkspaceTimeAction(
   await logWorkspaceTime(actor(context), {
     engagementId,
     ...input,
-    startedAt: new Date(input.startedAt),
+    startedAt: parseDateTimeInTimeZone(input.startedAt, context.timeZone),
     billable: input.billable === "on",
   });
   refresh(engagementId);

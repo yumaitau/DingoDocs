@@ -11,6 +11,7 @@ import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { StatusPill } from "@/components/ui/status-pill";
 import { requireOrganisationContext } from "@/lib/permissions/require";
+import { formatDateTime } from "@/lib/time-zone";
 import { formatDate } from "@/lib/utils";
 import { getDashboardData } from "@/server/services/dashboard";
 
@@ -195,7 +196,7 @@ export default async function DashboardPage() {
                           </span>
                           <span className="mt-1 block text-xs text-slate-500">
                             {task.dueAt
-                              ? `Due ${formatDate(task.dueAt)}`
+                              ? `Due ${formatDateTime(task.dueAt, context.timeZone)}`
                               : "No due date"}
                           </span>
                         </span>
@@ -261,7 +262,7 @@ export default async function DashboardPage() {
                       </StatusPill>
                     </td>
                     <td className="px-4 py-3 text-xs text-slate-500">
-                      {formatDate(finding.updatedAt)}
+                      {formatDateTime(finding.updatedAt, context.timeZone)}
                     </td>
                   </tr>
                 ))}

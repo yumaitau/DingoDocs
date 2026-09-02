@@ -6,6 +6,7 @@ import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { StatusPill } from "@/components/ui/status-pill";
 import { requireOrganisationContext } from "@/lib/permissions/require";
+import { formatDateTime } from "@/lib/time-zone";
 import {
   createFindingTemplateAction,
   createRiskMatrixAction,
@@ -195,7 +196,7 @@ export default async function FindingsLibraryPage({
                         label="Review history"
                         value={
                           row.supersededAt
-                            ? `Superseded ${row.supersededAt.toLocaleDateString()}`
+                            ? `Superseded ${formatDateTime(row.supersededAt, context.timeZone)}`
                             : "Latest version"
                         }
                       />

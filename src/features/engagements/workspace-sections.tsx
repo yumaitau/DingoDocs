@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { StatusPill } from "@/components/ui/status-pill";
 import { EvidenceSection } from "@/features/evidence/evidence-section";
 import { FindingsSection } from "@/features/findings/findings-section";
+import { formatDateTime } from "@/lib/time-zone";
 import {
   acknowledgeRulesAction,
   addScopeItemAction,
@@ -78,11 +79,13 @@ export async function EngagementWorkspaceSection({
   engagementId,
   organisationId,
   userId,
+  timeZone,
 }: {
   title: string;
   engagementId: string;
   organisationId: string;
   userId: string;
+  timeZone: string;
 }) {
   if (!managedSections.has(title))
     return <UnimplementedSection title={title} />;
@@ -91,7 +94,7 @@ export async function EngagementWorkspaceSection({
     engagementId,
   );
   if (!workspace) return null;
-  const props = { workspace, engagementId, userId };
+  const props = { workspace, engagementId, userId, timeZone };
   switch (title) {
     case "Scope":
       return <ScopeSection {...props} />;
@@ -551,6 +554,7 @@ async function RetestingSection({
   workspace,
   engagementId,
   organisationId,
+  timeZone,
 }: SectionProps & { organisationId: string }) {
   const retests = await getEngagementRetests({ organisationId }, engagementId);
   return (
@@ -578,9 +582,9 @@ async function RetestingSection({
                   </p>
                   <h3 className="mt-1 font-semibold">{finding.title}</h3>
                   <p className="mt-1 text-xs text-slate-500">
-                    Requested {attempt.requestedAt.toLocaleString()}
+                    Requested {formatDateTime(attempt.requestedAt, timeZone)}
                     {attempt.scheduledFor
-                      ? ` · scheduled ${attempt.scheduledFor.toLocaleString()}`
+                      ? ` · scheduled ${formatDateTime(attempt.scheduledFor, timeZone)}`
                       : ""}
                   </p>
                 </div>
@@ -792,6 +796,7 @@ type SectionProps = {
   workspace: Workspace;
   engagementId: string;
   userId: string;
+  timeZone: string;
 };
 
 function ScopeSection({ workspace, engagementId }: SectionProps) {
@@ -1327,7 +1332,7 @@ function NotesSection({ workspace, engagementId }: SectionProps) {
   );
 }
 
-function TimelineSection({ workspace, engagementId }: SectionProps) {
+function TimelineSection({ workspace, engagementId, timeZone }: SectionProps) {
   return (
     <Stack>
       <SectionHeader
@@ -1370,7 +1375,7 @@ function TimelineSection({ workspace, engagementId }: SectionProps) {
             <div className="flex flex-wrap justify-between gap-2">
               <h3 className="font-medium">{entry.phase}</h3>
               <time className="text-xs text-slate-500">
-                {entry.occurredAt.toLocaleString()}
+                {formatDateTime(entry.occurredAt, timeZone)}
               </time>
             </div>
             <p className="mt-2 text-sm text-slate-600">{entry.description}</p>
@@ -1474,7 +1479,7 @@ function TasksSection({ workspace, engagementId }: SectionProps) {
   );
 }
 
-function TimeSection({ workspace, engagementId }: SectionProps) {
+function TimeSection({ workspace, engagementId, timeZone }: SectionProps) {
   const total = workspace.timeEntries.reduce(
     (sum, entry) => sum + Number(entry.hours),
     0,
@@ -1537,7 +1542,7 @@ function TimeSection({ workspace, engagementId }: SectionProps) {
             <div>
               <h3 className="font-medium">{entry.category}</h3>
               <p className="text-xs text-slate-500">
-                {entry.startedAt.toLocaleString()} ·{" "}
+                {formatDateTime(entry.startedAt, timeZone)} ·{" "}
                 {entry.description ?? "No description"}
               </p>
             </div>

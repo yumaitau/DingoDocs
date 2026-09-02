@@ -4,6 +4,7 @@ import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { StatusPill } from "@/components/ui/status-pill";
 import { requireOrganisationContext } from "@/lib/permissions/require";
+import { formatDateTime } from "@/lib/time-zone";
 import {
   createReportRevisionAction,
   queueReportGenerationAction,
@@ -108,7 +109,8 @@ export default async function ReportPage({
               ) : null}
               {current.renderedAt ? (
                 <p className="mt-1 text-xs text-slate-500">
-                  Rendered {current.renderedAt.toLocaleString()}
+                  Rendered{" "}
+                  {formatDateTime(current.renderedAt, context.timeZone)}
                 </p>
               ) : null}
             </div>
@@ -145,7 +147,7 @@ export default async function ReportPage({
                   </span>
                   <span className="text-xs text-slate-500">
                     {version.immutable ? "Immutable" : "Editable"} ·{" "}
-                    {version.createdAt.toLocaleDateString()}
+                    {formatDateTime(version.createdAt, context.timeZone)}
                   </span>
                 </div>
               ))}
@@ -175,7 +177,7 @@ export default async function ReportPage({
                     <p className="mt-1 text-slate-600">{transition.comment}</p>
                   ) : null}
                   <p className="mt-1 text-xs text-slate-500">
-                    {transition.createdAt.toLocaleString()}
+                    {formatDateTime(transition.createdAt, context.timeZone)}
                   </p>
                 </div>
               ))}
@@ -232,13 +234,13 @@ export default async function ReportPage({
               </div>
               <div>
                 <dt className="text-xs text-slate-500">Created</dt>
-                <dd>{current.createdAt.toLocaleString()}</dd>
+                <dd>{formatDateTime(current.createdAt, context.timeZone)}</dd>
               </div>
               <div>
                 <dt className="text-xs text-slate-500">Approval</dt>
                 <dd>
                   {current.approvedAt
-                    ? current.approvedAt.toLocaleString()
+                    ? formatDateTime(current.approvedAt, context.timeZone)
                     : "Pending"}
                 </dd>
               </div>

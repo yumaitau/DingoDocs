@@ -1,5 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { requireOrganisationContext } from "@/lib/permissions/require";
+import { formatDateTime } from "@/lib/time-zone";
 import { revokeOwnSessionAction } from "@/server/actions/security";
 import { listUserDevices } from "@/server/services/account-security";
 import { SecurityControls } from "@/app/(app)/account/security/security-controls";
@@ -34,7 +35,7 @@ export default async function PortalSecurityPage() {
                 </p>
                 <p className="mt-1 text-xs text-slate-500">
                   {device.ipAddress || "Unknown network"} · expires{" "}
-                  {device.expiresAt.toLocaleString()}
+                  {formatDateTime(device.expiresAt, context.timeZone)}
                 </p>
               </div>
               <form action={revokeOwnSessionAction}>
