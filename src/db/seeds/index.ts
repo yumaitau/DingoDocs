@@ -20,6 +20,7 @@ import {
   tasks,
   users,
 } from "@/db/schema";
+import { professionalPentestTemplate } from "@/lib/reports/professional-template";
 
 const ids = {
   user: "0197f30f-122c-7000-8000-000000000001",
@@ -232,75 +233,13 @@ async function main() {
         organisationId: ids.organisation,
         name: "Technical Penetration Test Report",
         version: 1,
-        definition: {
-          sections: [
-            { id: "cover", type: "cover" },
-            {
-              id: "executive-summary",
-              type: "executive_summary",
-              title: "Executive summary",
-              content:
-                "This report presents the outcomes of {{engagement.name}} for {{client.name}}.",
-            },
-            {
-              id: "severity-chart",
-              type: "chart",
-              title: "Finding severity overview",
-              condition: { field: "hasFindings", operator: "truthy" },
-            },
-            { id: "scope", type: "scope", title: "Assessment scope" },
-            { id: "assets", type: "assets", title: "Assessed assets" },
-            { id: "findings", type: "findings", title: "Detailed findings" },
-            {
-              id: "evidence",
-              type: "evidence",
-              title: "Evidence register",
-              condition: { field: "hasEvidence", operator: "truthy" },
-            },
-            {
-              id: "appendix",
-              type: "appendix",
-              title: "Appendix: report controls",
-              content:
-                "This document is controlled according to the classification shown in its header and footer.",
-              options: { pageBreakBefore: true },
-            },
-          ],
-          reusableContent: {
-            methodology:
-              "Testing followed a risk-based methodology and the approved Rules of Engagement.",
-          },
-          variables: {},
+        definition: professionalPentestTemplate({
           branding: {
             organisationName: "Dingo Security",
-            primaryColour: "#174b6b",
-            accentColour: "#d59b2d",
+            whiteLabel: true,
+            tagline: "Confidential security assessment",
           },
-          typography: {
-            bodyFont: "Arial",
-            headingFont: "Arial",
-            bodySize: 11,
-          },
-          header: {
-            left: "Dingo Security",
-            right: "Confidential",
-            showRule: true,
-          },
-          footer: {
-            left: "{{engagement.reference}}",
-            showPageNumbers: true,
-          },
-          watermark: "CONFIDENTIAL",
-          classification: "Confidential",
-          approvals: [
-            { role: "peer_reviewer", required: true },
-            { role: "quality_assurance", required: true },
-          ],
-          signatures: [
-            { label: "Prepared by", role: "Lead consultant" },
-            { label: "Approved by", role: "Quality assurance" },
-          ],
-        },
+        }),
         createdBy: ids.user,
       })
       .onConflictDoNothing();

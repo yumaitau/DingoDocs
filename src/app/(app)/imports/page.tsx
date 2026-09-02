@@ -33,8 +33,10 @@ export default async function ImportsPage() {
         <section className="rounded-xl border bg-paper p-5">
           <h2 className="font-semibold">Scanner import</h2>
           <p className="mt-1 text-sm text-slate-500">
-            The original file is preserved as internal evidence. Nothing is
-            created until the preview is applied.
+            The original file is preserved as internal evidence. Preview remains
+            selective in the UI. Scanner MCP ingest auto-applies new records as
+            draft findings and writes a testing-journal note; nothing is
+            published to the client.
           </p>
           <form action={previewScannerImportAction} className="mt-5 space-y-4">
             <label className="block text-sm font-medium">
@@ -72,7 +74,7 @@ export default async function ImportsPage() {
                 type="file"
                 name="file"
                 required
-                accept=".xml,.nessus,.csv,.json"
+                accept=".xml,.nessus,.csv,.json,.jsonl,.txt"
                 className="mt-1 block w-full text-sm"
               />
             </label>

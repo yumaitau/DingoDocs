@@ -231,13 +231,51 @@ run("scanner exchange, backup, and tenant-safe PostgreSQL search", () => {
     });
     expect(
       duplicate.items.find((item) => item.title === "Imported issue"),
-    ).toMatchObject({ action: "duplicate", selected: false });
+    ).toMatchObject({
+      action: "duplicate",
+      selected: false,
+    });
     await expect(
       modules.applyScannerImport(
         { organisationId: ids.orgB, userId: ids.outsider },
         { importRunId, selectedItemIds: [] },
       ),
     ).rejects.toBeInstanceOf(modules.ExchangeScopeError);
+  });
+
+  it("ingests scanner output as draft findings with a testing-journal note", async () => {
+    const bytes = new TextEncoder().encode(
+      JSON.stringify({
+        "template-id": "exposed-panel",
+        info: {
+          name: "Exposed admin panel",
+          severity: "medium",
+          description: "Admin console is reachable.",
+        },
+        host: "https://portal.test",
+        port: "443",
+      }),
+    );
+    const ingested = await modules.ingestScannerImport(admin, {
+      engagementId: ids.engagementA,
+      adapter: "nuclei",
+      filename: "nuclei.json",
+      bytes,
+    });
+    expect(ingested.publication).toBe("draft");
+    expect(ingested.applied).toHaveLength(1);
+    expect(ingested.note.kind).toBe("testing_journal");
+    expect(ingested.note.visibility).toBe("team");
+    expect(ingested.summary.note).toContain("remain draft");
+    const [finding] = await modules.db
+      .select()
+      .from(modules.findings)
+      .where(modules.eq(modules.findings.id, ingested.applied[0]!.findingId));
+    expect(finding).toMatchObject({
+      title: "Exposed admin panel",
+      status: "draft",
+      severity: "medium",
+    });
   });
 
   it("exports required organisation domains and a migration-safe superset without storage locators", async () => {

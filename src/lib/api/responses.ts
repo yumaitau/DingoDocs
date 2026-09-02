@@ -4,6 +4,12 @@ import { AuthenticationRequiredError } from "@/lib/auth/session";
 import { PermissionDeniedError } from "@/lib/permissions/require";
 import { ApiAuthenticationError } from "@/lib/api/authentication";
 import { structuredLog } from "@/lib/observability/logger";
+import { ExchangeScopeError } from "@/server/services/data-exchange";
+import {
+  WorkspaceScopeError,
+  WorkspaceTransitionError,
+} from "@/server/services/engagement-workspace";
+import { ReportScopeError } from "@/server/services/reports";
 
 export function apiError(error: unknown, requestId?: string | null) {
   if (error instanceof ZodError)
@@ -48,6 +54,26 @@ export function apiError(error: unknown, requestId?: string | null) {
       },
       { status: 403 },
     );
+  if (
+    error instanceof ExchangeScopeError ||
+    error instanceof WorkspaceScopeError ||
+    error instanceof ReportScopeError
+  )
+    return NextResponse.json(
+      {
+        error: { code: "not_found", message: error.message },
+        requestId,
+      },
+      { status: 404 },
+    );
+  if (error instanceof WorkspaceTransitionError)
+    return NextResponse.json(
+      {
+        error: { code: "conflict", message: error.message },
+        requestId,
+      },
+      { status: 409 },
+    );
   structuredLog("error", "api.error", {
     requestId,
     errorType: error instanceof Error ? error.name : "UnknownError",
@@ -61,5 +87,12 @@ export function apiError(error: unknown, requestId?: string | null) {
       requestId,
     },
     { status: 500 },
+  );
+}
+
+export function apiNotFound(requestId?: string | null, message = "Not found") {
+  return NextResponse.json(
+    { error: { code: "not_found", message }, requestId },
+    { status: 404 },
   );
 }

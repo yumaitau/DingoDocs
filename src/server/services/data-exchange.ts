@@ -43,7 +43,12 @@ import {
   type ImportAdapterName,
   type NormalizedImportItem,
 } from "@/lib/imports/adapters";
+import { summariseScannerIngest } from "@/lib/imports/ingest-summary";
 import { uploadEvidence } from "./evidence";
+import {
+  createTimelineEntry,
+  createWorkspaceNote,
+} from "./engagement-workspace";
 
 export type ExchangeActor = { organisationId: string; userId: string };
 export class ExchangeScopeError extends Error {
@@ -350,6 +355,99 @@ export async function getImportPreview(
     )
     .orderBy(asc(importItems.title));
   return { run, items };
+}
+
+export async function ingestScannerImport(
+  actor: ExchangeActor,
+  input: {
+    engagementId: string;
+    adapter: ImportAdapterName;
+    filename: string;
+    mediaType?: string;
+    bytes: Uint8Array;
+    applyCreates?: boolean;
+  },
+) {
+  const preview = await previewScannerImport(actor, {
+    engagementId: input.engagementId,
+    adapter: input.adapter,
+    filename: input.filename,
+    mediaType:
+      input.mediaType ?? mediaTypeForImport(input.filename, input.bytes),
+    bytes: input.bytes,
+  });
+  const selectedItemIds = preview.items
+    .filter((item) => item.action === "create")
+    .map((item) => item.id);
+  const applied =
+    input.applyCreates === false
+      ? []
+      : await applyScannerImport(actor, {
+          importRunId: preview.run.id,
+          selectedItemIds,
+        });
+  const summary = summariseScannerIngest({
+    adapter: input.adapter,
+    filename: input.filename,
+    appliedCount: applied.length,
+    items: preview.items.map((item) => ({
+      title: item.title,
+      severity: item.severity,
+      action: item.action,
+      assetIdentifier: item.assetIdentifier,
+    })),
+  });
+  const note = await createWorkspaceNote(actor, {
+    engagementId: input.engagementId,
+    title: `Scanner ingest (${input.adapter})`,
+    body: summary.note,
+    kind: "testing_journal",
+    visibility: "team",
+  });
+  const timeline = await createTimelineEntry(actor, {
+    engagementId: input.engagementId,
+    occurredAt: new Date(),
+    phase: "testing",
+    description: summary.timeline,
+    clientVisible: false,
+  });
+  await db.insert(auditEvents).values({
+    organisationId: actor.organisationId,
+    actorId: actor.userId,
+    action: "import.ingested",
+    targetType: "import_run",
+    targetId: preview.run.id,
+    metadata: {
+      engagementId: input.engagementId,
+      adapter: input.adapter,
+      applied: applied.length,
+      publication: "draft",
+      noteId: note.id,
+      timelineId: timeline?.id,
+    },
+  });
+  return {
+    run: preview.run,
+    items: preview.items,
+    applied,
+    note,
+    timeline,
+    publication: "draft" as const,
+    summary,
+  };
+}
+
+export function mediaTypeForImport(filename: string, bytes: Uint8Array) {
+  const lower = filename.toLowerCase();
+  if (lower.endsWith(".csv")) return "text/csv";
+  const source = new TextDecoder("utf-8").decode(bytes).trimStart();
+  if (source.startsWith("<")) return "application/xml";
+  try {
+    JSON.parse(new TextDecoder("utf-8").decode(bytes));
+    return "application/json";
+  } catch {
+    return "text/plain";
+  }
 }
 
 export async function exportOrganisation(

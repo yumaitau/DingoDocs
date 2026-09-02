@@ -6,6 +6,7 @@ export const importAdapterNames = [
   "openvas",
   "zap",
   "burp",
+  "nuclei",
   "csv",
   "json",
 ] as const;
@@ -35,6 +36,7 @@ export function parseScannerImport(
   let items: Omit<NormalizedImportItem, "fingerprint">[];
   if (adapter === "csv") items = parseCsv(source);
   else if (adapter === "json") items = parseJson(source);
+  else if (adapter === "nuclei") items = parseNuclei(source);
   else if (adapter === "nmap") items = parseNmap(source);
   else if (adapter === "nessus") items = parseNessus(source);
   else if (adapter === "openvas")
@@ -74,6 +76,83 @@ export function parseScannerImport(
     ...item,
     fingerprint: fingerprint(adapter, item),
   }));
+}
+
+function parseNuclei(source: string) {
+  return parseNucleiRecords(source).map((raw, index) => {
+    const info =
+      raw.info && typeof raw.info === "object" && !Array.isArray(raw.info)
+        ? (raw.info as Record<string, unknown>)
+        : {};
+    const title = string(
+      info.name ?? raw.name ?? raw["template-id"] ?? raw.template_id,
+    );
+    if (!title) throw new Error(`Nuclei record ${index + 1} has no title`);
+    const references = Array.isArray(info.reference)
+      ? info.reference.map(string).filter(Boolean)
+      : string(info.reference)
+        ? [string(info.reference)]
+        : Array.isArray(raw.references)
+          ? raw.references.map(string).filter(Boolean)
+          : undefined;
+    return {
+      externalId: string(
+        raw["template-id"] ?? raw.template_id ?? raw["template-path"] ?? index,
+      ),
+      title,
+      description: string(
+        info.description ?? raw.description ?? raw["extracted-results"],
+      ),
+      remediation: string(info.remediation ?? info.recommendation),
+      severity: mapSeverity(info.severity ?? raw.severity),
+      assetIdentifier: cleanHost(
+        string(
+          raw.host ?? raw.ip ?? raw["matched-at"] ?? raw.matched_at ?? raw.url,
+        ),
+      ),
+      port: number(raw.port),
+      protocol: string(raw.type ?? raw.protocol),
+      cvssScore: number(
+        info.cvss_score ?? info.cvssScore ?? info["cvss-score"],
+      ),
+      references: references?.length ? references : undefined,
+    };
+  });
+}
+
+function parseNucleiRecords(source: string) {
+  const trimmed = source.trim();
+  if (!trimmed) return [];
+  try {
+    const parsed = JSON.parse(trimmed) as unknown;
+    if (Array.isArray(parsed)) return parsed.filter(isRecord);
+    if (parsed && typeof parsed === "object") {
+      const value = parsed as Record<string, unknown>;
+      if (Array.isArray(value.results)) return value.results.filter(isRecord);
+      if (Array.isArray(value.findings)) return value.findings.filter(isRecord);
+      return [value];
+    }
+  } catch {
+    const rows: Record<string, unknown>[] = [];
+    for (const [index, line] of trimmed.split(/\r?\n/).entries()) {
+      if (!line.trim()) continue;
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(line);
+      } catch {
+        throw new Error(`Nuclei JSONL line ${index + 1} is not valid JSON`);
+      }
+      if (!isRecord(parsed))
+        throw new Error(`Nuclei JSONL line ${index + 1} is not an object`);
+      rows.push(parsed);
+    }
+    return rows;
+  }
+  throw new Error("Nuclei output must be JSON, JSONL, or a results array");
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value) && typeof value === "object" && !Array.isArray(value);
 }
 
 function parseNmap(xml: string) {

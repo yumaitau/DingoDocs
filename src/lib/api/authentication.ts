@@ -42,7 +42,7 @@ export type ApiPrincipal = {
 
 export async function authenticateApiRequest(
   request: Request,
-  requiredScope: ApiScope,
+  requiredScope?: ApiScope,
 ): Promise<ApiPrincipal | null> {
   const authorization = request.headers.get("authorization");
   if (!authorization) return null;
@@ -70,7 +70,7 @@ export async function authenticateApiRequest(
     .limit(1);
   if (!key || (key.serviceAccountId && key.serviceDisabledAt))
     throw new ApiAuthenticationError("API key is invalid or expired");
-  if (!key.scopes.includes(requiredScope))
+  if (requiredScope && !key.scopes.includes(requiredScope))
     throw new ApiAuthenticationError(
       `API key does not grant ${requiredScope}`,
       403,
@@ -111,6 +111,19 @@ export async function authenticateApiRequest(
     serviceAccountId: key.serviceAccountId ?? undefined,
     scopes: key.scopes,
   };
+}
+
+export async function requireApiBearer(request: Request) {
+  const principal = await authenticateApiRequest(request);
+  if (!principal)
+    throw new ApiAuthenticationError("Bearer API key is required");
+  return principal;
+}
+
+export function bearerToken(request: Request) {
+  const authorization = request.headers.get("authorization");
+  const match = /^Bearer ([A-Za-z0-9_-]{20,})$/.exec(authorization ?? "");
+  return match?.[1];
 }
 
 export async function apiReadContext(request: Request, scope: ApiScope) {

@@ -15,6 +15,14 @@ DingoDocs is a Next.js 16 App Router monolith. React Server Components render pr
 - `src/lib/storage`: local and S3-compatible storage providers
 - `src/lib/jobs`: PostgreSQL-backed job claiming, retries, and dead-letter state
 - `src/lib/audit`: redacted audit event recording
+- `src/mcp`: shared MCP tool catalog, JSON-RPC protocol, stdio server, and REST client
+- `src/lib/reports`: professional pentest template and white-label branding helpers
+
+## MCP and scanner ingest
+
+The REST API under `/api/v1` is the source of truth. The stdio MCP process (`pnpm mcp`) and the HTTP JSON-RPC endpoint (`POST /api/mcp`) are facades: they authenticate a Bearer `dd_pat_` / `dd_svc_` key, then call the same tenant-scoped routes. Scanner ingest (`POST /api/v1/engagements/{id}/imports`) stores the original output as internal evidence, creates draft findings and assets for new fingerprints, and records a testing-journal note plus timeline event. Findings created this way remain `draft` until they complete the existing review and publication workflow.
+
+White-label report rendering merges organisation branding with the template definition. Logo fields accept `data:image/png` or `data:image/jpeg` URIs only; `http(s)` URLs are discarded to prevent SSRF during PDF generation.
 
 ## Entity overview
 
