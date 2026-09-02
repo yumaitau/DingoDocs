@@ -105,7 +105,9 @@ async function waitForCdp(endpoint, processClosed, stderr) {
         `Lightpanda exited with code ${closed.code}: ${stderr().trim()}`,
       );
     try {
-      const response = await fetch(`${endpoint}/json/version`);
+      const response = await fetch(`${endpoint}/json/version`, {
+        signal: AbortSignal.timeout(500),
+      });
       if (response.ok) return;
     } catch {
       // Server is still starting.
@@ -135,6 +137,20 @@ async function runTests(endpoint) {
       resolvePromise(code ?? (signal ? 1 : 0)),
     );
   });
+}
+
+async function stopLightpanda(child, processClosed) {
+  child.kill("SIGTERM");
+  let timeout;
+  const timedOut = await Promise.race([
+    processClosed.then(() => false),
+    new Promise((resolvePromise) => {
+      timeout = setTimeout(() => resolvePromise(true), 5_000);
+    }),
+  ]);
+  if (timeout) clearTimeout(timeout);
+  if (timedOut) child.kill("SIGKILL");
+  await processClosed;
 }
 
 async function main() {
@@ -179,11 +195,7 @@ async function main() {
     await waitForCdp(endpoint, processClosed, () => stderr);
     process.exitCode = await runTests(endpoint);
   } finally {
-    lightpanda.kill("SIGTERM");
-    await Promise.race([
-      processClosed,
-      new Promise((resolvePromise) => setTimeout(resolvePromise, 5_000)),
-    ]);
+    await stopLightpanda(lightpanda, processClosed);
   }
 }
 

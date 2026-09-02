@@ -1,7 +1,8 @@
 import { defineConfig, devices } from "@playwright/test";
+import { approvedE2EBaseURL } from "./src/test/e2e-origin";
 
 const port = process.env.PLAYWRIGHT_PORT ?? "3000";
-const externalBaseURL = process.env.PLAYWRIGHT_BASE_URL?.replace(/\/$/, "");
+const externalBaseURL = approvedE2EBaseURL(process.env.PLAYWRIGHT_BASE_URL);
 const baseURL = externalBaseURL ?? `http://127.0.0.1:${port}`;
 
 export default defineConfig({

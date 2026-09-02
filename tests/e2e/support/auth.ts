@@ -1,4 +1,5 @@
 import type { Page } from "@playwright/test";
+import { approvedE2EBaseURL } from "../../../src/test/e2e-origin";
 
 export const adminCredentials = {
   email: process.env.E2E_ADMIN_EMAIL ?? "admin@dingodocs.local",
@@ -7,6 +8,7 @@ export const adminCredentials = {
 
 export async function signIn(page: Page) {
   await page.goto("/sign-in");
+  approvedE2EBaseURL(page.url());
   await page.getByLabel("Email").fill(adminCredentials.email);
   await page.getByLabel("Password").fill(adminCredentials.password);
   const signInResponsePromise = page.waitForResponse(
@@ -27,7 +29,9 @@ export async function signIn(page: Page) {
 }
 
 export async function signInWithoutFormInput(page: Page, baseURL: string) {
-  await page.goto(new URL("/sign-in", baseURL).toString(), {
+  const approvedBaseURL = approvedE2EBaseURL(baseURL);
+  if (!approvedBaseURL) throw new Error("E2E base URL is required");
+  await page.goto(new URL("/sign-in", approvedBaseURL).toString(), {
     waitUntil: "domcontentloaded",
   });
   const result = await page.evaluate(async (credentials) => {
@@ -40,7 +44,7 @@ export async function signInWithoutFormInput(page: Page, baseURL: string) {
   }, adminCredentials);
   if (result.status < 200 || result.status >= 300)
     throw new Error(`Sign-in failed with ${result.status}: ${result.body}`);
-  await page.goto(new URL("/dashboard", baseURL).toString(), {
+  await page.goto(new URL("/dashboard", approvedBaseURL).toString(), {
     waitUntil: "domcontentloaded",
   });
 }

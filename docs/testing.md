@@ -13,15 +13,17 @@ Set `LIGHTPANDA_EXECUTABLE_PATH` to use an already installed binary. Set `LIGHTP
 Set `PLAYWRIGHT_BASE_URL` to skip Playwright's local web server and test the supplied deployment. Supply deployment-specific test credentials through environment variables; do not place them in shell history, source control, test output, screenshots, or traces.
 
 ```sh
-PLAYWRIGHT_BASE_URL=http://192.168.1.228:3000 \
+PLAYWRIGHT_BASE_URL=https://dingodocs-test.example.com \
 E2E_ADMIN_EMAIL=admin@dingodocs.local \
 E2E_ADMIN_PASSWORD='replace-with-test-password' \
 pnpm test:e2e
 
-PLAYWRIGHT_BASE_URL=http://192.168.1.228:3000 \
+PLAYWRIGHT_BASE_URL=https://dingodocs-test.example.com \
 E2E_ADMIN_EMAIL=admin@dingodocs.local \
 E2E_ADMIN_PASSWORD='replace-with-test-password' \
 pnpm test:e2e:lightpanda
 ```
 
 Use a dedicated synthetic tenant. The Chromium suite creates scoped API credentials and uploads synthetic evidence, then revokes credentials it creates. Never target a production tenant containing real client data.
+
+Deployed-host URLs must use HTTPS. Plain HTTP is accepted only for loopback URLs such as an SSH-forwarded `http://127.0.0.1:3000`; this prevents test credentials crossing the network unencrypted.
