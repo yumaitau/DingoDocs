@@ -203,6 +203,22 @@ export async function applyRunbookTemplate(
       .orderBy(asc(runbookTemplateSteps.position));
     if (!templateSteps.length)
       throw new RunbookTransitionError("Published runbook has no steps");
+    const [existing] = await tx
+      .select({ id: engagementRunbooks.id })
+      .from(engagementRunbooks)
+      .where(
+        and(
+          eq(engagementRunbooks.organisationId, actor.organisationId),
+          eq(engagementRunbooks.engagementId, engagement.id),
+          eq(engagementRunbooks.templateId, template.id),
+          eq(engagementRunbooks.templateVersion, template.version),
+        ),
+      )
+      .limit(1);
+    if (existing)
+      throw new RunbookTransitionError(
+        "This runbook version is already applied to the engagement",
+      );
     const [runbook] = await tx
       .insert(engagementRunbooks)
       .values({
@@ -213,8 +229,12 @@ export async function applyRunbookTemplate(
         templateVersion: template.version,
         createdBy: actor.userId,
       })
+      .onConflictDoNothing()
       .returning();
-    if (!runbook) throw new Error("Unable to apply runbook");
+    if (!runbook)
+      throw new RunbookTransitionError(
+        "This runbook version is already applied to the engagement",
+      );
     await tx.insert(engagementRunbookSteps).values(
       templateSteps.map((step) => ({
         organisationId: actor.organisationId,

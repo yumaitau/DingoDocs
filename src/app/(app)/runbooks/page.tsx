@@ -75,6 +75,7 @@ export default async function RunbooksPage() {
                         <input
                           className={field}
                           name="stepTitle"
+                          required={position === 1}
                           maxLength={160}
                         />
                       </Field>
@@ -85,6 +86,7 @@ export default async function RunbooksPage() {
                         <textarea
                           className={area}
                           name="stepProcedure"
+                          required={position === 1}
                           rows={3}
                         />
                       </Field>

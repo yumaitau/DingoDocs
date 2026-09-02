@@ -125,6 +125,14 @@ run("runbooks with PostgreSQL", () => {
       engagementId: ids.engagement,
       templateId: template.id,
     });
+    await expect(
+      modules.applyRunbookTemplate(actor, {
+        engagementId: ids.engagement,
+        templateId: template.id,
+      }),
+    ).rejects.toThrow(
+      "This runbook version is already applied to the engagement",
+    );
     const [templateStep] = await modules.db
       .select()
       .from(modules.runbookTemplateSteps)
