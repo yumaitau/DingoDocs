@@ -53,6 +53,13 @@ test("tenant resources reject unauthenticated browser clients", async ({
   }
 });
 
+test("personal preferences redirect unauthenticated users to sign in", async ({
+  page,
+}) => {
+  await page.goto("/account/preferences");
+  await expect(page).toHaveURL(/\/sign-in$/);
+});
+
 test("owner can reach every workspace and follow seeded assessment records", async ({
   page,
 }) => {

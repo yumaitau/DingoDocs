@@ -3,16 +3,14 @@ import { AppShell } from "@/components/app-shell";
 import { ClientPortalShell } from "@/components/client-portal-shell";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
-import { requireSession } from "@/lib/auth/session";
+import { requirePageSession } from "@/lib/auth/session";
 import { requireOrganisationContext } from "@/lib/permissions/require";
 import { formatDateTime, listSupportedTimeZones } from "@/lib/time-zone";
 import { updateTimeZoneAction } from "@/server/actions/preferences";
 
 export default async function PreferencesPage() {
-  const [context, session] = await Promise.all([
-    requireOrganisationContext(),
-    requireSession(),
-  ]);
+  const session = await requirePageSession();
+  const context = await requireOrganisationContext();
   const content = (
     <>
       <PageHeader
