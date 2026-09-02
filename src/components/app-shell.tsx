@@ -9,6 +9,7 @@ import {
   Building2,
   Cable,
   CheckSquare,
+  ClipboardList,
   ChevronRight,
   FileText,
   Gauge,
@@ -35,6 +36,7 @@ const primary: NavItem[] = [
   { label: "Findings Library", href: "/findings-library", icon: Library },
   { label: "Reports", href: "/reports", icon: FileText },
   { label: "Tasks", href: "/tasks", icon: CheckSquare },
+  { label: "Runbooks", href: "/runbooks", icon: ClipboardList },
   { label: "Templates", href: "/templates", icon: BookOpen },
   { label: "Imports & Exports", href: "/imports", icon: ArrowLeftRight },
 ];
