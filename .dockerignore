@@ -2,6 +2,9 @@
 .next
 node_modules
 coverage
+test-results
+playwright-report
+.cache
 storage/data
 .env*
 !.env.example

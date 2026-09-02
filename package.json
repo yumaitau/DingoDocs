@@ -31,7 +31,9 @@
     "docker:down": "docker compose down"
   },
   "dependencies": {
+    "@aws-sdk/client-license-manager": "^3.1124.0",
     "@aws-sdk/client-s3": "^3.1094.0",
+    "@aws-sdk/client-sesv2": "^3.1124.0",
     "@aws-sdk/s3-request-presigner": "^3.1094.0",
     "@better-auth/passkey": "1.6.25",
     "@dnd-kit/core": "^6.3.1",
@@ -95,8 +97,10 @@
   },
   "pnpm": {
     "overrides": {
+      "@hono/node-server@<1.19.15": "1.19.15",
       "browserslist@<=4.28.6": "4.28.7",
       "brace-expansion@<5.0.9": "5.0.9",
+      "esbuild@<=0.24.2": "0.25.12",
       "js-yaml@4.3.0": "4.3.1",
       "postcss@<8.5.18": "8.5.23"
     },
