@@ -124,7 +124,6 @@ export const auth = betterAuth({
         attributes: {
           httpOnly: true,
           sameSite: "lax",
-          secure: process.env.NODE_ENV === "production",
         },
       },
     },

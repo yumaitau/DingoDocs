@@ -50,6 +50,7 @@ jobs:
       - run: pnpm build
       - run: pnpm exec playwright install --with-deps chromium
       - run: pnpm test:e2e
+      - run: pnpm test:e2e:lightpanda
 
   container:
     runs-on: ubuntu-24.04

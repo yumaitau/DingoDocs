@@ -1,4 +1,5 @@
-import { expect, test, type Page } from "@playwright/test";
+import { expect, test } from "@playwright/test";
+import { signIn } from "./support/auth";
 
 test("sign-in is keyboard accessible", async ({ page }) => {
   await page.goto("/sign-in");
@@ -231,25 +232,3 @@ test("report workspace and live preview share the seeded report model", async ({
   expect(html).toContain("Northstar Customer Portal Assessment");
   expect(html).toContain("Missing object-level authorisation exposes invoices");
 });
-
-async function signIn(page: Page) {
-  await page.goto("/sign-in");
-  await page.getByLabel("Email").fill("admin@dingodocs.local");
-  await page.getByLabel("Password").fill("DingoDocs-Demo-2026!");
-  const signInResponsePromise = page.waitForResponse(
-    (response) =>
-      response.request().method() === "POST" &&
-      response.url().endsWith("/api/auth/sign-in/email"),
-  );
-  const dashboardNavigationPromise = page.waitForURL(/\/dashboard/, {
-    waitUntil: "domcontentloaded",
-  });
-  await page.getByRole("button", { name: "Sign in", exact: true }).click();
-  const signInResponse = await signInResponsePromise;
-  if (!signInResponse.ok()) {
-    throw new Error(
-      `Sign-in failed with ${signInResponse.status()}: ${await signInResponse.text()}`,
-    );
-  }
-  await dashboardNavigationPromise;
-}
