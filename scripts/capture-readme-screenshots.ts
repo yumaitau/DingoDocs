@@ -66,6 +66,10 @@ async function main() {
       deviceScaleFactor: 1,
     });
 
+    await page.goto(baseUrl, { waitUntil: "domcontentloaded" });
+    await page.getByRole("heading", { name: "Defensible pentests." }).waitFor();
+    await capture(page, "landing.png");
+
     await page.goto(`${baseUrl}/sign-in`, { waitUntil: "domcontentloaded" });
     await page.getByRole("heading", { name: "Welcome back" }).waitFor();
     await capture(page, "sign-in.png");
@@ -73,6 +77,12 @@ async function main() {
     await signIn(page);
     await page.getByRole("heading", { name: "Good morning" }).waitFor();
     await capture(page, "dashboard.png");
+
+    await page.goto(`${baseUrl}/account/preferences`, {
+      waitUntil: "domcontentloaded",
+    });
+    await page.getByRole("heading", { name: "Personal preferences" }).waitFor();
+    await capture(page, "preferences.png");
 
     await page.goto(`${baseUrl}/engagements`, {
       waitUntil: "domcontentloaded",
