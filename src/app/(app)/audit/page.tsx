@@ -3,7 +3,7 @@ import { db } from "@/db";
 import { auditEvents } from "@/db/schema";
 import { PageHeader } from "@/components/page-header";
 import { requirePermission } from "@/lib/permissions/require";
-import { formatDate } from "@/lib/utils";
+import { formatDateTime } from "@/lib/time-zone";
 
 export default async function AuditPage() {
   const context = await requirePermission("audit:view");
@@ -42,7 +42,7 @@ export default async function AuditPage() {
                     {row.actorId?.slice(0, 8) ?? "system"}
                   </td>
                   <td className="px-4 py-3 text-xs text-slate-500">
-                    {formatDate(row.createdAt)}
+                    {formatDateTime(row.createdAt, context.timeZone)}
                   </td>
                   <td className="px-4 py-3 font-mono text-xs text-slate-500">
                     {row.requestId?.slice(0, 12) ?? "n/a"}

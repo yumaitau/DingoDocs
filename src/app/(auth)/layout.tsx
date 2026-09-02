@@ -15,6 +15,7 @@ export default function AuthLayout({
           alt=""
           fill
           sizes="58vw"
+          loading="eager"
           className="-z-20 object-cover opacity-55"
         />
         <div

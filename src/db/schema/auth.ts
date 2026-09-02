@@ -20,6 +20,7 @@ export const users = pgTable(
     email: text("email").notNull(),
     emailVerified: boolean("email_verified").notNull().default(false),
     image: text("image"),
+    timeZone: text("time_zone").notNull().default("Australia/Sydney"),
     twoFactorEnabled: boolean("two_factor_enabled").notNull().default(false),
     mfaEnforcedAt: timestamp("mfa_enforced_at", { withTimezone: true }),
     mfaEnrolledAt: timestamp("mfa_enrolled_at", { withTimezone: true }),

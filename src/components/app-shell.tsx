@@ -12,6 +12,7 @@ import {
   CheckSquare,
   ClipboardList,
   ChevronRight,
+  Clock3,
   FileText,
   Gauge,
   History,
@@ -43,6 +44,7 @@ const primary: NavItem[] = [
   { label: "Imports & Exports", href: "/imports", icon: ArrowLeftRight },
 ];
 const secondary: NavItem[] = [
+  { label: "Preferences", href: "/account/preferences", icon: Clock3 },
   { label: "Team", href: "/team", icon: Users },
   { label: "Audit Log", href: "/audit", icon: History },
   { label: "Integrations", href: "/integrations", icon: Cable },

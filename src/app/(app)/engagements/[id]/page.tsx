@@ -181,6 +181,7 @@ export default async function EngagementPage({
             engagementId={id}
             organisationId={context.organisationId}
             userId={context.userId}
+            timeZone={context.timeZone}
           />
         )}
       </div>

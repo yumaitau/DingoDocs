@@ -9,6 +9,7 @@ import {
   requireOrganisationContext,
   requirePermission,
 } from "@/lib/permissions/require";
+import { parseDateTimeInTimeZone } from "@/lib/time-zone";
 import {
   addPortalComment,
   addRetestNote,
@@ -152,10 +153,11 @@ export async function uploadRemediationEvidenceAction(
 
 export async function scheduleRetestAction(formData: FormData) {
   const context = await requirePermission("finding:approve");
+  const scheduledFor = z.string().parse(formData.get("scheduledFor"));
   await scheduleRetest(context, {
     attemptId: id.parse(formData.get("attemptId")),
     assignedTo: id.parse(formData.get("assignedTo")),
-    scheduledFor: z.coerce.date().parse(formData.get("scheduledFor")),
+    scheduledFor: parseDateTimeInTimeZone(scheduledFor, context.timeZone),
   });
   revalidatePath(`/engagements/${id.parse(formData.get("engagementId"))}`);
 }

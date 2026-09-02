@@ -1,7 +1,7 @@
 import { and, asc, eq, isNull } from "drizzle-orm";
 import { cookies } from "next/headers";
 import { db } from "@/db";
-import { organisationMembers, organisations } from "@/db/schema";
+import { organisationMembers, organisations, users } from "@/db/schema";
 
 export const activeOrganisationCookie = "dingodocs_active_organisation";
 
@@ -20,12 +20,14 @@ export async function resolveActiveOrganisation(userId: string) {
       slug: organisations.slug,
       name: organisations.name,
       role: organisationMembers.role,
+      timeZone: users.timeZone,
     })
     .from(organisationMembers)
     .innerJoin(
       organisations,
       eq(organisations.id, organisationMembers.organisationId),
     )
+    .innerJoin(users, eq(users.id, organisationMembers.userId))
     .where(
       hintedId
         ? and(...baseCondition, eq(organisations.id, hintedId))
@@ -43,12 +45,14 @@ export async function resolveActiveOrganisation(userId: string) {
       slug: organisations.slug,
       name: organisations.name,
       role: organisationMembers.role,
+      timeZone: users.timeZone,
     })
     .from(organisationMembers)
     .innerJoin(
       organisations,
       eq(organisations.id, organisationMembers.organisationId),
     )
+    .innerJoin(users, eq(users.id, organisationMembers.userId))
     .where(and(...baseCondition))
     .orderBy(asc(organisations.name))
     .limit(1);

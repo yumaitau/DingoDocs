@@ -10,7 +10,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { requireOrganisationContext } from "@/lib/permissions/require";
-import { formatDate } from "@/lib/utils";
+import { formatDateTime } from "@/lib/time-zone";
 import {
   addPortalCommentAction,
   approvePortalReportAction,
@@ -79,7 +79,7 @@ export default async function PortalEngagementPage({
           title="Approved scope"
           description={
             portal.approvedScope
-              ? `Scope version ${portal.approvedScope.version}, approved ${portal.approvedScope.approvedAt ? formatDate(portal.approvedScope.approvedAt) : "without a recorded date"}.`
+              ? `Scope version ${portal.approvedScope.version}, approved ${portal.approvedScope.approvedAt ? formatDateTime(portal.approvedScope.approvedAt, actor.timeZone) : "without a recorded date"}.`
               : "No approved scope has been shared yet."
           }
         />
@@ -195,7 +195,7 @@ export default async function PortalEngagementPage({
                                 {update.status.replaceAll("_", " ")}
                               </span>
                               {update.owner ? ` · ${update.owner}` : ""} ·{" "}
-                              {formatDate(update.createdAt)}
+                              {formatDateTime(update.createdAt, actor.timeZone)}
                               {update.note && (
                                 <p className="mt-1">{update.note}</p>
                               )}
@@ -220,7 +220,7 @@ export default async function PortalEngagementPage({
                                 ? ` · ${attempt.outcome.replaceAll("_", " ")}`
                                 : ""}
                               {attempt.scheduledFor
-                                ? ` · scheduled ${formatDate(attempt.scheduledFor)}`
+                                ? ` · scheduled ${formatDateTime(attempt.scheduledFor, actor.timeZone)}`
                                 : ""}
                               {portal.retestNotes
                                 .filter(
@@ -236,7 +236,12 @@ export default async function PortalEngagementPage({
                         </ul>
                       </div>
                     )}
-                    {comments.length > 0 && <CommentList comments={comments} />}
+                    {comments.length > 0 && (
+                      <CommentList
+                        comments={comments}
+                        timeZone={actor.timeZone}
+                      />
+                    )}
                   </div>
                   <div className="space-y-4">
                     <form
@@ -390,7 +395,7 @@ export default async function PortalEngagementPage({
                           {report.versionStatus.replaceAll("_", " ")}
                         </span>
                         {report.publishedAt
-                          ? ` · published ${formatDate(report.publishedAt)}`
+                          ? ` · published ${formatDateTime(report.publishedAt, actor.timeZone)}`
                           : ""}
                       </p>
                     </div>
@@ -418,7 +423,10 @@ export default async function PortalEngagementPage({
                   </div>
                   {reportComments.length > 0 && (
                     <div className="mt-4">
-                      <CommentList comments={reportComments} />
+                      <CommentList
+                        comments={reportComments}
+                        timeZone={actor.timeZone}
+                      />
                     </div>
                   )}
                   {report.versionStatus === "client_review" && (
@@ -471,7 +479,7 @@ export default async function PortalEngagementPage({
                   <p className="text-sm font-medium">{item.originalFilename}</p>
                   <p className="mt-1 text-xs text-slate-500">
                     {item.mediaType} · version {item.version} ·{" "}
-                    {formatDate(item.createdAt)}
+                    {formatDateTime(item.createdAt, actor.timeZone)}
                   </p>
                 </div>
                 <code className="text-[10px] text-slate-400">
@@ -534,8 +542,10 @@ function TextBlock({ title, body }: { title: string; body: string }) {
 
 function CommentList({
   comments,
+  timeZone,
 }: {
   comments: Array<{ id: string; body: string; createdAt: Date }>;
+  timeZone: string;
 }) {
   return (
     <div>
@@ -548,7 +558,7 @@ function CommentList({
           >
             {comment.body}
             <p className="mt-1 text-[11px] text-slate-400">
-              {formatDate(comment.createdAt)}
+              {formatDateTime(comment.createdAt, timeZone)}
             </p>
           </li>
         ))}

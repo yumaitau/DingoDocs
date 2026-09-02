@@ -6,6 +6,7 @@ import { db } from "@/db";
 import { evidence, evidenceLegalHolds } from "@/db/schema";
 import { roles } from "@/lib/permissions/matrix";
 import { requirePermission } from "@/lib/permissions/require";
+import { formatDateTime } from "@/lib/time-zone";
 import {
   createInvitationAction,
   placeLegalHoldAction,
@@ -88,7 +89,8 @@ export default async function SettingsPage() {
               >
                 <span className="min-w-0 flex-1 truncate">
                   {invitation.email} · {invitation.role.replaceAll("_", " ")} ·
-                  expires {invitation.expiresAt.toLocaleDateString()}
+                  expires{" "}
+                  {formatDateTime(invitation.expiresAt, context.timeZone)}
                 </span>
                 <form action={revokeInvitationAction}>
                   <input
@@ -201,7 +203,8 @@ export default async function SettingsPage() {
           <ul className="mt-3 max-h-36 space-y-1 overflow-auto text-xs text-slate-600">
             {retentionPreview.map((item) => (
               <li key={item.id}>
-                {item.filename} · {item.retentionUntil?.toLocaleDateString()}
+                {item.filename} ·{" "}
+                {formatDateTime(item.retentionUntil, context.timeZone)}
               </li>
             ))}
           </ul>
