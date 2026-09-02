@@ -1,4 +1,4 @@
-import { defineConfig, devices } from "@playwright/test";
+import { defineConfig } from "@playwright/test";
 import { approvedE2EBaseURL } from "./src/test/e2e-origin";
 
 const port = process.env.PLAYWRIGHT_PORT ?? "3000";
@@ -6,18 +6,14 @@ const externalBaseURL = approvedE2EBaseURL(process.env.PLAYWRIGHT_BASE_URL);
 const baseURL = externalBaseURL ?? `http://127.0.0.1:${port}`;
 
 export default defineConfig({
-  testDir: "./tests/e2e",
-  testIgnore: "**/lightpanda/**",
-  fullyParallel: true,
+  testDir: "./tests/e2e/lightpanda",
+  fullyParallel: false,
   forbidOnly: Boolean(process.env.CI),
   retries: 0,
-  workers: process.env.CI ? 1 : undefined,
+  workers: 1,
   reporter: process.env.CI ? "github" : "list",
-  use: { baseURL, trace: "retain-on-failure" },
-  projects: [
-    { name: "chromium", use: { ...devices["Desktop Chrome"] } },
-    { name: "mobile-chrome", use: { ...devices["Pixel 7"] } },
-  ],
+  use: { baseURL, trace: "off" },
+  projects: [{ name: "lightpanda" }],
   webServer: externalBaseURL
     ? undefined
     : {

@@ -101,7 +101,8 @@ pnpm build           Create a production build
 pnpm lint            Run ESLint
 pnpm typecheck       Run strict TypeScript checks
 pnpm test            Run unit and configured integration tests
-pnpm test:e2e        Run Playwright tests
+pnpm test:e2e        Run Chromium desktop and mobile Playwright tests
+pnpm test:e2e:lightpanda Run the Lightpanda-compatible Playwright suite
 pnpm mcp             Start the DingoDocs MCP server over stdio
 pnpm db:generate     Generate a Drizzle migration
 pnpm db:migrate      Apply migrations
@@ -115,7 +116,7 @@ pnpm docker:down     Stop Compose services
 
 Domain schema is split under `src/db/schema`. Protected operations resolve the authenticated user and revalidate active organisation membership on the server. Repositories require a tenant scope and include `organisation_id` in record lookups. UI visibility is never treated as authorisation.
 
-See [Architecture](docs/architecture.md), [Deployment](docs/deployment.md), [Administrator guide](docs/admin-guide.md), [User guide](docs/user-guide.md), [Client portal guide](docs/client-portal-guide.md), [Backup/restore](docs/backup-restore.md), [Upgrade](docs/upgrade.md), [Threat model](docs/threat-model.md), [Data flow](docs/data-flow.md), [Security model](docs/security.md), [API](docs/api.md), and [Integration operations](docs/integrations.md).
+See [Architecture](docs/architecture.md), [Deployment](docs/deployment.md), [Testing](docs/testing.md), [Administrator guide](docs/admin-guide.md), [User guide](docs/user-guide.md), [Client portal guide](docs/client-portal-guide.md), [Backup/restore](docs/backup-restore.md), [Upgrade](docs/upgrade.md), [Threat model](docs/threat-model.md), [Data flow](docs/data-flow.md), [Security model](docs/security.md), [API](docs/api.md), and [Integration operations](docs/integrations.md).
 
 ## Project status
 
