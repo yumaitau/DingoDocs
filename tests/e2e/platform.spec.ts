@@ -3,6 +3,7 @@ import { signIn } from "./support/auth";
 
 const productRoutes = [
   ["/clients", "Clients"],
+  ["/analytics", "Risk analytics"],
   ["/engagements", "Engagements"],
   ["/findings-library", "Findings Library"],
   ["/reports", "Reports"],
@@ -61,6 +62,24 @@ test("owner can reach every workspace and follow seeded assessment records", asy
     await expect(page.getByRole("heading", { name: heading })).toBeVisible();
     await expect(page.locator("nav[aria-label='Primary']")).toHaveCount(1);
   }
+
+  await page.goto("/analytics");
+  await expect(
+    page.getByRole("heading", { name: "Severity distribution" }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole("heading", { name: "Client risk comparison" }),
+  ).toBeVisible();
+  await page.getByLabel("Severity").selectOption("high");
+  await page.getByLabel("Workflow").selectOption("all");
+  await page.getByRole("button", { name: "Apply filters" }).click();
+  await expect(page).toHaveURL(/\/analytics\?.*severity=high/);
+  const findingLink = page.getByRole("table").last().getByRole("link").first();
+  await expect(findingLink).toBeVisible();
+  await findingLink.click();
+  await expect(
+    page.getByRole("heading", { name: "Create engagement finding" }),
+  ).toBeVisible();
 
   await page.goto("/clients");
   await page.getByRole("link", { name: /Northstar Systems/ }).click();

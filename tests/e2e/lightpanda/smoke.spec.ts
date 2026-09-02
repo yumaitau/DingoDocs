@@ -56,6 +56,12 @@ test("authenticated browser reaches core engagement records", async ({
     page.getByText("Northstar customer portal assessment", { exact: true }),
   ).toBeVisible();
 
+  await page.goto(appURL("/analytics"), { waitUntil: "domcontentloaded" });
+  await expect(page.locator("h1")).toHaveText("Risk analytics");
+  await expect(
+    page.getByRole("heading", { name: "Severity distribution" }),
+  ).toBeVisible();
+
   await page.goto(
     appURL("/engagements/0197f30f-122c-7000-8000-000000000004?view=findings"),
     { waitUntil: "domcontentloaded" },

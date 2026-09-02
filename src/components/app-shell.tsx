@@ -8,6 +8,7 @@ import {
   BookOpen,
   Building2,
   Cable,
+  ChartNoAxesCombined,
   CheckSquare,
   ClipboardList,
   ChevronRight,
@@ -31,6 +32,7 @@ import { cn } from "@/lib/utils";
 type NavItem = { label: string; href: string; icon: LucideIcon };
 const primary: NavItem[] = [
   { label: "Dashboard", href: "/dashboard", icon: Gauge },
+  { label: "Analytics", href: "/analytics", icon: ChartNoAxesCombined },
   { label: "Clients", href: "/clients", icon: Building2 },
   { label: "Engagements", href: "/engagements", icon: ShieldCheck },
   { label: "Findings Library", href: "/findings-library", icon: Library },

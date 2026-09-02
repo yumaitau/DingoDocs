@@ -11,7 +11,9 @@ export default defineConfig({
   fullyParallel: true,
   forbidOnly: Boolean(process.env.CI),
   retries: 0,
-  workers: process.env.CI ? 1 : undefined,
+  // Authentication throttling is part of the product contract. Keep browser
+  // journeys serial so the suite never depends on bypassing production limits.
+  workers: 1,
   reporter: process.env.CI ? "github" : "list",
   use: { baseURL, trace: "retain-on-failure" },
   projects: [
