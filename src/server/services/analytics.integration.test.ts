@@ -95,6 +95,24 @@ run("risk analytics with PostgreSQL", () => {
         createdAt: new Date("2025-07-29T00:00:00Z"),
       },
       {
+        organisationId: ids.orgA,
+        engagementId: ids.engagementA,
+        identifier: "AN-005",
+        title: "Draft informational issue",
+        severity: "informational",
+        status: "draft",
+        createdAt: new Date("2025-01-10T00:00:00Z"),
+      },
+      {
+        organisationId: ids.orgA,
+        engagementId: ids.engagementB,
+        identifier: "AN-006",
+        title: "Medium issue under review",
+        severity: "medium",
+        status: "ready_for_review",
+        createdAt: new Date("2025-02-10T00:00:00Z"),
+      },
+      {
         organisationId: ids.orgB,
         engagementId: ids.engagementOther,
         identifier: "AN-X01",
@@ -139,17 +157,24 @@ run("risk analytics with PostgreSQL", () => {
     );
 
     expect(result.summary).toEqual({
-      total: 4,
+      total: 6,
       highRisk: 2,
       pastDue: 1,
       remediated: 1,
     });
     expect(result.severityCounts).toEqual([
-      { key: "informational", label: "Informational", value: 0 },
+      { key: "informational", label: "Informational", value: 1 },
       { key: "low", label: "Low", value: 1 },
-      { key: "medium", label: "Medium", value: 1 },
+      { key: "medium", label: "Medium", value: 2 },
       { key: "high", label: "High", value: 1 },
       { key: "critical", label: "Critical", value: 1 },
+    ]);
+    expect(result.workflowCounts).toEqual([
+      { key: "authoring", label: "Authoring", value: 1 },
+      { key: "review", label: "Review and QA", value: 1 },
+      { key: "remediation", label: "Remediation", value: 2 },
+      { key: "risk_accepted", label: "Risk accepted", value: 1 },
+      { key: "closed", label: "Resolved or closed", value: 1 },
     ]);
     expect(result.clients.map((client) => client.name)).toEqual([
       "Alpha Client",

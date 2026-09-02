@@ -9,7 +9,7 @@ import Link from "next/link";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { StatusPill } from "@/components/ui/status-pill";
-import { requireOrganisationContext } from "@/lib/permissions/require";
+import { requireInternalOrganisationContext } from "@/lib/permissions/require";
 import { formatDate } from "@/lib/utils";
 import {
   getRiskAnalytics,
@@ -25,7 +25,7 @@ export default async function AnalyticsPage({
 }: {
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
-  const context = await requireOrganisationContext();
+  const context = await requireInternalOrganisationContext();
   const filters = parseRiskAnalyticsFilters(await searchParams);
   const data = await getRiskAnalytics(context.organisationId, filters);
   const metrics = [
