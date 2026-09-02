@@ -2,6 +2,13 @@ import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
   output: "standalone",
+  outputFileTracingIncludes: {
+    "/*": [
+      "node_modules/node-cron/**/*",
+      "node_modules/@aws-sdk/client-license-manager/**/*",
+      "node_modules/@aws-sdk/client-sesv2/**/*",
+    ],
+  },
   poweredByHeader: false,
   async headers() {
     const developmentEval =

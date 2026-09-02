@@ -37,3 +37,5 @@ Readiness also returns aggregate queued/running/retrying/dead-letter job counts;
 Application logs are structured and should be collected by the container platform. Passwords, session tokens, API keys, raw evidence, and report content must never be logged.
 
 Detailed procedures: [backup and restore](backup-restore.md) and [upgrade](upgrade.md).
+
+AWS Marketplace images have a separate compile-time identity, entitlement check, and migration lifecycle. See [AWS Marketplace container distribution](aws-marketplace.md).

@@ -116,7 +116,7 @@ pnpm docker:down     Stop Compose services
 
 Domain schema is split under `src/db/schema`. Protected operations resolve the authenticated user and revalidate active organisation membership on the server. Repositories require a tenant scope and include `organisation_id` in record lookups. UI visibility is never treated as authorisation.
 
-See [Architecture](docs/architecture.md), [Deployment](docs/deployment.md), [Testing](docs/testing.md), [Administrator guide](docs/admin-guide.md), [User guide](docs/user-guide.md), [Client portal guide](docs/client-portal-guide.md), [Backup/restore](docs/backup-restore.md), [Upgrade](docs/upgrade.md), [Threat model](docs/threat-model.md), [Data flow](docs/data-flow.md), [Security model](docs/security.md), [API](docs/api.md), and [Integration operations](docs/integrations.md).
+See [Architecture](docs/architecture.md), [Deployment](docs/deployment.md), [AWS Marketplace](docs/aws-marketplace.md), [Testing](docs/testing.md), [Administrator guide](docs/admin-guide.md), [User guide](docs/user-guide.md), [Client portal guide](docs/client-portal-guide.md), [Backup/restore](docs/backup-restore.md), [Upgrade](docs/upgrade.md), [Threat model](docs/threat-model.md), [Data flow](docs/data-flow.md), [Security model](docs/security.md), [API](docs/api.md), and [Integration operations](docs/integrations.md).
 
 ## Project status
 
@@ -124,4 +124,4 @@ DingoDocs is under active development. The engagement workspace, secure evidence
 
 ## Licence
 
-Apache License 2.0. No telemetry, licence keys, proprietary cloud dependency, or paid feature gating is included.
+The source and community distribution use the Apache License 2.0. Community images contain no telemetry, licence keys, proprietary cloud dependency, or paid feature gating. Images published through AWS Marketplace validate the buyer's AWS entitlement as described in the [Marketplace deployment guide](docs/aws-marketplace.md).
