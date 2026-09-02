@@ -176,8 +176,8 @@ importers:
         specifier: ^9.39.4
         version: 9.39.5(jiti@2.7.0)
       eslint-config-next:
-        specifier: 16.3.0-preview.9
-        version: 16.3.0-preview.9(@typescript-eslint/parser@8.63.0(eslint@9.39.5(jiti@2.7.0))(typescript@6.0.3))(eslint@9.39.5(jiti@2.7.0))(typescript@6.0.3)
+        specifier: 16.3.3
+        version: 16.3.3(@typescript-eslint/parser@8.63.0(eslint@9.39.5(jiti@2.7.0))(typescript@6.0.3))(eslint@9.39.5(jiti@2.7.0))(typescript@6.0.3)
       jsdom:
         specifier: ^29.1.1
         version: 29.1.1(@noble/hashes@2.2.0)
@@ -1973,15 +1973,6 @@ packages:
       "@cfworker/json-schema":
         optional: true
 
-  "@napi-rs/wasm-runtime@1.1.6":
-    resolution:
-      {
-        integrity: sha512-ZLv/JdUfkvOy9eCnnBaGfiO+XimbjebAeO+MRQqD/B+FR1tnRN0tpKSJHRbE8sFfS6aqsXZ67TQjfwfsxULVbg==,
-      }
-    peerDependencies:
-      "@emnapi/core": ^1.7.1
-      "@emnapi/runtime": ^1.7.1
-
   "@napi-rs/wasm-runtime@1.2.3":
     resolution:
       {
@@ -1998,10 +1989,10 @@ packages:
         integrity: sha512-BcD+/sVDfoHckHcEx6e4RaLfWrUb+DpXgL9jOc6f29RTyvNwVVtnAaPljp3ok4zFQan6RhFE7q32lSXAFjjV9A==,
       }
 
-  "@next/eslint-plugin-next@16.3.0-preview.9":
+  "@next/eslint-plugin-next@16.3.3":
     resolution:
       {
-        integrity: sha512-hykuS4PlTT4Nrm7wxsYkbDZ82UuXMuAUXQvkCV/QT3cjGqvOK+SSNlViV8zAaaAV8VXBXqpUaXGNmdgwEDLUeg==,
+        integrity: sha512-pbEh30vvjKpDoTAmo1v3q2uM4JUi8QaEBpbmjWvGfoec2jLghy/WNtvzAT0bk+Ik9oz6etjt4YjXEk4BQnicCw==,
       }
 
   "@next/swc-darwin-arm64@16.3.0-preview.9":
@@ -4930,10 +4921,10 @@ packages:
       }
     engines: { node: ">=10" }
 
-  eslint-config-next@16.3.0-preview.9:
+  eslint-config-next@16.3.3:
     resolution:
       {
-        integrity: sha512-KZNgIceBPjpvytbAZ9IHMfLJN0kExK8Hqjx6oX00CoFjEz2pTkL5exVrj9RarOv92IPomv4WN7MP0gPEDKZAaA==,
+        integrity: sha512-teqtsR26tnlfXFHfVLTM/4tzEzU8DMu6GS1sddZzhfGzgd2f2ofbgDUcsk6cssSCzX6Tk6fmWifJcdANSdPJrw==,
       }
     peerDependencies:
       eslint: ">=9.0.0"
@@ -8991,7 +8982,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  "@napi-rs/wasm-runtime@1.1.6(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)":
+  "@napi-rs/wasm-runtime@1.2.3(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)":
     dependencies:
       "@emnapi/core": 1.10.0
       "@emnapi/runtime": 1.10.0
@@ -9007,7 +8998,7 @@ snapshots:
 
   "@next/env@16.3.0-preview.9": {}
 
-  "@next/eslint-plugin-next@16.3.0-preview.9(eslint@9.39.5(jiti@2.7.0))":
+  "@next/eslint-plugin-next@16.3.3(eslint@9.39.5(jiti@2.7.0))":
     dependencies:
       "@eslint-community/eslint-utils": 4.9.1(eslint@9.39.5(jiti@2.7.0))
       fast-glob: 3.3.1
@@ -10130,7 +10121,7 @@ snapshots:
     dependencies:
       "@emnapi/core": 1.10.0
       "@emnapi/runtime": 1.10.0
-      "@napi-rs/wasm-runtime": 1.1.6(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)
+      "@napi-rs/wasm-runtime": 1.2.3(@emnapi/core@1.10.0)(@emnapi/runtime@1.10.0)
     optional: true
 
   "@unrs/resolver-binding-win32-arm64-msvc@1.12.2":
@@ -10888,9 +10879,9 @@ snapshots:
 
   escape-string-regexp@4.0.0: {}
 
-  eslint-config-next@16.3.0-preview.9(@typescript-eslint/parser@8.63.0(eslint@9.39.5(jiti@2.7.0))(typescript@6.0.3))(eslint@9.39.5(jiti@2.7.0))(typescript@6.0.3):
+  eslint-config-next@16.3.3(@typescript-eslint/parser@8.63.0(eslint@9.39.5(jiti@2.7.0))(typescript@6.0.3))(eslint@9.39.5(jiti@2.7.0))(typescript@6.0.3):
     dependencies:
-      "@next/eslint-plugin-next": 16.3.0-preview.9(eslint@9.39.5(jiti@2.7.0))
+      "@next/eslint-plugin-next": 16.3.3(eslint@9.39.5(jiti@2.7.0))
       eslint: 9.39.5(jiti@2.7.0)
       eslint-import-resolver-node: 0.3.10
       eslint-import-resolver-typescript: 3.10.1(eslint-plugin-import@2.32.0)(eslint@9.39.5(jiti@2.7.0))
