@@ -17,7 +17,8 @@ const productRoutes = [
 
 test("deployment health, readiness, and API documentation stay public", async ({
   request,
-}) => {
+}, testInfo) => {
+  test.skip(testInfo.project.name !== "chromium", "API contract runs once");
   const health = await request.get("/api/health", {
     headers: { "x-request-id": "deployment-e2e" },
   });
@@ -37,7 +38,8 @@ test("deployment health, readiness, and API documentation stay public", async ({
 
 test("tenant resources reject unauthenticated browser clients", async ({
   request,
-}) => {
+}, testInfo) => {
+  test.skip(testInfo.project.name !== "chromium", "API contract runs once");
   for (const path of [
     "/api/v1/clients",
     "/api/v1/engagements",
