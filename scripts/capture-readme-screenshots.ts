@@ -7,6 +7,24 @@ const outputDir = resolve("docs/screenshots");
 const engagement = "/engagements/0197f30f-122c-7000-8000-000000000004";
 
 async function capture(page: Page, path: string) {
+  await page.evaluate(() => {
+    for (const image of document.images) image.loading = "eager";
+  });
+  await page.evaluate(async () => {
+    await document.fonts.ready;
+    await Promise.all(
+      Array.from(document.images).map((image) =>
+        image.complete
+          ? image.decode().catch(() => undefined)
+          : new Promise<void>((resolve) => {
+              image.addEventListener("load", () => resolve(), { once: true });
+              image.addEventListener("error", () => resolve(), {
+                once: true,
+              });
+            }),
+      ),
+    );
+  });
   await page.screenshot({ path: resolve(outputDir, path), fullPage: true });
 }
 

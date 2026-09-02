@@ -25,6 +25,7 @@ import {
   X,
   type LucideIcon,
 } from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -114,7 +115,17 @@ export function AppShell({
           >
             <Menu className="size-5" />
           </button>
-          <span className="text-sm font-semibold">DingoDocs</span>
+          <div className="flex items-center gap-2">
+            <Image
+              src="/brand/dingodocs-logo-mark.png"
+              alt=""
+              width={28}
+              height={28}
+              className="size-7 object-contain"
+              priority
+            />
+            <span className="text-sm font-semibold">DingoDocs</span>
+          </div>
           <button
             type="button"
             aria-label="Open command palette"
@@ -164,9 +175,14 @@ function Navigation({
   return (
     <div className="flex h-full flex-col px-3 py-3">
       <div className="flex h-10 items-center gap-2 px-2">
-        <span className="grid size-7 place-items-center rounded-lg bg-primary text-xs font-bold text-white">
-          D
-        </span>
+        <Image
+          src="/brand/dingodocs-logo-mark.png"
+          alt=""
+          width={28}
+          height={28}
+          className="size-7 object-contain"
+          priority
+        />
         <div className="min-w-0">
           <div className="text-sm font-semibold leading-tight">DingoDocs</div>
           <div className="truncate text-[11px] text-slate-500">

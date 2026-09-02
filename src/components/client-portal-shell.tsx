@@ -1,6 +1,7 @@
 "use client";
 
 import { LogOut, ShieldCheck } from "lucide-react";
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { signOut } from "@/lib/auth/client";
@@ -22,9 +23,14 @@ export function ClientPortalShell({
       <header className="border-b bg-paper">
         <div className="mx-auto flex min-h-16 max-w-6xl flex-wrap items-center gap-4 px-4 py-3 sm:px-6">
           <Link href="/portal" className="flex items-center gap-3">
-            <span className="grid size-9 place-items-center rounded-lg bg-primary text-sm font-bold text-white">
-              D
-            </span>
+            <Image
+              src="/brand/dingodocs-logo-mark.png"
+              alt=""
+              width={36}
+              height={36}
+              className="size-9 object-contain"
+              priority
+            />
             <span>
               <span className="block text-sm font-semibold">
                 DingoDocs portal

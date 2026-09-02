@@ -26,9 +26,14 @@ export default function AuthLayout({
           href="/"
           className="flex items-center gap-2 text-sm font-semibold text-[#fff3e5]"
         >
-          <span className="grid size-8 place-items-center rounded-lg bg-[#a94727] text-white shadow-[0_12px_32px_rgba(45,17,8,0.35)]">
-            D
-          </span>
+          <Image
+            src="/brand/dingodocs-logo-mark.png"
+            alt=""
+            width={32}
+            height={32}
+            className="size-8 object-contain"
+            priority
+          />
           DingoDocs
         </Link>
         <div className="my-auto max-w-xl">

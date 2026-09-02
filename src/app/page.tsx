@@ -63,9 +63,14 @@ export default function Home() {
       <header className={styles.header}>
         <nav className={styles.nav} aria-label="Primary navigation">
           <Link className={styles.brand} href="/" aria-label="DingoDocs home">
-            <span className={styles.brandMark} aria-hidden="true">
-              D
-            </span>
+            <Image
+              src="/brand/dingodocs-logo-mark.png"
+              alt=""
+              width={32}
+              height={32}
+              className={styles.brandMark}
+              priority
+            />
             <span>DingoDocs</span>
           </Link>
           <div className={styles.navActions}>

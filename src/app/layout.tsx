@@ -12,6 +12,10 @@ export const metadata: Metadata = {
   title: { default: "DingoDocs", template: "%s · DingoDocs" },
   description:
     "Open source penetration testing engagement and reporting platform",
+  icons: {
+    icon: "/brand/dingodocs-logo-mark.png",
+    apple: "/brand/dingodocs-logo-mark.png",
+  },
 };
 
 export default function RootLayout({

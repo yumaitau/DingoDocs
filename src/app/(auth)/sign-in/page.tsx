@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Image from "next/image";
 import Link from "next/link";
 import { Suspense } from "react";
 import { SignInForm } from "./sign-in-form";
@@ -11,9 +12,14 @@ export default function SignInPage() {
   return (
     <div className="w-full max-w-sm">
       <div className="mb-8 lg:hidden">
-        <span className="grid size-9 place-items-center rounded-lg bg-primary font-semibold text-white">
-          D
-        </span>
+        <Image
+          src="/brand/dingodocs-logo-mark.png"
+          alt=""
+          width={36}
+          height={36}
+          className="size-9 object-contain"
+          priority
+        />
       </div>
       <h2 className="text-2xl font-semibold tracking-[-0.02em]">
         Welcome back
