@@ -279,6 +279,7 @@ export async function updateEngagementRunbookStep(
       tx,
       findings,
       findings.id,
+      findings.deletedAt,
       input.findingId,
       actor.organisationId,
       input.engagementId,
@@ -287,6 +288,7 @@ export async function updateEngagementRunbookStep(
       tx,
       evidence,
       evidence.id,
+      evidence.deletedAt,
       input.evidenceId,
       actor.organisationId,
       input.engagementId,
@@ -295,6 +297,7 @@ export async function updateEngagementRunbookStep(
       tx,
       tasks,
       tasks.id,
+      undefined,
       input.taskId,
       actor.organisationId,
       input.engagementId,
@@ -325,7 +328,8 @@ export async function updateEngagementRunbookStep(
         eq(engagementRunbookSteps.engagementRunbookId, current.runbook.id),
       );
     const required = steps.filter((step) => step.required);
-    const allComplete = required.every((step) =>
+    const completionSet = required.length ? required : steps;
+    const allComplete = completionSet.every((step) =>
       ["completed", "not_applicable"].includes(step.status),
     );
     const blocked = steps.some((step) => step.status === "blocked");
@@ -341,7 +345,9 @@ export async function updateEngagementRunbookStep(
       .update(engagementRunbooks)
       .set({
         status,
-        startedAt: started ? (current.runbook.startedAt ?? now) : null,
+        startedAt: started
+          ? (current.runbook.startedAt ?? now)
+          : current.runbook.startedAt,
         completedAt: status === "complete" ? now : null,
       })
       .where(eq(engagementRunbooks.id, current.runbook.id));
@@ -451,6 +457,8 @@ async function validateLink(
   tx: Transaction,
   table: typeof findings | typeof evidence | typeof tasks,
   idColumn: typeof findings.id | typeof evidence.id | typeof tasks.id,
+  deletedAtColumn:
+    typeof findings.deletedAt | typeof evidence.deletedAt | undefined,
   recordId: string | null | undefined,
   organisationId: string,
   engagementId: string,
@@ -464,6 +472,7 @@ async function validateLink(
         eq(idColumn, recordId),
         eq(table.organisationId, organisationId),
         eq(table.engagementId, engagementId),
+        deletedAtColumn ? isNull(deletedAtColumn) : undefined,
       ),
     )
     .limit(1);
