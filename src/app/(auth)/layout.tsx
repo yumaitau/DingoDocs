@@ -16,7 +16,6 @@ export default function AuthLayout({
           fill
           sizes="58vw"
           className="-z-20 object-cover opacity-55"
-          preload
         />
         <div
           className="absolute inset-0 -z-10 bg-[linear-gradient(90deg,rgba(34,18,12,0.94)_0%,rgba(34,18,12,0.72)_58%,rgba(34,18,12,0.36)_100%)]"

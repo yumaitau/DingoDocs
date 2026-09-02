@@ -9,6 +9,7 @@
   --earth-on-accent: #fff8ef;
   --earth-line: rgb(77 50 39 / 18%);
   --earth-shadow: rgb(86 39 23 / 18%);
+
   min-height: 100dvh;
   overflow: hidden;
   background:
@@ -448,6 +449,7 @@
     --earth-on-accent: #20110c;
     --earth-line: rgb(242 198 162 / 17%);
     --earth-shadow: rgb(0 0 0 / 32%);
+
     background:
       radial-gradient(
         circle at 88% 8%,
