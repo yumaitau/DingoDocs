@@ -8,6 +8,7 @@ const productRoutes = [
   ["/reports", "Reports"],
   ["/tasks", "Tasks"],
   ["/templates", "Templates"],
+  ["/runbooks", "Runbooks"],
   ["/imports", "Imports and exports"],
   ["/team", "Team"],
   ["/audit", "Audit Log"],
@@ -51,7 +52,7 @@ test("tenant resources reject unauthenticated browser clients", async ({
   }
 });
 
-test("owner can reach every primary and administration workspace", async ({
+test("owner can reach every workspace and follow seeded assessment records", async ({
   page,
 }) => {
   await signIn(page);
@@ -60,12 +61,7 @@ test("owner can reach every primary and administration workspace", async ({
     await expect(page.getByRole("heading", { name: heading })).toBeVisible();
     await expect(page.locator("nav[aria-label='Primary']")).toHaveCount(1);
   }
-});
 
-test("seeded client and engagement remain connected across workspaces", async ({
-  page,
-}) => {
-  await signIn(page);
   await page.goto("/clients");
   await page.getByRole("link", { name: /Northstar Systems/ }).click();
   await expect(
@@ -90,4 +86,63 @@ test("seeded client and engagement remain connected across workspaces", async ({
     page.getByRole("link", { name: "Findings", exact: true }),
   ).toBeVisible();
   await expect(page.getByRole("link", { name: "Evidence" })).toBeVisible();
+});
+
+test("owner can publish and execute a reusable assessment runbook", async ({
+  page,
+}, testInfo) => {
+  test.skip(testInfo.project.name !== "chromium", "Mutable workflow runs once");
+  const name = `E2E access-control methodology ${Date.now()}`;
+
+  await signIn(page);
+  await page.goto("/runbooks");
+  const nameField = page.getByLabel("Name");
+  if (!(await nameField.isVisible())) {
+    await page.getByText("Create runbook template", { exact: true }).click();
+  }
+  await nameField.fill(name);
+  await page.getByLabel("Assessment types").fill("Web application");
+  await page.getByLabel("Step 1 title").fill("Validate tenant boundaries");
+  await page
+    .getByLabel("Step 1 procedure")
+    .fill("Attempt authorised and cross-tenant access to protected resources.");
+  await page
+    .getByLabel("Step 1 expected evidence")
+    .fill("Request and response records");
+  await page.getByRole("button", { name: "Save draft runbook" }).click();
+
+  const template = page.locator("article").filter({ hasText: name });
+  await expect(template).toContainText("draft");
+  await template.getByRole("button", { name: "Publish" }).click();
+  await expect(template).toContainText("published");
+
+  await page.goto("/engagements");
+  await page
+    .getByRole("link", { name: "Northstar customer portal assessment" })
+    .click();
+  await page.getByRole("link", { name: "Methodology", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "Methodology runbooks" }),
+  ).toBeVisible();
+  const runbookSelect = page.getByLabel("Runbook");
+  if (!(await runbookSelect.isVisible())) {
+    await page.getByText("Apply published runbook", { exact: true }).click();
+  }
+  await runbookSelect.selectOption({ label: `${name} · v1 · 1 steps` });
+  await page.getByRole("button", { name: "Apply snapshot" }).click();
+
+  const execution = page.locator("section").filter({ hasText: name }).last();
+  await expect(execution).toContainText("Validate tenant boundaries");
+  await execution.getByText("Update execution record").click();
+  await execution.getByLabel("Execution status").selectOption("completed");
+  await execution
+    .getByLabel("Testing notes")
+    .fill("Tenant isolation checks completed and reviewed.");
+  await execution.getByLabel("Linked finding").selectOption({ index: 1 });
+  await execution.getByLabel("Linked task").selectOption({ index: 1 });
+  await execution
+    .getByRole("button", { name: "Save execution record" })
+    .click();
+  await expect(execution).toContainText("100%");
+  await expect(execution.getByText("complete", { exact: true })).toBeVisible();
 });

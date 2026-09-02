@@ -26,6 +26,10 @@ import {
   updateScopeItemAction,
 } from "@/server/actions/engagement-workspace";
 import {
+  applyRunbookTemplateAction,
+  updateEngagementRunbookStepAction,
+} from "@/server/actions/runbooks";
+import {
   addRetestNoteAction,
   attachRetestEvidenceAction,
   completeRetestAction,
@@ -43,12 +47,18 @@ import {
   getEngagementWorkspace,
   type EngagementStatus,
 } from "@/server/services/engagement-workspace";
+import {
+  getRunbookLinkOptions,
+  listEngagementRunbooks,
+  listRunbookTemplates,
+} from "@/server/services/runbooks";
 
 const managedSections = new Set([
   "Scope",
   "Assets",
   "Rules of Engagement",
   "Team",
+  "Methodology",
   "Notes",
   "Timeline",
   "Tasks",
@@ -91,6 +101,8 @@ export async function EngagementWorkspaceSection({
       return <RulesSection {...props} />;
     case "Team":
       return <TeamSection {...props} />;
+    case "Methodology":
+      return <MethodologySection {...props} organisationId={organisationId} />;
     case "Notes":
       return <NotesSection {...props} />;
     case "Timeline":
@@ -127,6 +139,216 @@ export async function EngagementWorkspaceSection({
     default:
       return null;
   }
+}
+
+async function MethodologySection({
+  engagementId,
+  organisationId,
+}: SectionProps & { organisationId: string }) {
+  const [runbooks, templates, links] = await Promise.all([
+    listEngagementRunbooks(organisationId, engagementId),
+    listRunbookTemplates(organisationId, true),
+    getRunbookLinkOptions(organisationId, engagementId),
+  ]);
+  return (
+    <Stack>
+      <SectionHeader
+        title="Methodology runbooks"
+        description="Apply a published procedure, record execution status, and connect each test to its evidence, finding, or follow-up task."
+        state={`${runbooks.length} applied`}
+      />
+      <ActionDetails label="Apply published runbook" open={!runbooks.length}>
+        {templates.length ? (
+          <form
+            action={applyRunbookTemplateAction.bind(null, engagementId)}
+            className="flex flex-col gap-3 sm:flex-row sm:items-end"
+          >
+            <Field label="Runbook">
+              <select className={field} name="templateId" required>
+                <option value="">Select procedure</option>
+                {templates.map((template) => (
+                  <option key={template.id} value={template.id}>
+                    {template.name} · v{template.version} ·{" "}
+                    {template.steps.length} steps
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Button type="submit">Apply snapshot</Button>
+          </form>
+        ) : (
+          <p className="text-sm text-slate-500">
+            Publish a reusable procedure in Runbooks before applying it here.
+          </p>
+        )}
+      </ActionDetails>
+
+      {runbooks.map((runbook) => {
+        const terminal = runbook.steps.filter((step) =>
+          ["completed", "not_applicable"].includes(step.status),
+        ).length;
+        const progress = runbook.steps.length
+          ? Math.round((terminal / runbook.steps.length) * 100)
+          : 0;
+        return (
+          <section key={runbook.id} className="rounded-xl border bg-paper">
+            <div className="flex flex-wrap items-start justify-between gap-3 border-b p-5">
+              <div>
+                <h3 className="font-semibold">{runbook.templateName}</h3>
+                <p className="mt-1 text-xs text-slate-500">
+                  Snapshot v{runbook.templateVersion} · {terminal}/
+                  {runbook.steps.length} steps complete
+                </p>
+              </div>
+              <div className="flex items-center gap-3">
+                <span className="text-sm font-semibold tabular-nums">
+                  {progress}%
+                </span>
+                <StatusPill
+                  tone={
+                    runbook.status === "complete"
+                      ? "success"
+                      : runbook.status === "blocked"
+                        ? "danger"
+                        : runbook.status === "in_progress"
+                          ? "info"
+                          : "neutral"
+                  }
+                >
+                  {runbook.status.replaceAll("_", " ")}
+                </StatusPill>
+              </div>
+            </div>
+            <ol className="divide-y">
+              {runbook.steps.map((step) => (
+                <li key={step.id} className="p-5">
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div className="max-w-3xl">
+                      <h4 className="font-medium">
+                        {step.position}. {step.title}
+                      </h4>
+                      {step.objective ? (
+                        <p className="mt-1 text-sm text-slate-600">
+                          {step.objective}
+                        </p>
+                      ) : null}
+                      <p className="mt-3 whitespace-pre-wrap text-sm text-slate-700">
+                        {step.procedure}
+                      </p>
+                      {step.expectedEvidence ? (
+                        <p className="mt-2 text-xs text-slate-500">
+                          Expected evidence: {step.expectedEvidence}
+                        </p>
+                      ) : null}
+                    </div>
+                    <StatusPill
+                      tone={
+                        step.status === "completed"
+                          ? "success"
+                          : step.status === "blocked"
+                            ? "danger"
+                            : step.status === "in_progress"
+                              ? "info"
+                              : "neutral"
+                      }
+                    >
+                      {step.status.replaceAll("_", " ")}
+                    </StatusPill>
+                  </div>
+                  <details className="mt-4 rounded-lg border bg-[var(--mist)]">
+                    <summary className="cursor-pointer p-3 text-sm font-medium">
+                      Update execution record
+                    </summary>
+                    <form
+                      action={updateEngagementRunbookStepAction.bind(
+                        null,
+                        engagementId,
+                        step.id,
+                      )}
+                      className="grid gap-3 border-t p-4 lg:grid-cols-2"
+                    >
+                      <Field label="Execution status">
+                        <select
+                          className={field}
+                          name="status"
+                          defaultValue={step.status}
+                        >
+                          <option value="not_started">Not started</option>
+                          <option value="in_progress">In progress</option>
+                          <option value="completed">Completed</option>
+                          <option value="blocked">Blocked</option>
+                          <option value="not_applicable">Not applicable</option>
+                        </select>
+                      </Field>
+                      <Field label="Testing notes">
+                        <textarea
+                          className={area}
+                          name="notes"
+                          rows={3}
+                          defaultValue={step.notes ?? ""}
+                        />
+                      </Field>
+                      <Field label="Linked finding">
+                        <select
+                          className={field}
+                          name="findingId"
+                          defaultValue={step.findingId ?? ""}
+                        >
+                          <option value="">None</option>
+                          {links.findings.map((finding) => (
+                            <option key={finding.id} value={finding.id}>
+                              {finding.label} · {finding.title}
+                            </option>
+                          ))}
+                        </select>
+                      </Field>
+                      <Field label="Linked evidence">
+                        <select
+                          className={field}
+                          name="evidenceId"
+                          defaultValue={step.evidenceId ?? ""}
+                        >
+                          <option value="">None</option>
+                          {links.evidence.map((item) => (
+                            <option key={item.id} value={item.id}>
+                              {item.label}
+                            </option>
+                          ))}
+                        </select>
+                      </Field>
+                      <Field label="Linked task">
+                        <select
+                          className={field}
+                          name="taskId"
+                          defaultValue={step.taskId ?? ""}
+                        >
+                          <option value="">None</option>
+                          {links.tasks.map((task) => (
+                            <option key={task.id} value={task.id}>
+                              {task.label}
+                            </option>
+                          ))}
+                        </select>
+                      </Field>
+                      <div className="flex items-end">
+                        <Button type="submit">Save execution record</Button>
+                      </div>
+                    </form>
+                  </details>
+                </li>
+              ))}
+            </ol>
+          </section>
+        );
+      })}
+
+      {!runbooks.length ? (
+        <RecordList empty="No methodology runbooks applied yet.">
+          {null}
+        </RecordList>
+      ) : null}
+    </Stack>
+  );
 }
 
 async function ClientPortalAdministrationSection({
