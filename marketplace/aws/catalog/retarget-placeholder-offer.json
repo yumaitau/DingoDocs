@@ -1,0 +1,14 @@
+[
+  {
+    "ChangeType": "UpdateTargeting",
+    "Entity": {
+      "Type": "Offer@1.0",
+      "Identifier": "offer-msevqkkuc5a44"
+    },
+    "DetailsDocument": {
+      "PositiveTargeting": {
+        "BuyerAccounts": ["959038055523"]
+      }
+    }
+  }
+]
