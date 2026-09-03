@@ -1,0 +1,36 @@
+[
+  {
+    "ChangeType": "UpdatePricingTerms",
+    "Entity": {
+      "Type": "Offer@1.0",
+      "Identifier": "offer-2ydhzog4rujvq"
+    },
+    "DetailsDocument": {
+      "PricingModel": "Contract",
+      "Terms": [
+        {
+          "Type": "ConfigurableUpfrontPricingTerm",
+          "CurrencyCode": "USD",
+          "RateCards": [
+            {
+              "Selector": {
+                "Type": "Duration",
+                "Value": "P1M"
+              },
+              "Constraints": {
+                "MultipleDimensionSelection": "Disallowed",
+                "QuantityConfiguration": "Disallowed"
+              },
+              "RateCard": [
+                {
+                  "DimensionKey": "standard_workspace",
+                  "Price": "600"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  }
+]
