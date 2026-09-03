@@ -1,0 +1,77 @@
+[
+  {
+    "ChangeType": "UpdatePricingTerms",
+    "Entity": {
+      "Type": "Offer@1.0",
+      "Identifier": "offer-msevqkkuc5a44"
+    },
+    "DetailsDocument": {
+      "Terms": [
+        {
+          "CurrencyCode": "USD",
+          "RateCards": [
+            {
+              "RateCard": [
+                {
+                  "DimensionKey": "standard_workspace",
+                  "Price": "900"
+                }
+              ],
+              "Selector": {
+                "Value": "P1M",
+                "Type": "Duration"
+              },
+              "Constraints": {
+                "MultipleDimensionSelection": "Allowed",
+                "QuantityConfiguration": "Allowed"
+              }
+            }
+          ],
+          "Type": "ConfigurableUpfrontPricingTerm"
+        }
+      ],
+      "PricingModel": "Contract"
+    }
+  },
+  {
+    "ChangeType": "UpdateSupportTerms",
+    "Entity": {
+      "Type": "Offer@1.0",
+      "Identifier": "offer-msevqkkuc5a44"
+    },
+    "DetailsDocument": {
+      "Terms": [
+        {
+          "RefundPolicy": "https://dingodocs.yumait.au/refund-policy",
+          "Type": "SupportTerm"
+        }
+      ]
+    }
+  },
+  {
+    "ChangeType": "UpdateInformation",
+    "Entity": {
+      "Type": "Offer@1.0",
+      "Identifier": "offer-msevqkkuc5a44"
+    },
+    "DetailsDocument": {
+      "PreExistingAgreement": null,
+      "Name": "DingoDocs Standard Workspace",
+      "Description": "One DingoDocs workspace for security assessment delivery, reporting, evidence, remediation, and retesting."
+    }
+  },
+  {
+    "ChangeType": "UpdateRenewalTerms",
+    "Entity": {
+      "Type": "Offer@1.0",
+      "Identifier": "offer-msevqkkuc5a44"
+    },
+    "DetailsDocument": {
+      "Terms": [
+        {
+          "Type": "RenewalTerm"
+        }
+      ]
+    }
+  }
+]

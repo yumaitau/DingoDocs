@@ -1,6 +1,6 @@
 # AWS Marketplace container distribution
 
-DingoDocs publishes separate application and migration images for AWS Marketplace deployments. Both images validate the buyer's AWS Marketplace entitlement before serving traffic or applying database migrations. Community images skip this check.
+DingoDocs publishes one hardened image for AWS Marketplace deployments. The same image runs the application and the bundled `dist/migrate.cjs` migration command. Both paths validate the buyer's AWS Marketplace entitlement before serving traffic or applying database migrations. Community images skip this check.
 
 ## Build the release images
 
@@ -30,7 +30,7 @@ The build fails if a Marketplace identity value is blank. `DINGODOCS_DISTRIBUTIO
 
 ## Runtime contract
 
-The application performs an AWS License Manager `CheckoutLicense` call before it accepts HTTP requests. It renews the returned consumption token with `ExtendLicenseConsumption` every 15 minutes and checks it in during an orderly shutdown. The migrator checks out a license before it opens the migration directory and checks it in after migration. An active contract entitlement matching the compiled dimension is required.
+The application performs an AWS License Manager `CheckoutLicense` call before it accepts HTTP requests. Every 15 minutes it checks the non-consuming `AWS::Marketplace::Usage` entitlement so cancellations and expiry fail closed without drawing another workspace unit. The startup seat is checked in during an orderly shutdown. The bundled migrator checks out a license before it opens the migration directory and checks it in after migration. An active contract entitlement matching the compiled dimension is required.
 
 Transient credential or service failures are retried three times at five-second intervals. A Marketplace container exits non-zero when validation still cannot complete, the account is not entitled, the platform is unsupported, the compiled identity is invalid, or License Manager denies the call. The application revalidates every 15 minutes and exits after three consecutive transient failures or one permanent failure.
 
@@ -38,7 +38,7 @@ The workload needs:
 
 - `AWS_REGION` or `AWS_DEFAULT_REGION`
 - task or pod credentials; never static access keys in environment variables
-- `license-manager:CheckoutLicense`, `license-manager:ExtendLicenseConsumption`, and `license-manager:CheckInLicense` permissions on `*`
+- `license-manager:CheckoutLicense`, `license-manager:GetLicense`, `license-manager:CheckInLicense`, `license-manager:ExtendLicenseConsumption`, and `license-manager:ListReceivedLicenses` permissions on `*`
 - ECS, EKS, or Fargate runtime support for AWS Marketplace container licensing
 
 Set `EMAIL_PROVIDER=ses`, `EMAIL_FROM` to a verified SES identity, and optionally `SES_REGION` to send authentication mail with the task or pod role. The role needs `ses:SendEmail`; no SMTP or static AWS credentials are required. For a temporary install without mail, set `EMAIL_PROVIDER=none` and `REQUIRE_EMAIL_VERIFICATION=false` together. Password-reset, invitation, verification, and magic-link messages are unavailable in that mode.

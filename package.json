@@ -1,6 +1,6 @@
 {
   "name": "dingodocs",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "license": "Apache-2.0",
   "packageManager": "pnpm@10.33.0",
@@ -10,6 +10,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "build:runtime": "esbuild scripts/run-migrations.ts --bundle --platform=node --format=cjs --target=node26 --tsconfig=tsconfig.json --inject:./scripts/esbuild-import-meta-url.js --define:import.meta.url=import_meta_url --outfile=dist/migrate.cjs && esbuild scripts/enforce-marketplace-license.ts --bundle --platform=node --format=cjs --target=node26 --tsconfig=tsconfig.json --inject:./scripts/esbuild-import-meta-url.js --define:import.meta.url=import_meta_url --outfile=dist/enforce-marketplace-license.cjs",
     "start": "next start",
     "lint": "eslint .",
     "format": "prettier --check .",
@@ -88,6 +89,7 @@
     "@types/react-dom": "^19.2.3",
     "@vitest/coverage-v8": "^4.1.9",
     "drizzle-kit": "^0.31.10",
+    "esbuild": "^0.25.12",
     "eslint": "^9.39.4",
     "eslint-config-next": "16.3.3",
     "jsdom": "^29.1.1",

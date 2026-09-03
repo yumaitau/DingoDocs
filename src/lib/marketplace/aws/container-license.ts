@@ -15,6 +15,7 @@ export const AWS_MARKETPLACE_LICENSE_REVALIDATE_MS = 15 * 60 * 1000;
 export const AWS_MARKETPLACE_STARTUP_RETRY_ATTEMPTS = 3;
 export const AWS_MARKETPLACE_STARTUP_RETRY_MS = 5_000;
 export const AWS_MARKETPLACE_TRANSIENT_FAILURE_LIMIT = 3;
+export const AWS_MARKETPLACE_USAGE_ENTITLEMENT = "AWS::Marketplace::Usage";
 
 export class AwsMarketplaceLicenseError extends Error {
   constructor(
@@ -51,6 +52,8 @@ type LicenseDeps = {
   startupAttempts?: number;
   startupRetryMs?: number;
   revalidationState?: RevalidationState;
+  check?: "consume" | "heartbeat";
+  clientToken?: () => string;
 };
 
 export function resolveAwsRuntimeRegion(
@@ -92,34 +95,85 @@ export async function assertAwsMarketplaceContainerLicense(
 
   const client = deps.client ?? awsContainerLicenseClient;
   const region = resolveAwsRuntimeRegion(deps.env);
+  const check = deps.check ?? "consume";
+  const createClientToken = deps.clientToken ?? randomUUID;
   try {
-    const result = await client.checkoutLicense({
-      productSku: identity.productSku,
-      keyFingerprint: identity.keyFingerprint,
-      clientToken: randomUUID(),
+    return await checkoutMarketplaceEntitlement(
+      client,
+      identity,
       region,
-      entitlements: [
-        { Name: identity.contractDimension, Unit: "Count", Value: "1" },
-      ],
-    });
-    if (!result.names.includes(identity.contractDimension))
-      throw new AwsMarketplaceLicenseError(
-        "This AWS account is not subscribed to DingoDocs on AWS Marketplace",
-        "not_entitled",
-      );
-    if (!result.licenseConsumptionToken)
-      throw new AwsMarketplaceLicenseError(
-        "AWS License Manager did not return a consumption token",
-        "checkout_failed",
-      );
-    return {
-      mode: "contract",
-      licenseConsumptionToken: result.licenseConsumptionToken,
-      expiration: result.expiration,
-    };
+      check,
+      createClientToken,
+    );
   } catch (error) {
-    throw mapLicenseError(error);
+    const mapped = mapLicenseError(error);
+    if (check === "consume" && mapped.code === "not_entitled") {
+      try {
+        const result = await checkoutMarketplaceEntitlement(
+          client,
+          identity,
+          region,
+          "heartbeat",
+          createClientToken,
+        );
+        console.info(
+          "AWS Marketplace contract seat already consumed; subscription confirmed",
+        );
+        return result;
+      } catch {
+        throw mapped;
+      }
+    }
+    throw mapped;
   }
+}
+
+async function checkoutMarketplaceEntitlement(
+  client: AwsContainerLicenseClient,
+  identity: AwsMarketplaceIdentity,
+  region: string,
+  check: "consume" | "heartbeat",
+  createClientToken: () => string,
+): Promise<{
+  mode: "contract";
+  licenseConsumptionToken: string;
+  expiration?: string;
+}> {
+  const requiredName =
+    check === "heartbeat"
+      ? AWS_MARKETPLACE_USAGE_ENTITLEMENT
+      : identity.contractDimension;
+  const result = await client.checkoutLicense({
+    productSku: identity.productSku,
+    keyFingerprint: identity.keyFingerprint,
+    clientToken: createClientToken(),
+    region,
+    entitlements:
+      check === "heartbeat"
+        ? [{ Name: AWS_MARKETPLACE_USAGE_ENTITLEMENT, Unit: "None" }]
+        : [
+            {
+              Name: identity.contractDimension,
+              Unit: "Count",
+              Value: "1",
+            },
+          ],
+  });
+  if (!result.names.includes(requiredName))
+    throw new AwsMarketplaceLicenseError(
+      "This AWS account is not subscribed to DingoDocs on AWS Marketplace",
+      "not_entitled",
+    );
+  if (check === "consume" && !result.licenseConsumptionToken)
+    throw new AwsMarketplaceLicenseError(
+      "AWS License Manager did not return a consumption token",
+      "checkout_failed",
+    );
+  return {
+    mode: "contract",
+    licenseConsumptionToken: result.licenseConsumptionToken ?? "",
+    expiration: result.expiration,
+  };
 }
 
 export async function enforceAwsMarketplaceLicenseOrExit(
@@ -167,19 +221,10 @@ export async function runMarketplaceRevalidationTick(
   state: RevalidationState = { consecutiveTransient: 0 },
 ): Promise<"ok" | "retry" | "fatal"> {
   try {
-    if (!state.licenseConsumptionToken)
-      throw new AwsMarketplaceLicenseError(
-        "AWS Marketplace consumption token is unavailable",
-        "checkout_failed",
-      );
-    const client = deps.client ?? awsContainerLicenseClient;
-    const result = await client.extendLicenseConsumption({
-      licenseConsumptionToken: state.licenseConsumptionToken,
-      region: resolveAwsRuntimeRegion(deps.env),
+    await assertAwsMarketplaceContainerLicense({
+      ...deps,
+      check: "heartbeat",
     });
-    state.licenseConsumptionToken =
-      result.licenseConsumptionToken ?? state.licenseConsumptionToken;
-    state.expiration = result.expiration ?? state.expiration;
     state.consecutiveTransient = 0;
     return "ok";
   } catch (error) {

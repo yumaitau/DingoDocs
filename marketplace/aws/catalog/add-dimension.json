@@ -1,0 +1,18 @@
+[
+  {
+    "ChangeType": "AddDimensions",
+    "Entity": {
+      "Type": "ContainerProduct@1.0",
+      "Identifier": "prod-x5dyq2hv7quk2"
+    },
+    "DetailsDocument": [
+      {
+        "Types": ["Entitled"],
+        "Description": "Access to one DingoDocs security assessment delivery workspace. MaxCount is 1.",
+        "Unit": "Units",
+        "Key": "standard_workspace",
+        "Name": "Standard Workspace"
+      }
+    ]
+  }
+]

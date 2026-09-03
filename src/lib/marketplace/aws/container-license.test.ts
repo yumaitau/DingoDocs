@@ -28,9 +28,6 @@ function licenseClient(
         licenseConsumptionToken: "consumption-token",
       };
     },
-    async extendLicenseConsumption(input) {
-      return { licenseConsumptionToken: input.licenseConsumptionToken };
-    },
     async checkInLicense() {},
     ...overrides,
   };
@@ -141,11 +138,13 @@ describe("AWS Marketplace container licensing", () => {
     expect(exit).toHaveBeenCalledWith(1);
   });
 
-  it("does not accept a usage entitlement when the contract is unavailable", async () => {
-    const checkoutLicense = vi.fn(async () => {
-      throw Object.assign(new Error("no contract entitlement"), {
-        name: "NoEntitlementsAllowedException",
-      });
+  it("uses usage entitlement when the single contract seat is already held", async () => {
+    const checkoutLicense = vi.fn(async (input) => {
+      if (input.entitlements[0]?.Name === identity.contractDimension)
+        throw Object.assign(new Error("no contract entitlement"), {
+          name: "NoEntitlementsAllowedException",
+        });
+      return { names: ["AWS::Marketplace::Usage"] };
     });
 
     await expect(
@@ -155,14 +154,20 @@ describe("AWS Marketplace container licensing", () => {
         env: { AWS_REGION: "ap-southeast-2" },
         client: licenseClient({ checkoutLicense }),
       }),
-    ).rejects.toMatchObject({ code: "not_entitled" });
-    expect(checkoutLicense).toHaveBeenCalledTimes(1);
+    ).resolves.toMatchObject({ mode: "contract" });
+    expect(checkoutLicense).toHaveBeenCalledTimes(2);
+    expect(checkoutLicense.mock.calls[1]?.[0].entitlements).toEqual([
+      { Name: "AWS::Marketplace::Usage", Unit: "None" },
+    ]);
   });
 
-  it("extends and checks in the returned consumption token", async () => {
-    const extendLicenseConsumption = vi.fn(async () => ({
-      licenseConsumptionToken: "renewed-token",
-      expiration: "2026-09-03T00:00:00Z",
+  it("revalidates with usage entitlement and checks in the consumed seat", async () => {
+    const checkoutLicense = vi.fn(async (input) => ({
+      names: [input.entitlements[0]?.Name ?? ""],
+      licenseConsumptionToken:
+        input.entitlements[0]?.Name === identity.contractDimension
+          ? "consumption-token"
+          : undefined,
     }));
     const checkInLicense = vi.fn(async () => undefined);
     const state = {
@@ -174,7 +179,7 @@ describe("AWS Marketplace container licensing", () => {
       identity,
       env: { AWS_REGION: "ap-southeast-2" },
       client: licenseClient({
-        extendLicenseConsumption,
+        checkoutLicense,
         checkInLicense,
       }),
       revalidationState: state,
@@ -184,15 +189,17 @@ describe("AWS Marketplace container licensing", () => {
     await expect(runMarketplaceRevalidationTick(deps, state)).resolves.toBe(
       "ok",
     );
-    expect(extendLicenseConsumption).toHaveBeenCalledWith({
-      licenseConsumptionToken: "consumption-token",
-      region: "ap-southeast-2",
-    });
+    expect(checkoutLicense.mock.calls[1]?.[0]).toEqual(
+      expect.objectContaining({
+        region: "ap-southeast-2",
+        entitlements: [{ Name: "AWS::Marketplace::Usage", Unit: "None" }],
+      }),
+    );
     await lease?.checkIn();
     await lease?.checkIn();
     expect(checkInLicense).toHaveBeenCalledOnce();
     expect(checkInLicense).toHaveBeenCalledWith({
-      licenseConsumptionToken: "renewed-token",
+      licenseConsumptionToken: "consumption-token",
       region: "ap-southeast-2",
     });
   });
@@ -207,7 +214,7 @@ describe("AWS Marketplace container licensing", () => {
       identity,
       env: { AWS_REGION: "ap-southeast-2" },
       client: licenseClient({
-        async extendLicenseConsumption() {
+        async checkoutLicense() {
           throw new AwsMarketplaceLicenseError("timeout", "checkout_failed");
         },
       }),

@@ -1,0 +1,12 @@
+[
+  {
+    "ChangeType": "UpdateInformation",
+    "Entity": {
+      "Type": "ContainerProduct@1.0",
+      "Identifier": "prod-x5dyq2hv7quk2"
+    },
+    "DetailsDocument": {
+      "SupportDescription": "For support, use https://github.com/yumaitau/DingoDocs/issues. Deployment guidance is available at https://github.com/yumaitau/DingoDocs-aws-deploy. Support covers product access, deployment guidance, and reasonable troubleshooting for the AWS Marketplace container product."
+    }
+  }
+]
