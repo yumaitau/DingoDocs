@@ -1,0 +1,31 @@
+[
+  {
+    "ChangeType": "AddDeliveryOptions",
+    "Entity": {
+      "Type": "ContainerProduct@1.0",
+      "Identifier": "prod-b2j55een26yp2"
+    },
+    "DetailsDocument": {
+      "Version": {
+        "VersionTitle": "DingoDocs 1.0.0",
+        "ReleaseNotes": "Initial AWS Marketplace release."
+      },
+      "DeliveryOptions": [
+        {
+          "DeliveryOptionTitle": "DingoDocs Container Image",
+          "Details": {
+            "EcrDeliveryOptionDetails": {
+              "UsageInstructions": "Deploy this container image in Amazon ECS or Amazon EKS. Use the buyer-owned deployment templates at https://github.com/yumaitau/DingoDocs-aws-deploy. Run the bundled node dist/migrate.cjs migration command before starting the application. Configure PostgreSQL, S3-compatible evidence storage, IAM, TLS, backups, identity, and email for your environment. Product information and legal terms are at https://dingodocs.yumait.au/.",
+              "CompatibleServices": ["ECS", "EKS"],
+              "Description": "Deploy DingoDocs as a self-hosted security assessment delivery workspace inside your AWS environment.",
+              "DeploymentResources": [],
+              "ContainerImages": [
+                "709825985650.dkr.ecr.us-east-1.amazonaws.com/yuma-it/dingodocs-aws-v2:sha-b482227"
+              ]
+            }
+          }
+        }
+      ]
+    }
+  }
+]
