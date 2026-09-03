@@ -2,9 +2,11 @@
 
 DingoDocs publishes one hardened image for AWS Marketplace deployments. The same image runs the application and the bundled `dist/migrate.cjs` migration command. Both paths validate the buyer's AWS Marketplace entitlement before serving traffic or applying database migrations. Community images skip this check.
 
+The current Limited listing identity is product `prod-b2j55een26yp2`, product code `9gqyuklhwioved4ebtp9isjn5`, and Marketplace repository `709825985650.dkr.ecr.us-east-1.amazonaws.com/yuma-it/dingodocs-aws-v2`.
+
 ## Build the release images
 
-Marketplace product identity is compiled into each image. The listing pipeline must supply all five build arguments and must use the same values for both targets:
+Marketplace product identity is compiled into the image. The listing pipeline must supply all five build arguments:
 
 ```bash
 docker build \
@@ -15,15 +17,6 @@ docker build \
   --build-arg AWS_MARKETPLACE_CONTRACT_DIMENSION="$AWS_MARKETPLACE_CONTRACT_DIMENSION" \
   --build-arg AWS_MARKETPLACE_LICENSE_FINGERPRINT="$AWS_MARKETPLACE_LICENSE_FINGERPRINT" \
   --tag "$APPLICATION_IMAGE" .
-
-docker build \
-  --target migrator \
-  --build-arg DINGODOCS_DISTRIBUTION=aws-marketplace \
-  --build-arg AWS_MARKETPLACE_PRODUCT_CODE="$AWS_MARKETPLACE_PRODUCT_CODE" \
-  --build-arg AWS_MARKETPLACE_PRODUCT_SKU="$AWS_MARKETPLACE_PRODUCT_SKU" \
-  --build-arg AWS_MARKETPLACE_CONTRACT_DIMENSION="$AWS_MARKETPLACE_CONTRACT_DIMENSION" \
-  --build-arg AWS_MARKETPLACE_LICENSE_FINGERPRINT="$AWS_MARKETPLACE_LICENSE_FINGERPRINT" \
-  --tag "$MIGRATOR_IMAGE" .
 ```
 
 The build fails if a Marketplace identity value is blank. `DINGODOCS_DISTRIBUTION`, product identity, and fingerprint environment variables supplied when a container starts cannot replace the compiled values. Do not publish images built with test or placeholder listing values.
@@ -38,7 +31,7 @@ The workload needs:
 
 - `AWS_REGION` or `AWS_DEFAULT_REGION`
 - task or pod credentials; never static access keys in environment variables
-- `license-manager:CheckoutLicense`, `license-manager:GetLicense`, `license-manager:CheckInLicense`, `license-manager:ExtendLicenseConsumption`, and `license-manager:ListReceivedLicenses` permissions on `*`
+- `license-manager:CheckoutLicense`, `license-manager:GetLicense`, `license-manager:CheckInLicense`, and `license-manager:ListReceivedLicenses` permissions on `*`
 - ECS, EKS, or Fargate runtime support for AWS Marketplace container licensing
 
 Set `EMAIL_PROVIDER=ses`, `EMAIL_FROM` to a verified SES identity, and optionally `SES_REGION` to send authentication mail with the task or pod role. The role needs `ses:SendEmail`; no SMTP or static AWS credentials are required. For a temporary install without mail, set `EMAIL_PROVIDER=none` and `REQUIRE_EMAIL_VERIFICATION=false` together. Password-reset, invitation, verification, and magic-link messages are unavailable in that mode.

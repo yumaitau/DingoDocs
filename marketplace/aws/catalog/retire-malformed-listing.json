@@ -1,0 +1,13 @@
+[
+  {
+    "ChangeType": "UpdateInformation",
+    "Entity": {
+      "Type": "ContainerProduct@1.0",
+      "Identifier": "prod-x5dyq2hv7quk2"
+    },
+    "DetailsDocument": {
+      "ProductTitle": "DingoDocs - Retired Draft - Do Not Submit",
+      "ShortDescription": "Retired Limited draft retained only because AWS Marketplace does not permit sellers to delete a released public offer."
+    }
+  }
+]

@@ -9,8 +9,8 @@ permissions:
 
 env:
   IMAGE: ghcr.io/yumaitau/dingodocs-aws
-  PRODUCT_CODE: 94sw9qy9w1xbdi51koymv06vp
-  PRODUCT_SKU: prod-x5dyq2hv7quk2
+  PRODUCT_CODE: 9gqyuklhwioved4ebtp9isjn5
+  PRODUCT_SKU: prod-b2j55een26yp2
   CONTRACT_DIMENSION: standard_workspace
   LICENSE_FINGERPRINT: aws:294406891311:AWS/Marketplace:issuer-fingerprint
 

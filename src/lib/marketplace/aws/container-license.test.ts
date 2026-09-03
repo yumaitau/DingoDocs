@@ -161,6 +161,27 @@ describe("AWS Marketplace container licensing", () => {
     ]);
   });
 
+  it("preserves transient heartbeat failures when the contract seat is held", async () => {
+    const checkoutLicense = vi.fn(async (input) => {
+      if (input.entitlements[0]?.Name === identity.contractDimension)
+        throw Object.assign(new Error("seat held"), {
+          name: "NoEntitlementsAllowedException",
+        });
+      throw Object.assign(new Error("expired credentials"), {
+        name: "ExpiredTokenException",
+      });
+    });
+
+    await expect(
+      assertAwsMarketplaceContainerLicense({
+        distribution: "aws-marketplace",
+        identity,
+        env: { AWS_REGION: "ap-southeast-2" },
+        client: licenseClient({ checkoutLicense }),
+      }),
+    ).rejects.toMatchObject({ code: "credentials_missing" });
+  });
+
   it("revalidates with usage entitlement and checks in the consumed seat", async () => {
     const checkoutLicense = vi.fn(async (input) => ({
       names: [input.entitlements[0]?.Name ?? ""],

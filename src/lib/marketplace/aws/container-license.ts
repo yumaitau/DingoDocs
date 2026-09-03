@@ -120,8 +120,8 @@ export async function assertAwsMarketplaceContainerLicense(
           "AWS Marketplace contract seat already consumed; subscription confirmed",
         );
         return result;
-      } catch {
-        throw mapped;
+      } catch (heartbeatError) {
+        throw mapLicenseError(heartbeatError);
       }
     }
     throw mapped;
