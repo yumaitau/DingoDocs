@@ -1,7 +1,6 @@
 import {
   CheckInLicenseCommand,
   CheckoutLicenseCommand,
-  ExtendLicenseConsumptionCommand,
   LicenseManagerClient,
   type Entitlement,
 } from "@aws-sdk/client-license-manager";
@@ -20,10 +19,6 @@ export type AwsContainerLicenseClient = {
     region: string;
     entitlements: Array<{ Name: string; Unit: string; Value?: string }>;
   }): Promise<AwsContainerLicenseCheckout>;
-  extendLicenseConsumption(input: {
-    licenseConsumptionToken: string;
-    region: string;
-  }): Promise<{ licenseConsumptionToken?: string; expiration?: string }>;
   checkInLicense(input: {
     licenseConsumptionToken: string;
     region: string;
@@ -46,18 +41,6 @@ export const awsContainerLicenseClient: AwsContainerLicenseClient = {
       names: (result.EntitlementsAllowed ?? [])
         .map((entry) => entry.Name)
         .filter((name): name is string => Boolean(name)),
-      licenseConsumptionToken: result.LicenseConsumptionToken,
-      expiration: result.Expiration,
-    };
-  },
-  async extendLicenseConsumption(input) {
-    const client = new LicenseManagerClient({ region: input.region });
-    const result = await client.send(
-      new ExtendLicenseConsumptionCommand({
-        LicenseConsumptionToken: input.licenseConsumptionToken,
-      }),
-    );
-    return {
       licenseConsumptionToken: result.LicenseConsumptionToken,
       expiration: result.Expiration,
     };

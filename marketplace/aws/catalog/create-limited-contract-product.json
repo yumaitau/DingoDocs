@@ -1,0 +1,227 @@
+[
+  {
+    "ChangeType": "CreateProduct",
+    "ChangeName": "CreateDingoDocsProduct",
+    "Entity": {
+      "Type": "ContainerProduct@1.0"
+    },
+    "DetailsDocument": {}
+  },
+  {
+    "ChangeType": "UpdateInformation",
+    "Entity": {
+      "Type": "ContainerProduct@1.0",
+      "Identifier": "$CreateDingoDocsProduct.Entity.Identifier"
+    },
+    "DetailsDocument": {
+      "LogoUrl": "https://awsmp-logos.s3.amazonaws.com/7190432029fd873fb73b17ad2cf6bdc3",
+      "Categories": ["AI Security", "Security"],
+      "ProductTitle": "DingoDocs - Security Assessment Delivery Workspace",
+      "AdditionalResources": [],
+      "LongDescription": "DingoDocs is a purpose-built workspace for security assessment teams. Run assessments from one place and keep scope, evidence, findings, reports, and remediation inside a single customer-controlled, auditable environment instead of splitting work across documents, tickets, storage drives, and client email. DingoDocs follows the assessment lifecycle end to end: approve targets, rules, dates, and responsibilities; capture notes, scanner output, files, and evidence; review findings through explicit authoring and publication states; issue controlled white-label reports with immutable version history; and track remediation through evidence-backed retests. Every important state is explicit: who can act, what clients can see, what changed, and which report version was approved. Evidence retains classification, checksums, retention, legal holds, annotations, and links to findings. Named client contacts receive engagement-specific access to approved findings, reports, evidence, remediation, and retests. Operate DingoDocs inside your AWS security boundary and control identity, storage, access, backups, retention, integrations, and recovery.",
+      "SearchKeywords": [
+        "security assessment",
+        "pentest management",
+        "vulnerability findings",
+        "assessment reporting",
+        "evidence management",
+        "remediation tracking",
+        "security delivery",
+        "audit workspace",
+        "pentest workflow",
+        "finding review"
+      ],
+      "ShortDescription": "DingoDocs keeps scope, evidence, findings, reports, and remediation in one auditable workspace for security assessment teams.",
+      "Highlights": [
+        "One connected record from scope to retest. Scope, assets, notes, evidence, findings, tasks, time, QA, and reports remain attached to the engagement that produced them.",
+        "Built for defensible, auditable delivery. Evidence retains classification, checksums, retention, legal holds, annotations, and links to findings; publishing is a deliberate state change.",
+        "Customer-controlled deployment inside your AWS security boundary. Control identity, storage, access, backups, retention, integrations, and recovery."
+      ],
+      "SupportDescription": "Submit support requests at https://github.com/yumaitau/DingoDocs/issues (GitHub sign-in required). Deployment guidance is available at https://github.com/yumaitau/DingoDocs-aws-deploy. Support covers product access, deployment guidance, and reasonable troubleshooting for the AWS Marketplace container product.",
+      "VideoUrls": []
+    }
+  },
+  {
+    "ChangeType": "AddDimensions",
+    "Entity": {
+      "Type": "ContainerProduct@1.0",
+      "Identifier": "$CreateDingoDocsProduct.Entity.Identifier"
+    },
+    "DetailsDocument": [
+      {
+        "Key": "standard_workspace",
+        "Description": "Access to one DingoDocs security assessment delivery workspace. MaxCount is 1.",
+        "Name": "Standard Workspace",
+        "Types": ["Entitled"],
+        "Unit": "Units"
+      }
+    ]
+  },
+  {
+    "ChangeType": "UpdateTargeting",
+    "Entity": {
+      "Type": "ContainerProduct@1.0",
+      "Identifier": "$CreateDingoDocsProduct.Entity.Identifier"
+    },
+    "DetailsDocument": {
+      "PositiveTargeting": {
+        "BuyerAccounts": [
+          "959038055523",
+          "155422166461",
+          "100458166471",
+          "297512042063",
+          "782858285006",
+          "058264185180",
+          "183197503899"
+        ]
+      }
+    }
+  },
+  {
+    "ChangeType": "AddRepositories",
+    "Entity": {
+      "Type": "ContainerProduct@1.0",
+      "Identifier": "$CreateDingoDocsProduct.Entity.Identifier"
+    },
+    "DetailsDocument": {
+      "Repositories": [
+        {
+          "RepositoryName": "dingodocs-aws-v2",
+          "RepositoryType": "ECR"
+        }
+      ]
+    }
+  },
+  {
+    "ChangeType": "ReleaseProduct",
+    "Entity": {
+      "Type": "ContainerProduct@1.0",
+      "Identifier": "$CreateDingoDocsProduct.Entity.Identifier"
+    },
+    "DetailsDocument": {}
+  },
+  {
+    "ChangeType": "CreateOffer",
+    "ChangeName": "CreateDingoDocsOffer",
+    "Entity": {
+      "Type": "Offer@1.0"
+    },
+    "DetailsDocument": {
+      "ProductId": "$CreateDingoDocsProduct.Entity.Identifier"
+    }
+  },
+  {
+    "ChangeType": "UpdateTargeting",
+    "Entity": {
+      "Type": "Offer@1.0",
+      "Identifier": "$CreateDingoDocsOffer.Entity.Identifier"
+    },
+    "DetailsDocument": {
+      "PositiveTargeting": {
+        "CountryCodes": ["AU", "US"]
+      }
+    }
+  },
+  {
+    "ChangeType": "UpdatePricingTerms",
+    "Entity": {
+      "Type": "Offer@1.0",
+      "Identifier": "$CreateDingoDocsOffer.Entity.Identifier"
+    },
+    "DetailsDocument": {
+      "PricingModel": "Contract",
+      "Terms": [
+        {
+          "Type": "ConfigurableUpfrontPricingTerm",
+          "CurrencyCode": "USD",
+          "RateCards": [
+            {
+              "Selector": {
+                "Type": "Duration",
+                "Value": "P1M"
+              },
+              "Constraints": {
+                "MultipleDimensionSelection": "Disallowed",
+                "QuantityConfiguration": "Disallowed"
+              },
+              "RateCard": [
+                {
+                  "DimensionKey": "standard_workspace",
+                  "Price": "900"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "ChangeType": "UpdateLegalTerms",
+    "Entity": {
+      "Type": "Offer@1.0",
+      "Identifier": "$CreateDingoDocsOffer.Entity.Identifier"
+    },
+    "DetailsDocument": {
+      "Terms": [
+        {
+          "Type": "LegalTerm",
+          "Documents": [
+            {
+              "Type": "StandardEula",
+              "Version": "2022-07-14"
+            }
+          ]
+        }
+      ]
+    }
+  },
+  {
+    "ChangeType": "UpdateSupportTerms",
+    "Entity": {
+      "Type": "Offer@1.0",
+      "Identifier": "$CreateDingoDocsOffer.Entity.Identifier"
+    },
+    "DetailsDocument": {
+      "Terms": [
+        {
+          "Type": "SupportTerm",
+          "RefundPolicy": "https://dingodocs.yumait.au/refund-policy"
+        }
+      ]
+    }
+  },
+  {
+    "ChangeType": "UpdateInformation",
+    "Entity": {
+      "Type": "Offer@1.0",
+      "Identifier": "$CreateDingoDocsOffer.Entity.Identifier"
+    },
+    "DetailsDocument": {
+      "Name": "DingoDocs Standard Workspace",
+      "Description": "One DingoDocs workspace for security assessment delivery, reporting, evidence, remediation, and retesting."
+    }
+  },
+  {
+    "ChangeType": "UpdateRenewalTerms",
+    "Entity": {
+      "Type": "Offer@1.0",
+      "Identifier": "$CreateDingoDocsOffer.Entity.Identifier"
+    },
+    "DetailsDocument": {
+      "Terms": [
+        {
+          "Type": "RenewalTerm"
+        }
+      ]
+    }
+  },
+  {
+    "ChangeType": "ReleaseOffer",
+    "Entity": {
+      "Type": "Offer@1.0",
+      "Identifier": "$CreateDingoDocsOffer.Entity.Identifier"
+    },
+    "DetailsDocument": {}
+  }
+]

@@ -1,0 +1,17 @@
+[
+  {
+    "ChangeType": "AddRepositories",
+    "Entity": {
+      "Type": "ContainerProduct@1.0",
+      "Identifier": "prod-b2j55een26yp2"
+    },
+    "DetailsDocument": {
+      "Repositories": [
+        {
+          "RepositoryName": "dingodocs-aws-v2",
+          "RepositoryType": "ECR"
+        }
+      ]
+    }
+  }
+]
