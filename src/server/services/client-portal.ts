@@ -5,7 +5,6 @@ import { db } from "@/db";
 import {
   auditEvents,
   clientContacts,
-  clients,
   comments,
   engagementContacts,
   engagements,
@@ -24,6 +23,11 @@ import {
   scopeItems,
   scopeVersions,
 } from "@/db/schema";
+import {
+  PortalNotFoundError,
+  portalEngagementQuery,
+  requirePortalEngagement,
+} from "@/lib/permissions/portal";
 import { createReportRevision } from "./reports";
 
 export type PortalActor = { organisationId: string; userId: string };
@@ -51,120 +55,10 @@ const visibleFindingStatuses = [
   "closed",
 ] as const;
 
-export class PortalNotFoundError extends Error {
-  constructor() {
-    super("The requested portal resource was not found");
-    this.name = "PortalNotFoundError";
-  }
-}
-
-async function requirePortalEngagement(
-  actor: PortalActor,
-  engagementId: string,
-) {
-  const rows = await db
-    .select({
-      id: engagements.id,
-      organisationId: engagements.organisationId,
-      clientId: engagements.clientId,
-      name: engagements.name,
-      reference: engagements.reference,
-      type: engagements.type,
-      status: engagements.status,
-      startDate: engagements.startDate,
-      endDate: engagements.endDate,
-      objectives: engagements.objectives,
-      securityClassification: engagements.securityClassification,
-      clientName: clients.name,
-      contactId: clientContacts.id,
-      accessLevel: engagementContacts.accessLevel,
-    })
-    .from(clientContacts)
-    .innerJoin(
-      engagementContacts,
-      and(
-        eq(engagementContacts.contactId, clientContacts.id),
-        eq(engagementContacts.organisationId, clientContacts.organisationId),
-      ),
-    )
-    .innerJoin(
-      engagements,
-      and(
-        eq(engagements.id, engagementContacts.engagementId),
-        eq(engagements.organisationId, engagementContacts.organisationId),
-        eq(engagements.clientId, clientContacts.clientId),
-      ),
-    )
-    .innerJoin(
-      clients,
-      and(
-        eq(clients.id, clientContacts.clientId),
-        eq(clients.organisationId, clientContacts.organisationId),
-      ),
-    )
-    .where(
-      and(
-        eq(clientContacts.userId, actor.userId),
-        eq(clientContacts.organisationId, actor.organisationId),
-        eq(engagements.id, engagementId),
-        isNull(clientContacts.deletedAt),
-        isNull(clients.deletedAt),
-        isNull(engagements.deletedAt),
-        isNull(engagements.archivedAt),
-      ),
-    )
-    .limit(1);
-  if (!rows[0]) throw new PortalNotFoundError();
-  return rows[0];
-}
+export { PortalNotFoundError } from "@/lib/permissions/portal";
 
 export async function listPortalEngagements(actor: PortalActor) {
-  return db
-    .select({
-      id: engagements.id,
-      name: engagements.name,
-      reference: engagements.reference,
-      type: engagements.type,
-      status: engagements.status,
-      startDate: engagements.startDate,
-      endDate: engagements.endDate,
-      clientName: clients.name,
-      accessLevel: engagementContacts.accessLevel,
-    })
-    .from(clientContacts)
-    .innerJoin(
-      engagementContacts,
-      and(
-        eq(engagementContacts.contactId, clientContacts.id),
-        eq(engagementContacts.organisationId, clientContacts.organisationId),
-      ),
-    )
-    .innerJoin(
-      engagements,
-      and(
-        eq(engagements.id, engagementContacts.engagementId),
-        eq(engagements.organisationId, actor.organisationId),
-        eq(engagements.clientId, clientContacts.clientId),
-      ),
-    )
-    .innerJoin(
-      clients,
-      and(
-        eq(clients.id, clientContacts.clientId),
-        eq(clients.organisationId, actor.organisationId),
-      ),
-    )
-    .where(
-      and(
-        eq(clientContacts.userId, actor.userId),
-        eq(clientContacts.organisationId, actor.organisationId),
-        isNull(clientContacts.deletedAt),
-        isNull(clients.deletedAt),
-        isNull(engagements.deletedAt),
-        isNull(engagements.archivedAt),
-      ),
-    )
-    .orderBy(asc(engagements.name));
+  return portalEngagementQuery(actor).orderBy(asc(engagements.name));
 }
 
 export async function getPortalEngagement(
@@ -392,7 +286,7 @@ async function requireVisibleFinding(actor: PortalActor, findingId: string) {
     )
     .limit(1);
   if (!rows[0]) throw new PortalNotFoundError();
-  await requirePortalEngagement(actor, rows[0].engagementId);
+  await requirePortalEngagement(actor, rows[0].engagementId, true);
   return rows[0].finding;
 }
 
@@ -427,7 +321,7 @@ export async function addPortalComment(
       )
       .limit(1);
     if (!row[0]) throw new PortalNotFoundError();
-    await requirePortalEngagement(actor, row[0].engagementId);
+    await requirePortalEngagement(actor, row[0].engagementId, true);
   }
   const [comment] = await db
     .insert(comments)
@@ -590,7 +484,7 @@ export async function approvePortalReport(
     .limit(1);
   const current = rows[0];
   if (!current) throw new PortalNotFoundError();
-  await requirePortalEngagement(actor, current.report.engagementId);
+  await requirePortalEngagement(actor, current.report.engagementId, true);
   return db.transaction(async (tx) => {
     const now = new Date();
     const [version] = await tx

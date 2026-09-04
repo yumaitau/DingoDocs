@@ -14,48 +14,34 @@ export async function resolveActiveOrganisation(userId: string) {
     isNull(organisationMembers.deletedAt),
     isNull(organisations.deletedAt),
   ];
-  const rows = await db
-    .select({
-      organisationId: organisations.id,
-      slug: organisations.slug,
-      name: organisations.name,
-      role: organisationMembers.role,
-      timeZone: users.timeZone,
-    })
-    .from(organisationMembers)
-    .innerJoin(
-      organisations,
-      eq(organisations.id, organisationMembers.organisationId),
-    )
-    .innerJoin(users, eq(users.id, organisationMembers.userId))
-    .where(
-      hintedId
-        ? and(...baseCondition, eq(organisations.id, hintedId))
-        : and(...baseCondition),
-    )
-    .orderBy(asc(organisations.name))
-    .limit(1);
+  const selectOrganisation = (hintedId?: string) =>
+    db
+      .select({
+        organisationId: organisations.id,
+        slug: organisations.slug,
+        name: organisations.name,
+        role: organisationMembers.role,
+        timeZone: users.timeZone,
+      })
+      .from(organisationMembers)
+      .innerJoin(
+        organisations,
+        eq(organisations.id, organisationMembers.organisationId),
+      )
+      .innerJoin(users, eq(users.id, organisationMembers.userId))
+      .where(
+        hintedId
+          ? and(...baseCondition, eq(organisations.id, hintedId))
+          : and(...baseCondition),
+      )
+      .orderBy(asc(organisations.name))
+      .limit(1);
 
+  const rows = await selectOrganisation(hintedId);
   if (rows[0]) return rows[0];
   if (!hintedId) return null;
 
-  const fallback = await db
-    .select({
-      organisationId: organisations.id,
-      slug: organisations.slug,
-      name: organisations.name,
-      role: organisationMembers.role,
-      timeZone: users.timeZone,
-    })
-    .from(organisationMembers)
-    .innerJoin(
-      organisations,
-      eq(organisations.id, organisationMembers.organisationId),
-    )
-    .innerJoin(users, eq(users.id, organisationMembers.userId))
-    .where(and(...baseCondition))
-    .orderBy(asc(organisations.name))
-    .limit(1);
+  const fallback = await selectOrganisation();
 
   return fallback[0] ?? null;
 }

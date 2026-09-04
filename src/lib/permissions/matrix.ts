@@ -16,6 +16,7 @@ export type Role = (typeof roles)[number];
 export const permissions = [
   "engagement:create",
   "engagement:edit",
+  "engagement:manage_members",
   "engagement:archive",
   "scope:manage",
   "evidence:upload",
@@ -27,6 +28,7 @@ export const permissions = [
   "user:manage",
   "template:manage",
   "data:export",
+  "organisation:export",
   "audit:view",
   "integration:configure",
 ] as const;
@@ -47,6 +49,7 @@ const lead: readonly Permission[] = [
 ];
 const manager: readonly Permission[] = [
   ...lead,
+  "engagement:manage_members",
   "engagement:create",
   "engagement:archive",
   "client:manage",

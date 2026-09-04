@@ -126,6 +126,46 @@ run("integration automation with PostgreSQL", () => {
     ).rejects.toMatchObject({ status: 401 });
   });
 
+  it("rechecks personal write permissions after demotion while preserving service scopes", async () => {
+    const actor = { organisationId: ids.organisation, userId: ids.actor };
+    const personal = await modules.createApiCredential(actor, {
+      name: "Demotion test",
+      kind: "personal",
+      scopes: ["findings:write"],
+    });
+    const service = await modules.createApiCredential(actor, {
+      name: "Independent service",
+      kind: "service",
+      serviceAccountName: "Test service",
+      scopes: ["findings:write"],
+    });
+    await modules.db
+      .update(modules.organisationMembers)
+      .set({ role: "read_only" })
+      .where(modules.eq(modules.organisationMembers.userId, ids.actor));
+    try {
+      await expect(
+        modules.apiWriteContext(
+          requestWithToken(personal.plaintext),
+          "findings:write",
+          "finding:create",
+        ),
+      ).rejects.toThrow("Permission denied");
+      await expect(
+        modules.apiWriteContext(
+          requestWithToken(service.plaintext),
+          "findings:write",
+          "finding:create",
+        ),
+      ).resolves.toMatchObject({ serviceAccountId: expect.any(String) });
+    } finally {
+      await modules.db
+        .update(modules.organisationMembers)
+        .set({ role: "organisation_owner" })
+        .where(modules.eq(modules.organisationMembers.userId, ids.actor));
+    }
+  });
+
   it("signs timestamped webhooks, redacts payloads, logs delivery, and rotates secrets", async () => {
     const actor = {
       organisationId: ids.organisation,

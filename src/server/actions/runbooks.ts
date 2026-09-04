@@ -16,22 +16,11 @@ const optionalId = z.preprocess(
   z.string().uuid().nullable(),
 );
 
-function values(formData: FormData) {
-  return Object.fromEntries(formData);
-}
-
 function list(value: FormDataEntryValue | null) {
   return String(value ?? "")
     .split(/[\n,]/)
     .map((entry) => entry.trim())
     .filter(Boolean);
-}
-
-function actor(context: Awaited<ReturnType<typeof requirePermission>>) {
-  return {
-    organisationId: context.organisationId,
-    userId: context.userId,
-  };
 }
 
 export async function createRunbookTemplateAction(formData: FormData) {
@@ -43,7 +32,7 @@ export async function createRunbookTemplateAction(formData: FormData) {
       assessmentTypes: z.string().optional(),
       tags: z.string().optional(),
     })
-    .parse(values(formData));
+    .parse(Object.fromEntries(formData));
   const titles = formData
     .getAll("stepTitle")
     .map((value) => String(value).trim());
@@ -75,7 +64,7 @@ export async function createRunbookTemplateAction(formData: FormData) {
     .min(1)
     .max(50)
     .parse(steps);
-  await createRunbookTemplate(actor(context), {
+  await createRunbookTemplate(context, {
     ...input,
     assessmentTypes: list(input.assessmentTypes ?? ""),
     tags: list(input.tags ?? ""),
@@ -86,8 +75,10 @@ export async function createRunbookTemplateAction(formData: FormData) {
 
 export async function publishRunbookTemplateAction(formData: FormData) {
   const context = await requirePermission("template:manage");
-  const { templateId } = z.object({ templateId: id }).parse(values(formData));
-  await publishRunbookTemplate(actor(context), templateId);
+  const { templateId } = z
+    .object({ templateId: id })
+    .parse(Object.fromEntries(formData));
+  await publishRunbookTemplate(context, templateId);
   revalidatePath("/runbooks");
 }
 
@@ -97,8 +88,10 @@ export async function applyRunbookTemplateAction(
 ) {
   id.parse(engagementId);
   const context = await requirePermission("engagement:edit", { engagementId });
-  const { templateId } = z.object({ templateId: id }).parse(values(formData));
-  await applyRunbookTemplate(actor(context), { engagementId, templateId });
+  const { templateId } = z
+    .object({ templateId: id })
+    .parse(Object.fromEntries(formData));
+  await applyRunbookTemplate(context, { engagementId, templateId });
   revalidatePath(`/engagements/${engagementId}`);
 }
 
@@ -124,8 +117,8 @@ export async function updateEngagementRunbookStepAction(
       evidenceId: optionalId,
       taskId: optionalId,
     })
-    .parse(values(formData));
-  await updateEngagementRunbookStep(actor(context), {
+    .parse(Object.fromEntries(formData));
+  await updateEngagementRunbookStep(context, {
     engagementId,
     stepId,
     ...input,

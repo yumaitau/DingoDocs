@@ -254,6 +254,81 @@ run("finding library and workflow with PostgreSQL", () => {
     expect(enriched[0]?.comments[0]?.body).toBe("Reproduced independently.");
   });
 
+  it("rejects a late edit after concurrent review submission", async () => {
+    let result: Promise<unknown> | undefined;
+    try {
+      await modules.sqlClient.begin(async (lock) => {
+        await lock`update findings set status = 'ready_for_review' where id = ${findingId}`;
+        result = modules
+          .patchFindingNarrative(author, {
+            findingId,
+            title: "Late forbidden edit",
+            changeSummary: "Concurrent edit",
+          })
+          .catch((error: unknown) => error);
+        const deadline = Date.now() + 5000;
+        while (true) {
+          const waiting =
+            await modules.sqlClient`select pid from pg_stat_activity where datname = current_database() and wait_event_type = 'Lock' and query ilike '%update%findings%'`;
+          if (waiting.length) break;
+          if (Date.now() >= deadline)
+            throw new Error("Edit did not reach the locked finding");
+          await new Promise((resolve) => setTimeout(resolve, 10));
+        }
+      });
+      const outcome = await result;
+      expect(outcome).toBeInstanceOf(Error);
+      const [finding] = await modules.db
+        .select()
+        .from(modules.findings)
+        .where(modules.eq(modules.findings.id, findingId));
+      expect(finding.title).not.toBe("Late forbidden edit");
+      expect(finding.version).toBe(3);
+      expect(finding.status).toBe("ready_for_review");
+    } finally {
+      await result;
+      await modules.db
+        .update(modules.findings)
+        .set({ status: "draft" })
+        .where(modules.eq(modules.findings.id, findingId));
+    }
+  });
+
+  it("shows private finding comments only to their author", async () => {
+    const privateComment = await modules.addFindingComment(author, {
+      findingId,
+      body: "Author private detail",
+      visibility: "private",
+    });
+    const sharedComment = await modules.addFindingComment(author, {
+      findingId,
+      body: "Team detail",
+      visibility: "team",
+    });
+    const own = await modules.getEngagementFindings(
+      ids.orgA,
+      ids.engagement,
+      ids.author,
+    );
+    const other = await modules.getEngagementFindings(
+      ids.orgA,
+      ids.engagement,
+      ids.reviewer,
+    );
+    expect(
+      own
+        .find((finding) => finding.id === findingId)!
+        .comments.map((comment) => comment.id),
+    ).toContain(privateComment.id);
+    const comments = other.find(
+      (finding) => finding.id === findingId,
+    )!.comments;
+    expect(comments.map((comment) => comment.id)).not.toContain(
+      privateComment.id,
+    );
+    expect(comments.map((comment) => comment.id)).toContain(sharedComment.id);
+  });
+
   it("enforces independent peer review, QA, approval versions, and audited overrides", async () => {
     await modules.transitionFinding(author, {
       findingId,

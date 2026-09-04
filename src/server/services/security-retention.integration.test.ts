@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 const testUrl = process.env.TEST_DATABASE_URL;
 const run = testUrl ? describe : describe.skip;
@@ -146,6 +146,56 @@ run("account security and retention with PostgreSQL", () => {
           ),
         ),
     ).toHaveLength(1);
+  });
+
+  it("does not grant membership when an invitation is revoked before consumption", async () => {
+    const token = randomUUID() + randomUUID();
+    const [invitation] = await modules.db
+      .insert(modules.organisationInvitations)
+      .values({
+        organisationId: ids.organisation,
+        email: `${ids.invited}@test.invalid`,
+        role: "organisation_administrator",
+        tokenHash: createHash("sha256").update(token).digest("hex"),
+        invitedBy: ids.actor,
+        expiresAt: new Date(Date.now() + 60_000),
+      })
+      .returning();
+    const transaction = modules.db.transaction.bind(modules.db);
+    const spy = vi
+      .spyOn(modules.db, "transaction")
+      .mockImplementationOnce(async (callback) => {
+        // Revoke between any preflight read and the transaction consuming the invitation.
+        await modules.revokeSecureInvitation(
+          { organisationId: ids.organisation, userId: ids.actor },
+          invitation.id,
+        );
+        return transaction(callback);
+      });
+    try {
+      await expect(
+        modules.acceptSecureInvitation(
+          { id: ids.invited, email: `${ids.invited}@test.invalid` },
+          token,
+        ),
+      ).rejects.toThrow("invalid");
+      expect(
+        await modules.db
+          .select()
+          .from(modules.organisationMembers)
+          .where(
+            modules.and(
+              modules.eq(
+                modules.organisationMembers.organisationId,
+                ids.organisation,
+              ),
+              modules.eq(modules.organisationMembers.userId, ids.invited),
+            ),
+          ),
+      ).toHaveLength(0);
+    } finally {
+      spy.mockRestore();
+    }
   });
 
   it("accepts single-use invitations and allows administrator forced logout", async () => {

@@ -37,10 +37,6 @@ const findingStatus = z.enum([
   "closed",
 ]);
 
-function values(formData: FormData) {
-  return Object.fromEntries(formData);
-}
-
 function list(value: FormDataEntryValue | null | undefined) {
   return String(value ?? "")
     .split(/[\n,]/)
@@ -65,10 +61,6 @@ function mappings(value: FormDataEntryValue | null | undefined) {
     });
 }
 
-function actor(context: Awaited<ReturnType<typeof requirePermission>>) {
-  return { organisationId: context.organisationId, userId: context.userId };
-}
-
 function refreshEngagement(engagementId: string) {
   revalidatePath(`/engagements/${engagementId}`);
 }
@@ -90,8 +82,8 @@ const templateInput = z.object({
 
 export async function createFindingTemplateAction(formData: FormData) {
   const context = await requirePermission("template:manage");
-  const input = templateInput.parse(values(formData));
-  await createFindingTemplate(actor(context), {
+  const input = templateInput.parse(Object.fromEntries(formData));
+  await createFindingTemplate(context, {
     ...input,
     references: list(formData.get("references")),
     tags: list(formData.get("tags")),
@@ -107,8 +99,10 @@ export async function reviseFindingTemplateAction(
 ) {
   id.parse(templateId);
   const context = await requirePermission("template:manage");
-  const input = templateInput.omit({ stableKey: true }).parse(values(formData));
-  await reviseFindingTemplate(actor(context), templateId, {
+  const input = templateInput
+    .omit({ stableKey: true })
+    .parse(Object.fromEntries(formData));
+  await reviseFindingTemplate(context, templateId, {
     ...input,
     references: list(formData.get("references")),
     tags: list(formData.get("tags")),
@@ -129,8 +123,8 @@ export async function transitionTemplateReviewAction(
       toStatus: z.enum(["in_review", "changes_requested", "approved"]),
       reason: z.string().trim().max(2_000).optional(),
     })
-    .parse(values(formData));
-  await transitionTemplateReview(actor(context), { templateId, ...input });
+    .parse(Object.fromEntries(formData));
+  await transitionTemplateReview(context, { templateId, ...input });
   revalidatePath("/findings-library");
 }
 
@@ -142,8 +136,8 @@ export async function createEngagementFindingAction(
   const context = await requirePermission("finding:create", { engagementId });
   const input = z
     .object({ templateId: id, identifier: z.string().trim().min(1).max(80) })
-    .parse(values(formData));
-  await createFindingFromTemplate(actor(context), {
+    .parse(Object.fromEntries(formData));
+  await createFindingFromTemplate(context, {
     engagementId,
     ...input,
     assetIds: formData.getAll("assetIds").map(String),
@@ -186,8 +180,8 @@ export async function updateFindingNarrativeAction(
       dueAt: z.string().optional(),
       changeSummary: z.string().trim().min(3).max(500),
     })
-    .parse(values(formData));
-  await updateFindingNarrative(actor(context), {
+    .parse(Object.fromEntries(formData));
+  await updateFindingNarrative(context, {
     findingId,
     ...input,
     cvssScore: input.cvssScore || undefined,
@@ -212,7 +206,7 @@ export async function transitionFindingAction(
       override: z.string().optional(),
       overrideReason: z.string().trim().max(2_000).optional(),
     })
-    .parse(values(formData));
+    .parse(Object.fromEntries(formData));
   const approvalStatuses = new Set([
     "changes_requested",
     "peer_reviewed",
@@ -229,7 +223,7 @@ export async function transitionFindingAction(
     engagementId,
     findingId,
   );
-  await transitionFinding(actor(context), {
+  await transitionFinding(context, {
     findingId,
     toStatus: input.toStatus,
     comment: input.comment,
@@ -257,8 +251,8 @@ export async function addFindingCommentAction(
       body: requiredText,
       visibility: z.enum(["private", "team", "client"]),
     })
-    .parse(values(formData));
-  await addFindingComment(actor(context), { findingId, ...input });
+    .parse(Object.fromEntries(formData));
+  await addFindingComment(context, { findingId, ...input });
   refreshEngagement(engagementId);
 }
 
@@ -275,7 +269,7 @@ export async function linkFindingEvidenceAction(
     engagementId,
     findingId,
   );
-  await linkFindingEvidence(actor(context), {
+  await linkFindingEvidence(context, {
     findingId,
     evidenceIds: formData.getAll("evidenceIds").map(String),
   });
@@ -294,7 +288,7 @@ export async function updateFindingFromTemplateAction(
     engagementId,
     findingId,
   );
-  await updateFindingFromLatestTemplate(actor(context), findingId);
+  await updateFindingFromLatestTemplate(context, findingId);
   refreshEngagement(engagementId);
 }
 
@@ -307,8 +301,8 @@ export async function createRiskMatrixAction(formData: FormData) {
       definition: z.string().min(2).max(100_000),
       isDefault: z.string().optional(),
     })
-    .parse(values(formData));
-  await createRiskMatrix(actor(context), {
+    .parse(Object.fromEntries(formData));
+  await createRiskMatrix(context, {
     name: input.name,
     clientId: input.clientId || undefined,
     definition: JSON.parse(input.definition) as Parameters<

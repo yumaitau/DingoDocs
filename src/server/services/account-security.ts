@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from "node:crypto";
-import { and, desc, eq, inArray, isNull } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, isNull } from "drizzle-orm";
 import { db } from "@/db";
 import {
   auditEvents,
@@ -169,23 +169,25 @@ export async function acceptSecureInvitation(
   user: { id: string; email: string },
   token: string,
 ) {
-  const now = new Date();
-  const [invitation] = await db
-    .select()
-    .from(organisationInvitations)
-    .where(eq(organisationInvitations.tokenHash, hashToken(token)))
-    .limit(1);
-  if (
-    !invitation ||
-    invitation.acceptedAt ||
-    invitation.revokedAt ||
-    invitation.expiresAt <= now ||
-    invitation.email !== user.email.trim().toLowerCase()
-  )
-    throw new Error(
-      "Invitation is invalid, expired, or belongs to another user",
-    );
-  await db.transaction(async (tx) => {
+  return db.transaction(async (tx) => {
+    const now = new Date();
+    const [invitation] = await tx
+      .update(organisationInvitations)
+      .set({ acceptedAt: now })
+      .where(
+        and(
+          eq(organisationInvitations.tokenHash, hashToken(token)),
+          eq(organisationInvitations.email, user.email.trim().toLowerCase()),
+          isNull(organisationInvitations.acceptedAt),
+          isNull(organisationInvitations.revokedAt),
+          gt(organisationInvitations.expiresAt, now),
+        ),
+      )
+      .returning();
+    if (!invitation)
+      throw new Error(
+        "Invitation is invalid, expired, or belongs to another user",
+      );
     await tx
       .insert(organisationMembers)
       .values({
@@ -202,16 +204,6 @@ export async function acceptSecureInvitation(
         ],
         set: { role: invitation.role, joinedAt: now, deletedAt: null },
       });
-    await tx
-      .update(organisationInvitations)
-      .set({ acceptedAt: now })
-      .where(
-        and(
-          eq(organisationInvitations.id, invitation.id),
-          isNull(organisationInvitations.acceptedAt),
-          isNull(organisationInvitations.revokedAt),
-        ),
-      );
     await tx.insert(auditEvents).values({
       organisationId: invitation.organisationId,
       actorId: user.id,
@@ -220,8 +212,8 @@ export async function acceptSecureInvitation(
       targetId: invitation.id,
       metadata: { role: invitation.role },
     });
+    return invitation.organisationId;
   });
-  return invitation.organisationId;
 }
 
 export async function revokeSecureInvitation(

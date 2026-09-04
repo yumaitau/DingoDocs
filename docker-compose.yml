@@ -2,7 +2,7 @@ name: dingodocs
 
 services:
   app:
-    build:
+    build: &app-build
       context: .
       dockerfile: Dockerfile
     environment:
@@ -26,19 +26,11 @@ services:
     depends_on:
       migrate:
         condition: service_completed_successfully
-    healthcheck:
-      test:
-        ["CMD", "wget", "-q", "--spider", "http://localhost:3000/api/health"]
-      interval: 15s
-      timeout: 5s
-      retries: 5
     restart: unless-stopped
 
   migrate:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      target: migrator
+    build: *app-build
+    command: ["node", "dist/migrate.cjs"]
     environment:
       DATABASE_URL: postgres://dingodocs:dingodocs@postgres:5432/dingodocs
     depends_on:
@@ -53,7 +45,7 @@ services:
       POSTGRES_USER: dingodocs
       POSTGRES_PASSWORD: dingodocs
     ports:
-      - "5432:5432"
+      - "127.0.0.1:5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -71,16 +63,16 @@ services:
       MINIO_ROOT_USER: dingodocs
       MINIO_ROOT_PASSWORD: dingodocs-local-only
     ports:
-      - "9000:9000"
-      - "9001:9001"
+      - "127.0.0.1:9000:9000"
+      - "127.0.0.1:9001:9001"
     volumes:
       - minio_data:/data
 
   mailpit:
     image: axllent/mailpit:v1.27
     ports:
-      - "1025:1025"
-      - "8025:8025"
+      - "127.0.0.1:1025:1025"
+      - "127.0.0.1:8025:8025"
     restart: unless-stopped
 
 volumes:

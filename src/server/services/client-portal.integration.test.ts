@@ -429,6 +429,107 @@ run("restricted client portal and retest lifecycle with PostgreSQL", () => {
     });
   });
 
+  it("enforces read-only grants across every portal mutation", async () => {
+    await modules.db
+      .update(modules.engagementContacts)
+      .set({ accessLevel: "read_only" })
+      .where(modules.eq(modules.engagementContacts.contactId, ids.contactA));
+    try {
+      expect(
+        (await modules.getPortalEngagement(clientActor, ids.engagementA))
+          .findings,
+      ).not.toHaveLength(0);
+      const operations = [
+        () =>
+          modules.addPortalComment(clientActor, {
+            targetType: "finding",
+            targetId: ids.findingVisible,
+            body: "forbidden",
+          }),
+        () =>
+          modules.addPortalComment(clientActor, {
+            targetType: "report",
+            targetId: ids.reportReview,
+            body: "forbidden",
+          }),
+        () =>
+          modules.submitRemediationUpdate(clientActor, {
+            findingId: ids.findingVisible,
+            status: "risk_accepted",
+          }),
+        () => modules.requestRetest(clientActor, ids.findingVisible),
+        () => modules.approvePortalReport(clientActor, ids.reportReview),
+      ];
+      for (const operation of operations)
+        await expect(operation()).rejects.toBeInstanceOf(
+          modules.PortalNotFoundError,
+        );
+      const evidenceService = await import("./evidence");
+      const actor = await evidenceService.scopedEvidenceActor({
+        ...clientActor,
+        roles: ["client_user"],
+      });
+      await expect(
+        evidenceService.uploadEvidence(actor, {
+          engagementId: ids.engagementA,
+          filename: "blocked.txt",
+          mediaType: "text/plain",
+          bytes: new TextEncoder().encode("blocked"),
+          classification: "client_visible",
+        }),
+      ).rejects.toBeInstanceOf(modules.PortalNotFoundError);
+      await expect(
+        evidenceService.createEvidenceAnnotation(actor, {
+          evidenceId: ids.evidenceVisible,
+          operations: [{ type: "callout", x: 1, y: 1, number: 1 }],
+        }),
+      ).rejects.toBeInstanceOf(modules.PortalNotFoundError);
+    } finally {
+      await modules.db
+        .update(modules.engagementContacts)
+        .set({ accessLevel: "standard" })
+        .where(modules.eq(modules.engagementContacts.contactId, ids.contactA));
+    }
+  });
+
+  it("revokes evidence access for both client roles with the engagement grant", async () => {
+    const evidenceService = await import("./evidence");
+    for (const role of ["client_user", "client_administrator"] as const) {
+      const granted = await evidenceService.scopedEvidenceActor({
+        ...clientActor,
+        roles: [role],
+      });
+      await expect(
+        evidenceService.getEvidenceForAccess(granted, ids.evidenceVisible),
+      ).resolves.toMatchObject({ id: ids.evidenceVisible });
+    }
+    const [grant] = await modules.db
+      .select()
+      .from(modules.engagementContacts)
+      .where(modules.eq(modules.engagementContacts.contactId, ids.contactA));
+    await modules.revokePortalAccess(testerActor, {
+      engagementId: ids.engagementA,
+      grantId: grant.id,
+    });
+    try {
+      for (const role of ["client_user", "client_administrator"] as const) {
+        const revoked = await evidenceService.scopedEvidenceActor({
+          ...clientActor,
+          roles: [role],
+        });
+        await expect(
+          evidenceService.getEvidenceForAccess(revoked, ids.evidenceVisible),
+        ).rejects.toThrow();
+      }
+    } finally {
+      await modules.grantPortalAccess(testerActor, {
+        engagementId: ids.engagementA,
+        contactId: ids.contactA,
+        accessLevel: "standard",
+      });
+    }
+  });
+
   it("records client comments, explicit remediation states, report approval, and immutable retest requests", async () => {
     await modules.addPortalComment(clientActor, {
       targetType: "finding",

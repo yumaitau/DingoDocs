@@ -29,14 +29,16 @@ type Workspace = NonNullable<
 export async function FindingsSection({
   engagementId,
   organisationId,
+  userId,
   workspace,
 }: {
   engagementId: string;
   organisationId: string;
+  userId: string;
   workspace: Workspace;
 }) {
   const [rows, templates, evidence] = await Promise.all([
-    getEngagementFindings(organisationId, engagementId),
+    getEngagementFindings(organisationId, engagementId, userId),
     searchFindingTemplates(organisationId, "", true),
     listEngagementEvidence(organisationId, engagementId),
   ]);

@@ -7,6 +7,7 @@ import { importAdapterNames } from "@/lib/imports/adapters";
 import { requirePermission } from "@/lib/permissions/require";
 import {
   applyScannerImport,
+  mediaTypeForImport,
   previewScannerImport,
 } from "@/server/services/data-exchange";
 
@@ -15,12 +16,13 @@ export async function previewScannerImportAction(formData: FormData) {
   const engagementId = id.parse(formData.get("engagementId"));
   const context = await requirePermission("finding:create", { engagementId });
   const file = z.instanceof(File).parse(formData.get("file"));
+  const bytes = new Uint8Array(await file.arrayBuffer());
   const result = await previewScannerImport(context, {
     engagementId,
     adapter: z.enum(importAdapterNames).parse(formData.get("adapter")),
     filename: file.name,
-    mediaType: file.type || mediaType(file.name),
-    bytes: new Uint8Array(await file.arrayBuffer()),
+    mediaType: file.type || mediaTypeForImport(file.name, bytes),
+    bytes,
   });
   redirect(`/imports/${result.run.id}`);
 }
@@ -38,11 +40,4 @@ export async function applyScannerImportAction(
       .map((value) => id.parse(value)),
   });
   revalidatePath(`/imports/${importRunId}`);
-}
-function mediaType(filename: string) {
-  return filename.toLowerCase().endsWith(".csv")
-    ? "text/csv"
-    : filename.toLowerCase().endsWith(".json")
-      ? "application/json"
-      : "application/xml";
 }

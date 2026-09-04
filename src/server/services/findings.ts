@@ -1,3 +1,4 @@
+import { visibleToAuthor } from "@/lib/permissions/visibility";
 import "server-only";
 
 import {
@@ -515,9 +516,15 @@ export async function updateFindingFromLatestTemplate(
         updatedAt: new Date(),
       })
       .where(
-        and(eq(findings.id, finding.id), eq(findings.version, finding.version)),
+        and(
+          eq(findings.id, finding.id),
+          eq(findings.version, finding.version),
+          eq(findings.status, finding.status),
+        ),
       )
       .returning();
+    if (!updated)
+      throw new Error("Finding state changed; reload and try again");
     await tx.insert(auditEvents).values({
       organisationId: actor.organisationId,
       actorId: actor.userId,
@@ -578,9 +585,15 @@ export async function updateFindingNarrative(
         updatedAt: new Date(),
       })
       .where(
-        and(eq(findings.id, finding.id), eq(findings.version, finding.version)),
+        and(
+          eq(findings.id, finding.id),
+          eq(findings.version, finding.version),
+          eq(findings.status, finding.status),
+        ),
       )
       .returning();
+    if (!updated)
+      throw new Error("Finding state changed; reload and try again");
     await tx.insert(auditEvents).values({
       organisationId: actor.organisationId,
       actorId: actor.userId,
@@ -693,7 +706,11 @@ export async function transitionFinding(
         updatedAt: new Date(),
       })
       .where(
-        and(eq(findings.id, finding.id), eq(findings.status, finding.status)),
+        and(
+          eq(findings.id, finding.id),
+          eq(findings.status, finding.status),
+          eq(findings.version, finding.version),
+        ),
       )
       .returning();
     if (!updated)
@@ -848,6 +865,7 @@ export async function createRiskMatrix(
 export async function getEngagementFindings(
   organisationId: string,
   engagementId: string,
+  userId?: string,
 ) {
   const rows = await db
     .select()
@@ -884,6 +902,7 @@ export async function getEngagementFindings(
               eq(comments.targetType, "finding"),
               inArray(comments.targetId, ids),
               isNull(comments.deletedAt),
+              visibleToAuthor(comments.visibility, comments.authorId, userId),
             ),
           )
           .orderBy(asc(comments.createdAt))

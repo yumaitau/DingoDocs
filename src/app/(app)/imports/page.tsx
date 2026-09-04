@@ -1,3 +1,4 @@
+import { hasPermission, type Role } from "@/lib/permissions/matrix";
 import { db } from "@/db";
 import { engagements } from "@/db/schema";
 import { and, asc, eq, isNull } from "drizzle-orm";
@@ -87,19 +88,21 @@ export default async function ImportsPage() {
             Data exports include operational records and evidence metadata.
             Migration exports add templates, notes, and member mappings.
           </p>
-          <div className="mt-5 flex flex-wrap gap-3">
-            <form action="/api/exports/organisation?mode=data" method="post">
-              <Button type="submit" variant="secondary">
-                Download data export
-              </Button>
-            </form>
-            <form
-              action="/api/exports/organisation?mode=migration"
-              method="post"
-            >
-              <Button type="submit">Download migration export</Button>
-            </form>
-          </div>
+          {hasPermission(context.role as Role, "organisation:export") && (
+            <div className="mt-5 flex flex-wrap gap-3">
+              <form action="/api/exports/organisation?mode=data" method="post">
+                <Button type="submit" variant="secondary">
+                  Download data export
+                </Button>
+              </form>
+              <form
+                action="/api/exports/organisation?mode=migration"
+                method="post"
+              >
+                <Button type="submit">Download migration export</Button>
+              </form>
+            </div>
+          )}
         </section>
       </div>
     </>

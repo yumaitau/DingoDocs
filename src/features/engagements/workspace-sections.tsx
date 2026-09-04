@@ -90,7 +90,7 @@ export async function EngagementWorkspaceSection({
   if (!managedSections.has(title))
     return <UnimplementedSection title={title} />;
   const workspace = await getEngagementWorkspace(
-    { organisationId },
+    { organisationId, userId },
     engagementId,
   );
   if (!workspace) return null;
@@ -117,6 +117,7 @@ export async function EngagementWorkspaceSection({
     case "Findings":
       return (
         <FindingsSection
+          userId={userId}
           engagementId={engagementId}
           organisationId={organisationId}
           workspace={workspace}

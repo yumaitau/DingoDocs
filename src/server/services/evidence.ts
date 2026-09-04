@@ -1,19 +1,21 @@
 import "server-only";
 
 import { createHash } from "node:crypto";
-import { and, desc, eq, inArray, isNull } from "drizzle-orm";
+import { and, desc, eq, isNull } from "drizzle-orm";
 import sharp from "sharp";
 import { db } from "@/db";
 import {
   assetEvidence,
   auditEvents,
   backgroundJobs,
-  clientContacts,
   engagements,
-  engagementContacts,
   evidence,
   evidenceAnnotations,
 } from "@/db/schema";
+import {
+  portalEngagementQuery,
+  requirePortalEngagement,
+} from "@/lib/permissions/portal";
 import { hasPermission, type Role } from "@/lib/permissions/matrix";
 import {
   validateContentSignature,
@@ -89,6 +91,8 @@ export async function uploadEvidence(
   },
   provider: StorageProvider = storage(),
 ) {
+  if (actor.clientIds)
+    await requirePortalEngagement(actor, input.engagementId, true);
   const upload = validateUpload({
     size: input.bytes.byteLength,
     mediaType: input.mediaType,
@@ -302,32 +306,9 @@ export async function scopedEvidenceActor(input: {
     (role) => role !== "client_administrator" && role !== "client_user",
   );
   if (internalRole) return actor;
-  const contacts = await db
-    .select({ id: clientContacts.id, clientId: clientContacts.clientId })
-    .from(clientContacts)
-    .where(
-      and(
-        eq(clientContacts.organisationId, input.organisationId),
-        eq(clientContacts.userId, input.userId),
-        isNull(clientContacts.deletedAt),
-      ),
-    );
-  actor.clientIds = [...new Set(contacts.map((contact) => contact.clientId))];
-  if (input.roles.includes("client_user")) {
-    actor.engagementIds = contacts.length
-      ? (
-          await db
-            .select({ engagementId: engagementContacts.engagementId })
-            .from(engagementContacts)
-            .where(
-              inArray(
-                engagementContacts.contactId,
-                contacts.map((contact) => contact.id),
-              ),
-            )
-        ).map((row) => row.engagementId)
-      : [];
-  }
+  const grants = await portalEngagementQuery(input);
+  actor.clientIds = [...new Set(grants.map((grant) => grant.clientId))];
+  actor.engagementIds = grants.map((grant) => grant.id);
   return actor;
 }
 
@@ -384,6 +365,8 @@ export async function createEvidenceAnnotation(
   if (!input.operations.length)
     throw new Error("At least one annotation is required");
   const source = await getEvidenceForAccess(actor, input.evidenceId);
+  if (actor.clientIds)
+    await requirePortalEngagement(actor, source.engagementId, true);
   if (input.engagementId && source.engagementId !== input.engagementId)
     throw new EvidenceScopeError("Evidence belongs to another engagement");
   if (!source.mediaType.startsWith("image/"))

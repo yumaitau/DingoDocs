@@ -58,6 +58,12 @@ export async function rolesForOperation(input: {
     .limit(1);
 
   const result: Role[] = membership[0] ? [membership[0].role as Role] : [];
+  if (
+    !membership[0] ||
+    membership[0].role === "client_user" ||
+    membership[0].role === "client_administrator"
+  )
+    return result;
   if (input.engagementId) {
     const engagementMembership = await db
       .select({ role: engagementMembers.role })
@@ -85,9 +91,22 @@ export async function requirePermission(
   input?: { engagementId?: string },
 ) {
   const context = await requireOrganisationContext();
+  const operationRoles = await requireActorPermission(
+    context,
+    permission,
+    input,
+  );
+  return { ...context, roles: operationRoles };
+}
+
+export async function requireActorPermission(
+  actor: { userId: string; organisationId: string },
+  permission: Permission,
+  input?: { engagementId?: string },
+) {
   const operationRoles = await rolesForOperation({
-    userId: context.userId,
-    organisationId: context.organisationId,
+    userId: actor.userId,
+    organisationId: actor.organisationId,
     engagementId: input?.engagementId,
   });
   if (!operationRoles.some((role) => hasPermission(role, permission))) {
@@ -96,5 +115,5 @@ export async function requirePermission(
       `roles [${operationRoles.join(", ") || "none"}] are not permitted`,
     );
   }
-  return { ...context, roles: operationRoles };
+  return operationRoles;
 }

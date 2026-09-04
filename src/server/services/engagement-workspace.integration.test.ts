@@ -217,6 +217,96 @@ run("engagement workspace with PostgreSQL", () => {
     ).rejects.toBeInstanceOf(modules.WorkspaceTransitionError);
   });
 
+  it("prevents leads from promoting themselves to engagement manager", async () => {
+    await modules.db
+      .update(modules.organisationMembers)
+      .set({ role: "lead_consultant" })
+      .where(modules.eq(modules.organisationMembers.userId, ids.consultant));
+    try {
+      await expect(
+        modules.assignEngagementMember(
+          { organisationId: ids.orgA, userId: ids.consultant },
+          {
+            engagementId: ids.engagement,
+            userId: ids.consultant,
+            role: "engagement_manager",
+          },
+        ),
+      ).rejects.toThrow("Permission denied");
+    } finally {
+      await modules.db
+        .update(modules.organisationMembers)
+        .set({ role: "consultant" })
+        .where(modules.eq(modules.organisationMembers.userId, ids.consultant));
+    }
+  });
+
+  it("keeps private notes out of other members' workspace, API and search results", async () => {
+    const privateNote = await modules.createWorkspaceNote(actor, {
+      engagementId: ids.engagement,
+      title: "Cobaltprivatecanary",
+      body: "Confidential author note",
+      kind: "note",
+      visibility: "private",
+    });
+    const teamNote = await modules.createWorkspaceNote(actor, {
+      engagementId: ids.engagement,
+      title: "Shared note",
+      body: "Shared body",
+      kind: "note",
+      visibility: "team",
+    });
+    const own = await modules.getEngagementWorkspace(actor, ids.engagement);
+    expect(own!.notes.map((note) => note.id)).toContain(privateNote.id);
+    const other = { organisationId: ids.orgA, userId: ids.consultant };
+    const workspace = await modules.getEngagementWorkspace(
+      other,
+      ids.engagement,
+    );
+    expect(workspace!.notes.map((note) => note.id)).not.toContain(
+      privateNote.id,
+    );
+    expect(workspace!.notes.map((note) => note.id)).toContain(teamNote.id);
+    const { globalSearch } = await import("./global-search");
+    expect(
+      await globalSearch(
+        { ...other, role: "consultant" },
+        "Cobaltprivatecanary",
+      ),
+    ).toHaveLength(0);
+    expect(
+      await globalSearch(
+        { ...actor, role: "organisation_owner" },
+        "Cobaltprivatecanary",
+      ),
+    ).toHaveLength(1);
+    const { createApiCredential } = await import("@/lib/api/authentication");
+    const { GET } = await import("@/app/api/v1/engagements/[id]/notes/route");
+    for (const owner of [actor, other]) {
+      const key = await createApiCredential(owner, {
+        name: "Notes test",
+        kind: "personal",
+        scopes: ["engagements:read"],
+      });
+      const response = await GET(
+        new Request(
+          "https://test.invalid/api/v1/engagements/" +
+            ids.engagement +
+            "/notes",
+          {
+            headers: { authorization: `Bearer ${key.plaintext}` },
+          },
+        ),
+        { params: Promise.resolve({ id: ids.engagement }) },
+      );
+      expect(response.status).toBe(200);
+      const body = await response.json();
+      expect(
+        body.data.some((note: { id: string }) => note.id === privateNote.id),
+      ).toBe(owner.userId === actor.userId);
+    }
+  });
+
   it("persists linked work records and audited status transitions", async () => {
     const workspace = await modules.getEngagementWorkspace(
       actor,

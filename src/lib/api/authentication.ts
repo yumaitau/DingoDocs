@@ -14,6 +14,7 @@ import type { Permission } from "@/lib/permissions/matrix";
 import {
   requireInternalOrganisationContext,
   requirePermission,
+  requireActorPermission,
 } from "@/lib/permissions/require";
 
 export { apiScopes, type ApiScope } from "@/lib/api/scopes";
@@ -138,7 +139,18 @@ export async function apiWriteContext(
   input?: { engagementId?: string },
 ) {
   const principal = await authenticateApiRequest(request, scope);
-  if (principal) return principal;
+  if (principal) {
+    if (!principal.serviceAccountId) {
+      if (!principal.userId)
+        throw new ApiAuthenticationError("API key owner is unavailable");
+      await requireActorPermission(
+        { ...principal, userId: principal.userId },
+        permission,
+        input,
+      );
+    }
+    return principal;
+  }
   await requireInternalOrganisationContext();
   return requirePermission(permission, input);
 }

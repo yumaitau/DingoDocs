@@ -1,3 +1,4 @@
+import { canWritePortal } from "@/lib/permissions/portal";
 import {
   ArrowLeft,
   FileCheck2,
@@ -38,6 +39,7 @@ export default async function PortalEngagementPage({
     throw error;
   }
   const { engagement } = portal;
+  const canWrite = canWritePortal(engagement.accessLevel);
   return (
     <div className="space-y-8">
       <div>
@@ -244,122 +246,132 @@ export default async function PortalEngagementPage({
                     )}
                   </div>
                   <div className="space-y-4">
-                    <form
-                      action={submitRemediationAction.bind(
-                        null,
-                        id,
-                        finding.id,
-                      )}
-                      className="space-y-3 rounded-lg border p-4"
-                    >
-                      <h4 className="text-sm font-semibold">
-                        Update remediation
-                      </h4>
-                      <label className="block text-xs font-medium text-slate-600">
-                        Status
-                        <select
-                          name="status"
-                          required
-                          className="mt-1 min-h-10 w-full rounded-md border bg-paper px-3 text-sm"
-                        >
-                          <option value="in_progress">In progress</option>
-                          <option value="remediated">
-                            Remediated — ready for retest
-                          </option>
-                          <option value="partially_remediated">
-                            Partially remediated
-                          </option>
-                          <option value="not_remediated">Not remediated</option>
-                          <option value="risk_accepted">Risk accepted</option>
-                          <option value="open">Open</option>
-                        </select>
-                      </label>
-                      <label className="block text-xs font-medium text-slate-600">
-                        Owner
+                    {canWrite && (
+                      <form
+                        action={submitRemediationAction.bind(
+                          null,
+                          id,
+                          finding.id,
+                        )}
+                        className="space-y-3 rounded-lg border p-4"
+                      >
+                        <h4 className="text-sm font-semibold">
+                          Update remediation
+                        </h4>
+                        <label className="block text-xs font-medium text-slate-600">
+                          Status
+                          <select
+                            name="status"
+                            required
+                            className="mt-1 min-h-10 w-full rounded-md border bg-paper px-3 text-sm"
+                          >
+                            <option value="in_progress">In progress</option>
+                            <option value="remediated">
+                              Remediated — ready for retest
+                            </option>
+                            <option value="partially_remediated">
+                              Partially remediated
+                            </option>
+                            <option value="not_remediated">
+                              Not remediated
+                            </option>
+                            <option value="risk_accepted">Risk accepted</option>
+                            <option value="open">Open</option>
+                          </select>
+                        </label>
+                        <label className="block text-xs font-medium text-slate-600">
+                          Owner
+                          <input
+                            name="owner"
+                            defaultValue={finding.clientOwner ?? ""}
+                            maxLength={200}
+                            className="mt-1 min-h-10 w-full rounded-md border px-3 text-sm"
+                          />
+                        </label>
+                        <label className="block text-xs font-medium text-slate-600">
+                          Update note
+                          <textarea
+                            name="note"
+                            rows={3}
+                            maxLength={5000}
+                            className="mt-1 w-full rounded-md border p-3 text-sm"
+                          />
+                        </label>
+                        <Button type="submit">Save update</Button>
+                      </form>
+                    )}
+                    {canWrite && (
+                      <form
+                        action={uploadRemediationEvidenceAction.bind(
+                          null,
+                          id,
+                          finding.id,
+                        )}
+                        className="space-y-3 rounded-lg border p-4"
+                      >
+                        <h4 className="text-sm font-semibold">
+                          Remediation evidence
+                        </h4>
+                        <p className="text-xs text-slate-500">
+                          Uploads are shared with your organisation and linked
+                          to this finding.
+                        </p>
                         <input
-                          name="owner"
-                          defaultValue={finding.clientOwner ?? ""}
-                          maxLength={200}
-                          className="mt-1 min-h-10 w-full rounded-md border px-3 text-sm"
+                          name="file"
+                          type="file"
+                          required
+                          className="block w-full text-xs file:mr-3 file:rounded-md file:border file:bg-paper file:px-3 file:py-2"
                         />
-                      </label>
-                      <label className="block text-xs font-medium text-slate-600">
-                        Update note
+                        <Button type="submit" variant="secondary">
+                          Upload evidence
+                        </Button>
+                      </form>
+                    )}
+                    {canWrite && (
+                      <form
+                        action={requestRetestAction.bind(null, id, finding.id)}
+                        className="space-y-3 rounded-lg border p-4"
+                      >
+                        <h4 className="flex items-center gap-2 text-sm font-semibold">
+                          <RefreshCcw className="size-4" /> Request retest
+                        </h4>
                         <textarea
                           name="note"
-                          rows={3}
+                          rows={2}
                           maxLength={5000}
-                          className="mt-1 w-full rounded-md border p-3 text-sm"
+                          placeholder="What changed and what should be verified?"
+                          className="w-full rounded-md border p-3 text-sm"
                         />
-                      </label>
-                      <Button type="submit">Save update</Button>
-                    </form>
-                    <form
-                      action={uploadRemediationEvidenceAction.bind(
-                        null,
-                        id,
-                        finding.id,
-                      )}
-                      className="space-y-3 rounded-lg border p-4"
-                    >
-                      <h4 className="text-sm font-semibold">
-                        Remediation evidence
-                      </h4>
-                      <p className="text-xs text-slate-500">
-                        Uploads are shared with your organisation and linked to
-                        this finding.
-                      </p>
-                      <input
-                        name="file"
-                        type="file"
-                        required
-                        className="block w-full text-xs file:mr-3 file:rounded-md file:border file:bg-paper file:px-3 file:py-2"
-                      />
-                      <Button type="submit" variant="secondary">
-                        Upload evidence
-                      </Button>
-                    </form>
-                    <form
-                      action={requestRetestAction.bind(null, id, finding.id)}
-                      className="space-y-3 rounded-lg border p-4"
-                    >
-                      <h4 className="flex items-center gap-2 text-sm font-semibold">
-                        <RefreshCcw className="size-4" /> Request retest
-                      </h4>
-                      <textarea
-                        name="note"
-                        rows={2}
-                        maxLength={5000}
-                        placeholder="What changed and what should be verified?"
-                        className="w-full rounded-md border p-3 text-sm"
-                      />
-                      <Button type="submit" variant="secondary">
-                        Request retest
-                      </Button>
-                    </form>
-                    <form
-                      action={addPortalCommentAction.bind(
-                        null,
-                        id,
-                        "finding",
-                        finding.id,
-                      )}
-                      className="space-y-3 rounded-lg border p-4"
-                    >
-                      <h4 className="flex items-center gap-2 text-sm font-semibold">
-                        <MessageSquare className="size-4" /> Add comment
-                      </h4>
-                      <textarea
-                        name="body"
-                        required
-                        rows={2}
-                        maxLength={5000}
-                        className="w-full rounded-md border p-3 text-sm"
-                      />
-                      <Button type="submit" variant="secondary">
-                        Post comment
-                      </Button>
-                    </form>
+                        <Button type="submit" variant="secondary">
+                          Request retest
+                        </Button>
+                      </form>
+                    )}
+                    {canWrite && (
+                      <form
+                        action={addPortalCommentAction.bind(
+                          null,
+                          id,
+                          "finding",
+                          finding.id,
+                        )}
+                        className="space-y-3 rounded-lg border p-4"
+                      >
+                        <h4 className="flex items-center gap-2 text-sm font-semibold">
+                          <MessageSquare className="size-4" /> Add comment
+                        </h4>
+                        <textarea
+                          name="body"
+                          required
+                          rows={2}
+                          maxLength={5000}
+                          className="w-full rounded-md border p-3 text-sm"
+                        />
+                        <Button type="submit" variant="secondary">
+                          Post comment
+                        </Button>
+                      </form>
+                    )}
                   </div>
                 </div>
               </article>
@@ -399,7 +411,8 @@ export default async function PortalEngagementPage({
                           : ""}
                       </p>
                     </div>
-                    {report.reportStatus === "client_review" &&
+                    {canWrite &&
+                      report.reportStatus === "client_review" &&
                       report.versionStatus === "client_review" && (
                         <form
                           action={approvePortalReportAction.bind(
@@ -429,7 +442,7 @@ export default async function PortalEngagementPage({
                       />
                     </div>
                   )}
-                  {report.versionStatus === "client_review" && (
+                  {canWrite && report.versionStatus === "client_review" && (
                     <form
                       action={addPortalCommentAction.bind(
                         null,

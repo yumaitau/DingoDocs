@@ -4,7 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import type { ReportTemplateDefinition } from "@/db/schema";
 import {
-  requireOrganisationContext,
+  requireInternalOrganisationContext,
   requirePermission,
 } from "@/lib/permissions/require";
 import {
@@ -20,12 +20,6 @@ import {
 } from "@/server/services/reports";
 
 const id = z.string().uuid();
-function values(formData: FormData) {
-  return Object.fromEntries(formData);
-}
-function actor(context: Awaited<ReturnType<typeof requirePermission>>) {
-  return { organisationId: context.organisationId, userId: context.userId };
-}
 
 export async function createReportTemplateAction(formData: FormData) {
   const context = await requirePermission("template:manage");
@@ -36,8 +30,8 @@ export async function createReportTemplateAction(formData: FormData) {
       definition: z.string().min(2).max(200_000),
       customCss: z.string().max(50_000).optional(),
     })
-    .parse(values(formData));
-  await createReportTemplate(actor(context), {
+    .parse(Object.fromEntries(formData));
+  await createReportTemplate(context, {
     name: input.name,
     clientId: input.clientId || undefined,
     definition: JSON.parse(input.definition) as ReportTemplateDefinition,
@@ -57,8 +51,8 @@ export async function reviseReportTemplateAction(
       definition: z.string().min(2).max(200_000),
       customCss: z.string().max(50_000).optional(),
     })
-    .parse(values(formData));
-  await reviseReportTemplate(actor(context), templateId, {
+    .parse(Object.fromEntries(formData));
+  await reviseReportTemplate(context, templateId, {
     definition: JSON.parse(input.definition) as ReportTemplateDefinition,
     customCss: input.customCss,
   });
@@ -72,11 +66,11 @@ export async function createReportAction(formData: FormData) {
       templateId: id,
       title: z.string().trim().min(2).max(240),
     })
-    .parse(values(formData));
+    .parse(Object.fromEntries(formData));
   const context = await requirePermission("finding:create", {
     engagementId: input.engagementId,
   });
-  await createReport(actor(context), input);
+  await createReport(context, input);
   revalidatePath("/reports");
 }
 
@@ -95,8 +89,8 @@ export async function transitionReportAction(
       ),
       comment: z.string().trim().max(4_000).optional(),
     })
-    .parse(values(formData));
-  const organisation = await requireOrganisationContext();
+    .parse(Object.fromEntries(formData));
+  const organisation = await requireInternalOrganisationContext();
   const workspace = await getReportWorkspace(
     organisation.organisationId,
     reportId,
@@ -114,7 +108,7 @@ export async function transitionReportAction(
   const context = await requirePermission(permission, {
     engagementId: workspace.report.engagementId,
   });
-  await transitionReport(actor(context), { reportId, ...input });
+  await transitionReport(context, { reportId, ...input });
   revalidatePath(`/reports/${reportId}`);
   revalidatePath("/reports");
 }
@@ -124,7 +118,7 @@ export async function queueReportGenerationAction(
   formData: FormData,
 ) {
   id.parse(reportId);
-  const organisation = await requireOrganisationContext();
+  const organisation = await requireInternalOrganisationContext();
   const workspace = await getReportWorkspace(
     organisation.organisationId,
     reportId,
@@ -139,7 +133,7 @@ export async function queueReportGenerationAction(
       reportFormats.includes(format as (typeof reportFormats)[number]),
     );
   await queueReportGeneration(
-    actor(context),
+    context,
     reportId,
     formats.length ? formats : [...reportFormats],
   );
@@ -148,7 +142,7 @@ export async function queueReportGenerationAction(
 
 export async function createReportRevisionAction(reportId: string) {
   id.parse(reportId);
-  const organisation = await requireOrganisationContext();
+  const organisation = await requireInternalOrganisationContext();
   const workspace = await getReportWorkspace(
     organisation.organisationId,
     reportId,
@@ -156,7 +150,7 @@ export async function createReportRevisionAction(reportId: string) {
   const context = await requirePermission("report:publish", {
     engagementId: workspace.report.engagementId,
   });
-  await createReportRevision(actor(context), reportId);
+  await createReportRevision(context, reportId);
   revalidatePath(`/reports/${reportId}`);
   revalidatePath("/reports");
 }

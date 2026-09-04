@@ -25,22 +25,11 @@ const id = z.string().uuid();
 const text = z.string().trim().min(1).max(10_000);
 const optionalText = z.string().trim().max(10_000).optional();
 
-function values(formData: FormData) {
-  return Object.fromEntries(formData);
-}
-
 function list(value: FormDataEntryValue | null) {
   return String(value ?? "")
     .split(/[\n,]/)
     .map((entry) => entry.trim())
     .filter(Boolean);
-}
-
-function actor(context: Awaited<ReturnType<typeof requirePermission>>) {
-  return {
-    organisationId: context.organisationId,
-    userId: context.userId,
-  };
 }
 
 function refresh(engagementId: string) {
@@ -55,8 +44,8 @@ export async function createScopeDraftAction(
   const context = await requirePermission("scope:manage", { engagementId });
   const input = z
     .object({ changeSummary: z.string().trim().min(3).max(500) })
-    .parse(values(formData));
-  await createScopeDraft(actor(context), { engagementId, ...input });
+    .parse(Object.fromEntries(formData));
+  await createScopeDraft(context, { engagementId, ...input });
   refresh(engagementId);
 }
 
@@ -78,8 +67,8 @@ export async function addScopeItemAction(
       testingRestrictions: optionalText,
       approvedMethods: z.string().optional(),
     })
-    .parse(values(formData));
-  await addScopeItem(actor(context), {
+    .parse(Object.fromEntries(formData));
+  await addScopeItem(context, {
     engagementId,
     ...input,
     approvedMethods: list(input.approvedMethods ?? ""),
@@ -95,8 +84,8 @@ export async function approveScopeVersionAction(
   const context = await requirePermission("scope:manage", { engagementId });
   const { scopeVersionId } = z
     .object({ scopeVersionId: id })
-    .parse(values(formData));
-  await approveScopeVersion(actor(context), { engagementId, scopeVersionId });
+    .parse(Object.fromEntries(formData));
+  await approveScopeVersion(context, { engagementId, scopeVersionId });
   refresh(engagementId);
 }
 
@@ -116,8 +105,8 @@ export async function updateScopeItemAction(
       exclusionReason: optionalText,
       testingRestrictions: optionalText,
     })
-    .parse(values(formData));
-  await updateScopeItem(actor(context), { engagementId, ...input });
+    .parse(Object.fromEntries(formData));
+  await updateScopeItem(context, { engagementId, ...input });
   refresh(engagementId);
 }
 
@@ -136,8 +125,8 @@ export async function createAssetAction(
       owner: z.string().trim().max(160).optional(),
       criticality: z.string().trim().max(40).optional(),
     })
-    .parse(values(formData));
-  await createAsset(actor(context), {
+    .parse(Object.fromEntries(formData));
+  await createAsset(context, {
     engagementId,
     ...input,
     scopeItemIds: formData.getAll("scopeItemIds").map(String),
@@ -162,8 +151,8 @@ export async function createRulesVersionAction(
       evidenceHandling: text,
       dataDestruction: text,
     })
-    .parse(values(formData));
-  await createRulesVersion(actor(context), {
+    .parse(Object.fromEntries(formData));
+  await createRulesVersion(context, {
     engagementId,
     ...input,
     sourceIpAddresses: list(input.sourceIpAddresses ?? ""),
@@ -179,8 +168,10 @@ export async function approveRulesAction(
 ) {
   id.parse(engagementId);
   const context = await requirePermission("engagement:edit", { engagementId });
-  const { rulesId } = z.object({ rulesId: id }).parse(values(formData));
-  await approveRules(actor(context), { engagementId, rulesId });
+  const { rulesId } = z
+    .object({ rulesId: id })
+    .parse(Object.fromEntries(formData));
+  await approveRules(context, { engagementId, rulesId });
   refresh(engagementId);
 }
 
@@ -190,8 +181,10 @@ export async function acknowledgeRulesAction(
 ) {
   id.parse(engagementId);
   const context = await requirePermission("scope:manage", { engagementId });
-  const { rulesId } = z.object({ rulesId: id }).parse(values(formData));
-  await acknowledgeRules(actor(context), { engagementId, rulesId });
+  const { rulesId } = z
+    .object({ rulesId: id })
+    .parse(Object.fromEntries(formData));
+  await acknowledgeRules(context, { engagementId, rulesId });
   refresh(engagementId);
 }
 
@@ -200,7 +193,9 @@ export async function assignEngagementMemberAction(
   formData: FormData,
 ) {
   id.parse(engagementId);
-  const context = await requirePermission("engagement:edit", { engagementId });
+  const context = await requirePermission("engagement:manage_members", {
+    engagementId,
+  });
   const input = z
     .object({
       userId: id,
@@ -212,8 +207,8 @@ export async function assignEngagementMemberAction(
         "read_only",
       ]),
     })
-    .parse(values(formData));
-  await assignEngagementMember(actor(context), { engagementId, ...input });
+    .parse(Object.fromEntries(formData));
+  await assignEngagementMember(context, { engagementId, ...input });
   refresh(engagementId);
 }
 
@@ -230,8 +225,8 @@ export async function createWorkspaceNoteAction(
       kind: z.enum(["note", "testing_journal"]),
       visibility: z.enum(["private", "team", "client"]),
     })
-    .parse(values(formData));
-  await createWorkspaceNote(actor(context), {
+    .parse(Object.fromEntries(formData));
+  await createWorkspaceNote(context, {
     engagementId,
     ...input,
     assetIds: formData.getAll("assetIds").map(String),
@@ -253,8 +248,8 @@ export async function createTimelineEntryAction(
       commands: optionalText,
       clientVisible: z.string().optional(),
     })
-    .parse(values(formData));
-  await createTimelineEntry(actor(context), {
+    .parse(Object.fromEntries(formData));
+  await createTimelineEntry(context, {
     engagementId,
     ...input,
     occurredAt: parseDateTimeInTimeZone(input.occurredAt, context.timeZone),
@@ -277,8 +272,8 @@ export async function createWorkspaceTaskAction(
       assigneeId: z.union([id, z.literal("")]).optional(),
       dueAt: z.string().optional(),
     })
-    .parse(values(formData));
-  await createWorkspaceTask(actor(context), {
+    .parse(Object.fromEntries(formData));
+  await createWorkspaceTask(context, {
     engagementId,
     ...input,
     assigneeId: input.assigneeId || undefined,
@@ -304,8 +299,8 @@ export async function logWorkspaceTimeAction(
       startedAt: z.string().datetime({ local: true }),
       billable: z.string().optional(),
     })
-    .parse(values(formData));
-  await logWorkspaceTime(actor(context), {
+    .parse(Object.fromEntries(formData));
+  await logWorkspaceTime(context, {
     engagementId,
     ...input,
     startedAt: parseDateTimeInTimeZone(input.startedAt, context.timeZone),
@@ -339,7 +334,7 @@ export async function transitionEngagementAction(
       ]),
       reason: z.string().trim().max(500).optional(),
     })
-    .parse(values(formData));
-  await transitionEngagement(actor(context), { engagementId, ...input });
+    .parse(Object.fromEntries(formData));
+  await transitionEngagement(context, { engagementId, ...input });
   refresh(engagementId);
 }

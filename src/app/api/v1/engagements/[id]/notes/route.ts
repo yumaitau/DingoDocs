@@ -6,6 +6,7 @@ import { notes } from "@/db/schema";
 import { apiReadContext, apiWriteContext } from "@/lib/api/authentication";
 import { apiError } from "@/lib/api/responses";
 import { createWorkspaceNote } from "@/server/services/engagement-workspace";
+import { visibleToAuthor } from "@/lib/permissions/visibility";
 
 const createSchema = z.object({
   title: z.string().trim().min(1).max(240),
@@ -31,6 +32,13 @@ export async function GET(
         and(
           eq(notes.organisationId, principal.organisationId),
           eq(notes.engagementId, id),
+          visibleToAuthor(
+            notes.visibility,
+            notes.authorId,
+            "serviceAccountId" in principal && principal.serviceAccountId
+              ? undefined
+              : principal.userId,
+          ),
           isNull(notes.deletedAt),
         ),
       )

@@ -21,6 +21,8 @@ import {
   users,
 } from "@/db/schema";
 import type { Role } from "@/lib/permissions/matrix";
+import { requireActorPermission } from "@/lib/permissions/require";
+import { visibleToAuthor } from "@/lib/permissions/visibility";
 
 export type WorkspaceActor = {
   organisationId: string;
@@ -510,6 +512,9 @@ export async function assignEngagementMember(
   actor: WorkspaceActor,
   input: { engagementId: string; userId: string; role: Role },
 ) {
+  await requireActorPermission(actor, "engagement:manage_members", {
+    engagementId: input.engagementId,
+  });
   if (
     !engagementRoles.includes(input.role as (typeof engagementRoles)[number])
   ) {
@@ -520,7 +525,10 @@ export async function assignEngagementMember(
   return db.transaction(async (tx) => {
     await requireEngagement(tx, actor, input.engagementId);
     const [membership] = await tx
-      .select({ userId: organisationMembers.userId })
+      .select({
+        userId: organisationMembers.userId,
+        role: organisationMembers.role,
+      })
       .from(organisationMembers)
       .where(
         and(
@@ -532,6 +540,13 @@ export async function assignEngagementMember(
       .limit(1);
     if (!membership)
       throw new WorkspaceScopeError("User is not an active member");
+    if (
+      membership.role === "client_user" ||
+      membership.role === "client_administrator"
+    )
+      throw new WorkspaceScopeError(
+        "Client accounts must use portal access grants",
+      );
     const [assigned] = await tx
       .insert(engagementMembers)
       .values({
@@ -832,7 +847,7 @@ export async function transitionEngagement(
 }
 
 export async function getEngagementWorkspace(
-  actor: Pick<WorkspaceActor, "organisationId">,
+  actor: WorkspaceActor,
   engagementId: string,
 ) {
   const engagement = await db
@@ -949,6 +964,7 @@ export async function getEngagementWorkspace(
         and(
           eq(notes.organisationId, actor.organisationId),
           eq(notes.engagementId, engagementId),
+          visibleToAuthor(notes.visibility, notes.authorId, actor.userId),
           isNull(notes.deletedAt),
         ),
       )
