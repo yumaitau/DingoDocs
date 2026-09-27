@@ -28,6 +28,8 @@ export type ReportSectionDefinition = {
     | "executive_summary"
     | "reusable_content"
     | "prose"
+    | "code"
+    | "image"
     | "findings"
     | "scope"
     | "assets"
@@ -50,7 +52,14 @@ export type ReportSectionDefinition = {
   condition?: ReportCondition;
   options?: Record<string, string | number | boolean>;
 };
+export type ReportExam = {
+  type: "osai";
+  osid: string;
+  candidateName: string;
+  candidateEmail: string;
+};
 export type ReportTemplateDefinition = {
+  exam?: ReportExam;
   sections: ReportSectionDefinition[];
   reusableContent?: Record<string, string>;
   variables?: Record<string, string>;

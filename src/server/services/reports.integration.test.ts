@@ -321,6 +321,112 @@ run("report engine with PostgreSQL and storage fixtures", () => {
     ).toMatchObject({ immutable: true, status: "superseded" });
   });
 
+  it("saves authored drafts, rejects stale or inaccessible edits, and invalidates exports", async () => {
+    const template = await modules.createReportTemplate(author, {
+      name: "Editable layout",
+      definition: definition(),
+    });
+    const created = await modules.createReport(author, {
+      engagementId: ids.engagement,
+      templateId: template!.id,
+      title: "Editable assessment",
+    });
+    const draftId = created.report!.id;
+    const draftVersion = created.version!.id;
+    const edited = {
+      ...definition(),
+      sections: [
+        {
+          id: "commands",
+          type: "code" as const,
+          title: "Commands",
+          content: 'echo "{{literal}}"\n  whoami',
+        },
+      ],
+    };
+    const input = {
+      versionId: draftVersion,
+      expectedRevision: "initial",
+      definition: edited,
+    };
+    await expect(
+      modules.saveReportDraft(
+        { ...author, organisationId: ids.orgB },
+        draftId,
+        input,
+      ),
+    ).rejects.toBeInstanceOf(modules.ReportScopeError);
+    const saved = await modules.saveReportDraft(author, draftId, input);
+    expect(saved.sections[0].content).toBe('echo "{{literal}}"\n  whoami');
+    expect(saved.findings).toEqual(created.model.findings);
+    await expect(
+      modules.saveReportDraft(author, draftId, input),
+    ).rejects.toThrow("another window");
+    await modules.queueReportGeneration(author, draftId, ["html"]);
+    await expect(
+      modules.saveReportDraft(author, draftId, {
+        ...input,
+        expectedRevision: saved.editRevision!,
+      }),
+    ).rejects.toThrow("generation to finish");
+    await modules.generateReportJob(draftVersion, ["html"], provider);
+    // A repeat generation must enqueue a new job, not collide with a completed attempt.
+    await modules.queueReportGeneration(author, draftId, ["html"]);
+    const jobs = await modules.db
+      .select()
+      .from(modules.backgroundJobs)
+      .where(modules.eq(modules.backgroundJobs.organisationId, ids.orgA));
+    expect(
+      jobs.filter(
+        (job) =>
+          (job.payload as { reportVersionId?: string }).reportVersionId ===
+          draftVersion,
+      ),
+    ).toHaveLength(2);
+    await modules.generateReportJob(draftVersion, ["html"], provider);
+    const editedAgain = await modules.saveReportDraft(author, draftId, {
+      ...input,
+      expectedRevision: saved.editRevision!,
+    });
+    const workspace = await modules.getReportWorkspace(ids.orgA, draftId);
+    expect(workspace.current.exportKeys).toEqual({});
+    expect(workspace.current.renderStatus).toBe("not_requested");
+    await expect(
+      modules.getReportExport(author, {
+        reportVersionId: draftVersion,
+        format: "html",
+      }),
+    ).rejects.toThrow();
+    await modules.transitionReport(author, {
+      reportId: draftId,
+      toStatus: "internal_review",
+    });
+    await expect(
+      modules.saveReportDraft(author, draftId, {
+        ...input,
+        expectedRevision: editedAgain.editRevision!,
+      }),
+    ).rejects.toThrow("Only draft");
+    await modules.queueReportGeneration(author, draftId, ["html"]);
+    await modules.generateReportJob(draftVersion, ["html"], provider);
+    await modules.transitionReport(qa, {
+      reportId: draftId,
+      toStatus: "qa_approved",
+    });
+    await modules.transitionReport(approver, {
+      reportId: draftId,
+      toStatus: "approved",
+    });
+    await modules.transitionReport(approver, {
+      reportId: draftId,
+      toStatus: "published",
+    });
+    const revision = await modules.createReportRevision(author, draftId);
+    expect((revision!.content as { sections: unknown }).sections).toEqual(
+      editedAgain.sections,
+    );
+  });
+
   it("audits export/download history and rejects cross-tenant records", async () => {
     const original = (
       await modules.getReportWorkspace(ids.orgA, reportId)

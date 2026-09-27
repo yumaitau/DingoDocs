@@ -35,6 +35,55 @@ describe("report renderers", () => {
     expect(docx.byteLength).toBeGreaterThan(2_000);
   });
 
+  it("keeps commands literal and embeds screenshots in exam exports", async () => {
+    const report = model();
+    const png =
+      "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+a3ioAAAAASUVORK5CYII=";
+    report.exam = {
+      type: "osai",
+      osid: "OS-123456",
+      candidateName: "Exam Demo",
+      candidateEmail: "demo@example.test",
+    };
+    const code = 'printf "{{literal}} <script> & value\\n"\n  whoami\n```';
+    report.sections = [
+      report.sections[0],
+      {
+        definition: { id: "code", type: "code", title: "Commands" },
+        content: code,
+      },
+      {
+        definition: {
+          id: "image",
+          type: "image",
+          title: "Proof",
+          options: { imageDataUri: png },
+        },
+        content: "Test screenshot",
+      },
+    ];
+    const html = renderReportHtml(report);
+    expect(html).toContain("OS-123456");
+    expect(html).toContain("&lt;script&gt;");
+    expect(html).toContain(png);
+    expect(html).not.toContain("<script>");
+    expect(renderReportMarkdown(report)).toContain(code);
+    expect(renderReportMarkdown(report)).toContain("````");
+    report.signatures = [];
+    report.sections = report.sections.filter(
+      (section) => section.definition.type !== "cover",
+    );
+    const pdf = await renderReport(report, "pdf");
+    expect(
+      Buffer.from(pdf)
+        .toString("latin1")
+        .match(/\/Type \/Page\b/g),
+    ).toHaveLength(1);
+    expect(Buffer.from(pdf).toString("latin1")).toContain("/Subtype /Image");
+    const docx = await renderReport(report, "docx");
+    expect(Buffer.from(docx).toString("latin1")).toContain("word/media/");
+  });
+
   it("renders a white-label pentest report without product branding", async () => {
     const report = model();
     report.whiteLabel = true;

@@ -1,4 +1,5 @@
 import { Download, Eye, FileOutput, GitBranch } from "lucide-react";
+import Link from "next/link";
 import { notFound } from "next/navigation";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
@@ -8,6 +9,9 @@ import {
   assertEngagementAccess,
   requireOrganisationContext,
 } from "@/lib/permissions/require";
+import { osaiFileStem, osaiReadiness } from "@/lib/reports/layout";
+import { OSAI_GUIDE_URL } from "@/lib/reports/osai-template";
+import type { ReportDocumentModel } from "@/server/services/report-renderers";
 import { formatDateTime } from "@/lib/time-zone";
 import {
   createReportRevisionAction,
@@ -45,6 +49,22 @@ export default async function ReportPage({
     throw error;
   }
   const { report, current, versions, transitions } = workspace;
+  const model = current.content as ReportDocumentModel;
+  const exam = model.exam;
+  const examIssues = exam
+    ? osaiReadiness(
+        model.sections.map((s) => ({ ...s.definition, content: s.content })),
+        exam.osid,
+      )
+    : [];
+  let examStem = "OSAI-OS-XXXXX-Exam-Report";
+  if (exam) {
+    try {
+      examStem = osaiFileStem(exam.osid);
+    } catch {
+      /* shown in readiness issues */
+    }
+  }
   return (
     <>
       <PageHeader
@@ -56,6 +76,12 @@ export default async function ReportPage({
         ]}
         actions={
           <>
+            {!current.immutable &&
+              ["draft", "changes_requested"].includes(current.status) && (
+                <Button asChild>
+                  <Link href={`/reports/${id}/edit`}>Write report</Link>
+                </Button>
+              )}
             <StatusPill
               tone={report.status === "published" ? "success" : "info"}
             >
@@ -76,6 +102,46 @@ export default async function ReportPage({
       />
       <div className="grid gap-6 px-4 py-6 sm:px-6 lg:px-8 xl:grid-cols-[minmax(0,1fr)_380px]">
         <div className="space-y-6">
+          {exam && (
+            <section className="rounded-xl border border-sky-200 bg-sky-50 p-5 text-slate-900">
+              <h2 className="font-semibold">OSAI submission preparation</h2>
+              <p className="mt-2 text-sm">
+                {exam.candidateName} · {exam.osid || "OSID not entered"} ·{" "}
+                {exam.candidateEmail}
+              </p>
+              {examIssues.length > 0 && (
+                <ul className="mt-3 list-disc space-y-1 pl-5 text-sm">
+                  {examIssues.map((issue) => (
+                    <li key={issue}>{issue}</li>
+                  ))}
+                </ul>
+              )}
+              <p className="mt-3 text-sm">
+                Save edits, generate the PDF below and inspect every page.
+                Commands and queries must be selectable text; screenshots
+                support each attack stage. The checklist cannot verify
+                completeness or guarantee a score.
+              </p>
+              <p className="mt-3 text-sm">
+                On Kali, create an unencrypted archive containing only your PDF.
+                Keep the archive under 100 MB and submit within 24 hours after
+                the exam ends.
+              </p>
+              <pre className="mt-3 overflow-x-auto rounded bg-white p-3 text-xs">{`7z a ${examStem}.7z ${examStem}.pdf\n7z l ${examStem}.7z\nstat -c %s ${examStem}.7z\nmd5sum ${examStem}.7z`}</pre>
+              <p className="mt-2 text-sm">
+                Compare the local archive MD5 with the portal hash after upload.{" "}
+                <a
+                  className="underline"
+                  href={OSAI_GUIDE_URL}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  Check the current OffSec guide
+                </a>{" "}
+                before final submission.
+              </p>
+            </section>
+          )}
           <section className="rounded-xl border bg-paper p-5">
             <div className="flex items-center gap-2">
               <FileOutput className="size-4" />

@@ -1,4 +1,4 @@
-import type { Page } from "@playwright/test";
+import { test, type Page } from "@playwright/test";
 import { approvedE2EBaseURL } from "../../../src/test/e2e-origin";
 
 export const adminCredentials = {
@@ -11,21 +11,35 @@ export async function signIn(page: Page) {
   approvedE2EBaseURL(page.url());
   await page.getByLabel("Email").fill(adminCredentials.email);
   await page.getByLabel("Password").fill(adminCredentials.password);
-  const signInResponsePromise = page.waitForResponse(
-    (response) =>
-      response.request().method() === "POST" &&
-      response.url().endsWith("/api/auth/sign-in/email"),
-  );
-  const dashboardNavigationPromise = page.waitForURL(/\/dashboard/, {
-    waitUntil: "domcontentloaded",
-  });
-  await page.getByRole("button", { name: "Sign in", exact: true }).click();
-  const signInResponse = await signInResponsePromise;
-  if (!signInResponse.ok())
-    throw new Error(
-      `Sign-in failed with ${signInResponse.status()}: ${await signInResponse.text()}`,
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const responsePromise = page.waitForResponse(
+      (response) =>
+        response.request().method() === "POST" &&
+        response.url().endsWith("/api/auth/sign-in/email"),
     );
-  await dashboardNavigationPromise;
+    await page.getByRole("button", { name: "Sign in", exact: true }).click();
+    const response = await responsePromise;
+    const retryAfter = Number(response.headers()["retry-after"] ?? 60);
+    // Full browser suites can exceed the real IP rate limit. Respect its
+    // advertised cooldown once (or the configured 60-second window when
+    // Better Auth omits Retry-After); never bypass it or retry account lockouts.
+    if (
+      attempt === 0 &&
+      response.status() === 429 &&
+      retryAfter > 0 &&
+      retryAfter <= 60
+    ) {
+      test.setTimeout(test.info().timeout + (retryAfter + 5) * 1_000);
+      await page.waitForTimeout((retryAfter + 1) * 1_000);
+      continue;
+    }
+    if (!response.ok())
+      throw new Error(
+        `Sign-in failed with ${response.status()}: ${await response.text()}`,
+      );
+    await page.waitForURL(/\/dashboard/, { waitUntil: "domcontentloaded" });
+    return;
+  }
 }
 
 export async function signInWithoutFormInput(page: Page, baseURL: string) {
