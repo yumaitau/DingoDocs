@@ -65,7 +65,6 @@ export function authProviderConfiguration(
       env.OIDC_CLIENT_ID,
       env.OIDC_CLIENT_SECRET,
       env.OIDC_DISCOVERY_URL,
-      env.OIDC_ISSUER,
     ])
   ) {
     const providerId = env.OIDC_PROVIDER_ID?.trim() || "oidc";
@@ -78,8 +77,7 @@ export function authProviderConfiguration(
       clientId: env.OIDC_CLIENT_ID!,
       clientSecret: env.OIDC_CLIENT_SECRET!,
       discoveryUrl: env.OIDC_DISCOVERY_URL!,
-      issuer: env.OIDC_ISSUER!,
-      requireIssuerValidation: true,
+      requireIdTokenVerification: true,
       pkce: true,
       scopes: (env.OIDC_SCOPES ?? "openid profile email")
         .split(/[ ,]+/)

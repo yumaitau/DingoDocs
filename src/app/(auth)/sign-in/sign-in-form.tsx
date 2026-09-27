@@ -52,16 +52,10 @@ export function SignInForm({ providers }: { providers: PublicAuthProvider[] }) {
   async function signInWithProvider(provider: PublicAuthProvider) {
     setPending(true);
     setError("");
-    const result =
-      provider.protocol === "social"
-        ? await authClient.signIn.social({
-            provider: provider.id as "google" | "github",
-            callbackURL,
-          })
-        : await authClient.signIn.oauth2({
-            providerId: provider.id,
-            callbackURL,
-          });
+    const result = await authClient.signIn.social({
+      provider: provider.id,
+      callbackURL,
+    });
     setPending(false);
     if (result.error)
       setError(
