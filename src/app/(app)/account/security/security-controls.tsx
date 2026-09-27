@@ -28,7 +28,8 @@ export function SecurityControls() {
       password: String(formData.get("password")),
     });
     setPending(false);
-    if (result.data?.backupCodes) setRecoveryCodes(result.data.backupCodes);
+    if (result.data?.method === "totp")
+      setRecoveryCodes(result.data.backupCodes);
     setMessage(
       result.error
         ? (result.error.message ?? "MFA enrolment failed")

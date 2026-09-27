@@ -10,7 +10,15 @@ import {
   twoFactor,
 } from "better-auth/plugins";
 import { db } from "@/db";
-import { auditEvents } from "@/db/schema";
+import {
+  accounts,
+  auditEvents,
+  passkeys,
+  sessions,
+  twoFactor as twoFactorRecords,
+  users,
+  verificationTokens,
+} from "@/db/schema";
 import { sendAuthenticationEmail } from "@/lib/email/send";
 import { authProviderConfiguration } from "@/lib/auth/providers";
 import { DEFAULT_TIME_ZONE } from "@/lib/time-zone";
@@ -34,7 +42,17 @@ export const auth = betterAuth({
     .split(",")
     .map((origin) => origin.trim())
     .filter(Boolean),
-  database: drizzleAdapter(db, { provider: "pg", usePlural: true }),
+  database: drizzleAdapter(db, {
+    provider: "pg",
+    schema: {
+      user: users,
+      session: sessions,
+      account: accounts,
+      verificationTokens,
+      passkeys,
+      twoFactor: twoFactorRecords,
+    },
+  }),
   user: {
     additionalFields: {
       timeZone: {

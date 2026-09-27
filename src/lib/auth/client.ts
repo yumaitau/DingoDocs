@@ -3,7 +3,6 @@
 import { createAuthClient } from "better-auth/react";
 import {
   adminClient,
-  genericOAuthClient,
   magicLinkClient,
   twoFactorClient,
 } from "better-auth/client/plugins";
@@ -15,7 +14,6 @@ export const authClient = createAuthClient({
     magicLinkClient(),
     twoFactorClient(),
     passkeyClient(),
-    genericOAuthClient(),
     adminClient(),
   ],
 });

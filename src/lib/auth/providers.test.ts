@@ -9,11 +9,10 @@ describe("server-side authentication providers", () => {
       GITHUB_CLIENT_ID: "incomplete",
       ENTRA_CLIENT_ID: "entra-id",
       ENTRA_CLIENT_SECRET: "entra-secret",
-      ENTRA_TENANT_ID: "tenant-id",
+      ENTRA_TENANT_ID: "11111111-2222-3333-4444-555555555555",
       OIDC_CLIENT_ID: "oidc-id",
       OIDC_CLIENT_SECRET: "oidc-secret",
       OIDC_DISCOVERY_URL: "https://id.example/.well-known/openid-configuration",
-      OIDC_ISSUER: "https://id.example",
       OIDC_PROVIDER_ID: "corporate-sso",
       OIDC_PROVIDER_LABEL: "Corporate SSO",
     });
@@ -30,6 +29,12 @@ describe("server-side authentication providers", () => {
       },
       { id: "corporate-sso", label: "Corporate SSO", protocol: "oauth2" },
     ]);
+    expect(configured.oauthProviders[1]).toMatchObject({
+      discoveryUrl: "https://id.example/.well-known/openid-configuration",
+      requireIdTokenVerification: true,
+      pkce: true,
+      scopes: ["openid", "profile", "email"],
+    });
     expect(JSON.stringify(configured.publicProviders)).not.toContain("secret");
   });
 
@@ -40,7 +45,6 @@ describe("server-side authentication providers", () => {
         OIDC_CLIENT_SECRET: "secret",
         OIDC_DISCOVERY_URL:
           "https://id.example/.well-known/openid-configuration",
-        OIDC_ISSUER: "https://id.example",
         OIDC_PROVIDER_ID: "../../callback",
       }),
     ).toThrow("URL-safe");
