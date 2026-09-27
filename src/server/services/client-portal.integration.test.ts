@@ -80,7 +80,7 @@ run("restricted client portal and retest lifecycle with PostgreSQL", () => {
       {
         organisationId: ids.orgA,
         userId: ids.tester,
-        role: "lead_consultant",
+        role: "engagement_manager",
       },
       {
         organisationId: ids.orgB,
@@ -123,6 +123,12 @@ run("restricted client portal and retest lifecycle with PostgreSQL", () => {
         type: "API",
       },
     ]);
+    await modules.db.insert(modules.engagementMembers).values({
+      organisationId: ids.orgA,
+      engagementId: ids.engagementA,
+      userId: ids.tester,
+      role: "engagement_manager",
+    });
     await modules.db.insert(modules.clientContacts).values([
       {
         id: ids.contactA,
