@@ -2,12 +2,14 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
+import { MAX_LAYOUT_LENGTH } from "@/lib/reports/layout";
 import type { ReportTemplateDefinition } from "@/db/schema";
 import {
   requireInternalOrganisationContext,
   requirePermission,
 } from "@/lib/permissions/require";
 import {
+  saveReportDraft,
   createReport,
   createReportRevision,
   createReportTemplate,
@@ -27,17 +29,18 @@ export async function createReportTemplateAction(formData: FormData) {
     .object({
       name: z.string().trim().min(2).max(200),
       clientId: z.union([id, z.literal("")]).optional(),
-      definition: z.string().min(2).max(200_000),
+      definition: z.string().min(2).max(MAX_LAYOUT_LENGTH),
       customCss: z.string().max(50_000).optional(),
     })
     .parse(Object.fromEntries(formData));
-  await createReportTemplate(context, {
+  const template = await createReportTemplate(context, {
     name: input.name,
     clientId: input.clientId || undefined,
     definition: JSON.parse(input.definition) as ReportTemplateDefinition,
     customCss: input.customCss,
   });
   revalidatePath("/templates");
+  return { href: `/templates/${template!.id}` };
 }
 
 export async function reviseReportTemplateAction(
@@ -48,15 +51,16 @@ export async function reviseReportTemplateAction(
   const context = await requirePermission("template:manage");
   const input = z
     .object({
-      definition: z.string().min(2).max(200_000),
+      definition: z.string().min(2).max(MAX_LAYOUT_LENGTH),
       customCss: z.string().max(50_000).optional(),
     })
     .parse(Object.fromEntries(formData));
-  await reviseReportTemplate(context, templateId, {
+  const revision = await reviseReportTemplate(context, templateId, {
     definition: JSON.parse(input.definition) as ReportTemplateDefinition,
     customCss: input.customCss,
   });
   revalidatePath("/templates");
+  return { href: `/templates/${revision!.id}` };
 }
 
 export async function createReportAction(formData: FormData) {
@@ -153,4 +157,33 @@ export async function createReportRevisionAction(reportId: string) {
   await createReportRevision(context, reportId);
   revalidatePath(`/reports/${reportId}`);
   revalidatePath("/reports");
+}
+
+export async function saveReportDraftAction(
+  reportId: string,
+  formData: FormData,
+) {
+  id.parse(reportId);
+  const organisation = await requireInternalOrganisationContext();
+  const workspace = await getReportWorkspace(
+    organisation.organisationId,
+    reportId,
+  );
+  const context = await requirePermission("finding:create", {
+    engagementId: workspace.report.engagementId,
+  });
+  const input = z
+    .object({
+      versionId: id,
+      expectedRevision: z.string().max(100),
+      definition: z.string().max(MAX_LAYOUT_LENGTH),
+      customCss: z.string().max(50_000).optional(),
+    })
+    .parse(Object.fromEntries(formData));
+  await saveReportDraft(context, reportId, {
+    ...input,
+    definition: JSON.parse(input.definition),
+  });
+  revalidatePath(`/reports/${reportId}`);
+  revalidatePath(`/reports/${reportId}/edit`);
 }

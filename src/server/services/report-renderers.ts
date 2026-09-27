@@ -1,3 +1,5 @@
+import { readFile } from "node:fs/promises";
+import { join } from "node:path";
 import "server-only";
 
 import {
@@ -7,6 +9,7 @@ import {
   Footer,
   Header,
   HeadingLevel,
+  ImageRun,
   Packer,
   PageBreak,
   PageNumber,
@@ -20,7 +23,13 @@ import {
   WidthType,
 } from "docx";
 import PDFDocument from "pdfkit";
-import type { ReportFormat, ReportSectionDefinition } from "@/db/schema";
+import sharp from "sharp";
+import { safeReportImage } from "@/lib/reports/layout";
+import type {
+  ReportExam,
+  ReportFormat,
+  ReportSectionDefinition,
+} from "@/db/schema";
 import { logoBytes } from "@/lib/reports/branding";
 
 export type ReportFindingModel = {
@@ -37,6 +46,8 @@ export type ReportFindingModel = {
 };
 
 export type ReportDocumentModel = {
+  exam?: ReportExam;
+  editRevision?: string;
   reportId: string;
   reportVersionId: string;
   version: number;
@@ -152,6 +163,11 @@ export function renderReportMarkdown(model: ReportDocumentModel) {
     `**Classification:** ${model.classification}`,
     "",
   ];
+  if (model.exam)
+    output.push(
+      `**Candidate:** ${model.exam.candidateName} | ${model.exam.candidateEmail} | ${model.exam.osid}`,
+      "",
+    );
   for (const { definition, content } of model.sections) {
     if (definition.type === "page_break") {
       output.push("---", "");
@@ -159,7 +175,19 @@ export function renderReportMarkdown(model: ReportDocumentModel) {
     }
     if (definition.type === "cover") continue;
     output.push(`## ${definition.title ?? titleFor(definition.type)}`, "");
-    if (content) output.push(content, "");
+    if (definition.type === "code") {
+      const fence = "`".repeat(
+        Math.max(
+          3,
+          ...((content ?? "").match(/`+/g) ?? []).map((run) => run.length + 1),
+        ),
+      );
+      output.push(fence, content ?? "", fence, "");
+    } else if (content) output.push(content, "");
+    if (definition.type === "image") {
+      const image = safeReportImage(definition.options?.imageDataUri);
+      if (image) output.push(`![Screenshot](${image})`, "");
+    }
     if (definition.type === "findings")
       for (const finding of model.findings)
         output.push(
@@ -237,7 +265,7 @@ export function renderReportMarkdown(model: ReportDocumentModel) {
 async function renderReportPdf(model: ReportDocumentModel) {
   const document = new PDFDocument({
     size: "LETTER",
-    margins: { top: 72, right: 72, bottom: 72, left: 72 },
+    margins: { top: 72, right: 72, bottom: 90, left: 72 },
     bufferPages: true,
     autoFirstPage: false,
     info: {
@@ -246,6 +274,12 @@ async function renderReportPdf(model: ReportDocumentModel) {
       Subject: model.engagementName,
     },
   });
+  document.registerFont(
+    "ReportCode",
+    await readFile(
+      join(process.cwd(), "public/fonts/NotoSansMono-Regular.ttf"),
+    ),
+  );
   const chunks: Buffer[] = [];
   document.on("data", (chunk: Buffer) => chunks.push(chunk));
   const completed = new Promise<Buffer>((resolve, reject) => {
@@ -300,6 +334,19 @@ async function renderReportPdf(model: ReportDocumentModel) {
         .font("Helvetica")
         .fontSize(14)
         .text(`${model.clientName} | ${model.engagementReference}`);
+      if (model.exam)
+        document
+          .moveDown()
+          .fontSize(12)
+          .text(
+            [
+              model.exam.candidateName,
+              model.exam.candidateEmail,
+              model.exam.osid,
+            ]
+              .filter(Boolean)
+              .join("\n"),
+          );
       if (model.startDate || model.endDate)
         document
           .moveDown(0.4)
@@ -334,7 +381,30 @@ async function renderReportPdf(model: ReportDocumentModel) {
       .fillColor("#263746")
       .font("Helvetica")
       .fontSize(10.5);
-    if (content) document.text(content, { paragraphGap: 8 });
+    if (definition.type === "code") {
+      document
+        .font("ReportCode")
+        .fontSize(9)
+        .text(content ?? "", {
+          paragraphGap: 0,
+          lineGap: 2,
+        });
+      document.font("Helvetica").fontSize(model.theme.bodySize);
+    } else if (definition.type === "image") {
+      const image = await reportImage(definition.options?.imageDataUri);
+      if (image) {
+        const scale = Math.min(468 / image.width, 430 / image.height, 1);
+        const height = image.height * scale;
+        ensurePdfSpace(document, height + 40);
+        const y = document.y;
+        document.image(image.bytes, 72, y, {
+          width: image.width * scale,
+          height,
+        });
+        document.y = y + height + 10;
+      }
+      if (content) document.text(content, { paragraphGap: 8 });
+    } else if (content) document.text(content, { paragraphGap: 8 });
     renderPdfDataSection(document, model, definition.type, primary, accent);
   }
   if (model.signatures.length) {
@@ -360,6 +430,9 @@ async function renderReportPdf(model: ReportDocumentModel) {
   const range = document.bufferedPageRange();
   for (let page = range.start; page < range.start + range.count; page++) {
     document.switchToPage(page);
+    // Footer coordinates lie outside the reserved body area. Do not let
+    // PDFKit paginate these fixed-position labels onto extra blank pages.
+    document.page.margins.bottom = 0;
     if (model.theme.watermark)
       document
         .save()
@@ -469,6 +542,18 @@ async function renderReportDocx(model: ReportDocumentModel) {
           ],
         }),
       );
+      if (model.exam)
+        children.push(
+          new Paragraph({
+            text: [
+              model.exam.candidateName,
+              model.exam.candidateEmail,
+              model.exam.osid,
+            ]
+              .filter(Boolean)
+              .join(" | "),
+          }),
+        );
       children.push(
         new Paragraph({
           alignment: AlignmentType.CENTER,
@@ -491,7 +576,42 @@ async function renderReportDocx(model: ReportDocumentModel) {
         pageBreakBefore: definition.options?.pageBreakBefore === true,
       }),
     );
-    if (content) children.push(new Paragraph({ text: content }));
+    if (definition.type === "code") {
+      for (const line of (content ?? "").split("\n"))
+        children.push(
+          new Paragraph({
+            children: [
+              new TextRun({ text: line || " ", font: "Courier New", size: 18 }),
+            ],
+            spacing: { after: 0, line: 240 },
+          }),
+        );
+    } else if (definition.type === "image") {
+      const image = await reportImage(definition.options?.imageDataUri);
+      if (image) {
+        const scale = Math.min(600 / image.width, 550 / image.height, 1);
+        children.push(
+          new Paragraph({
+            children: [
+              new ImageRun({
+                type: image.type,
+                data: image.bytes,
+                transformation: {
+                  width: Math.round(image.width * scale),
+                  height: Math.round(image.height * scale),
+                },
+                altText: {
+                  title: definition.title ?? "Screenshot",
+                  description: content ?? "Report evidence",
+                  name: definition.id,
+                },
+              }),
+            ],
+          }),
+        );
+      }
+      if (content) children.push(new Paragraph({ text: content }));
+    } else if (content) children.push(new Paragraph({ text: content }));
     children.push(...docxDataSection(model, definition.type, primary));
   }
   if (model.signatures.length) {
@@ -649,12 +769,18 @@ function renderHtmlSection(
   content?: string,
 ) {
   if (definition.type === "cover")
-    return `<section class="cover">${model.logoDataUri ? `<img class="logo" alt="" src="${escapeHtml(model.logoDataUri)}">` : ""}<p class="kicker">${escapeHtml(model.organisationName)}</p>${model.tagline ? `<p class="meta">${escapeHtml(model.tagline)}</p>` : ""}<h1>${escapeHtml(model.title)}</h1><p class="meta">${escapeHtml(model.clientName)} | ${escapeHtml(model.engagementReference)}</p>${model.startDate || model.endDate ? `<p class="meta">Testing window: ${escapeHtml(model.startDate ?? "not recorded")} – ${escapeHtml(model.endDate ?? "not recorded")}</p>` : ""}<p class="classification">${escapeHtml(model.classification)}</p></section>`;
+    return `<section class="cover">${model.logoDataUri ? `<img class="logo" alt="" src="${escapeHtml(model.logoDataUri)}">` : ""}<p class="kicker">${escapeHtml(model.organisationName)}</p>${model.tagline ? `<p class="meta">${escapeHtml(model.tagline)}</p>` : ""}<h1>${escapeHtml(model.title)}</h1><p class="meta">${escapeHtml(model.clientName)} | ${escapeHtml(model.engagementReference)}</p>${model.startDate || model.endDate ? `<p class="meta">Testing window: ${escapeHtml(model.startDate ?? "not recorded")} – ${escapeHtml(model.endDate ?? "not recorded")}</p>` : ""}${model.exam ? `<p>${escapeHtml(model.exam.candidateName)}<br>${escapeHtml(model.exam.candidateEmail)}<br>${escapeHtml(model.exam.osid)}</p>` : ""}<p class="classification">${escapeHtml(model.classification)}</p></section>`;
   if (definition.type === "page_break")
     return `<div class="section page-break"></div>`;
   let body = content
     ? `<p>${escapeHtml(content).replaceAll("\n", "<br>")}</p>`
     : "";
+  if (definition.type === "code")
+    body = `<pre style="white-space:pre-wrap;overflow-wrap:anywhere;padding:16px;background:#f1f5f9;font:12px/1.5 monospace"><code>${escapeHtml(content ?? "")}</code></pre>`;
+  if (definition.type === "image") {
+    const uri = safeReportImage(definition.options?.imageDataUri);
+    body = `<figure>${uri ? `<img alt="${escapeHtml(content ?? definition.title ?? "Screenshot")}" src="${uri}" style="max-width:100%;height:auto">` : ""}<figcaption>${escapeHtml(content ?? "")}</figcaption></figure>`;
+  }
   if (definition.type === "findings")
     body += model.findings
       .map(
@@ -706,7 +832,7 @@ function renderHtmlSection(
   if (extra?.kind === "table") body += htmlTable(extra.headers, extra.rows);
   if (extra?.kind === "list")
     body += `<ol class="toc">${extra.items.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ol>`;
-  return `<section class="section"><h2>${escapeHtml(definition.title ?? titleFor(definition.type))}</h2>${body}</section>`;
+  return `<section class="section${definition.options?.pageBreakBefore === true ? " page-break" : ""}"><h2>${escapeHtml(definition.title ?? titleFor(definition.type))}</h2>${body}</section>`;
 }
 
 function renderPdfDataSection(
@@ -1105,4 +1231,21 @@ function sanitiseCss(value: string) {
     .replace(/behavior/gi, "")
     .replace(/-moz-binding/gi, "")
     .slice(0, 50_000);
+}
+
+async function reportImage(value: unknown) {
+  const uri = safeReportImage(value);
+  if (!uri) return undefined;
+  const bytes = Buffer.from(uri.slice(uri.indexOf(",") + 1), "base64");
+  const metadata = await sharp(bytes, {
+    limitInputPixels: 16_000_000,
+  }).metadata();
+  if (!metadata.width || !metadata.height)
+    throw new Error("Screenshot dimensions could not be read");
+  return {
+    bytes,
+    width: metadata.width,
+    height: metadata.height,
+    type: (metadata.format === "jpeg" ? "jpg" : "png") as "jpg" | "png",
+  };
 }

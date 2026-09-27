@@ -25,6 +25,11 @@ import {
 } from "@/db/schema";
 import { storage } from "@/lib/storage";
 import type { StorageProvider } from "@/lib/storage/types";
+import {
+  parseReportSections,
+  examSchema,
+  MAX_LAYOUT_LENGTH,
+} from "@/lib/reports/layout";
 import { safeLogoDataUri } from "@/lib/reports/branding";
 import {
   DEFAULT_CONFIDENTIALITY_NOTICE,
@@ -61,6 +66,10 @@ export class ReportScopeError extends Error {
 }
 
 export function validateReportTemplate(definition: ReportTemplateDefinition) {
+  if (JSON.stringify(definition).length > MAX_LAYOUT_LENGTH)
+    throw new Error("Report layout exceeds the 12 MB limit");
+  definition.sections = parseReportSections(definition.sections);
+  if (definition.exam) definition.exam = examSchema.parse(definition.exam);
   if (!definition.sections.length)
     throw new Error("A report template requires sections");
   const ids = new Set<string>();
@@ -254,6 +263,98 @@ export async function createReport(
   });
 }
 
+export async function saveReportDraft(
+  actor: ReportActor,
+  reportId: string,
+  input: {
+    versionId: string;
+    expectedRevision: string;
+    definition: ReportTemplateDefinition;
+    customCss?: string;
+  },
+) {
+  validateReportTemplate(input.definition);
+  return db.transaction(async (tx) => {
+    const report = await requireReport(tx, actor.organisationId, reportId);
+    const [version] = await tx
+      .select()
+      .from(reportVersions)
+      .where(
+        and(
+          eq(reportVersions.id, input.versionId),
+          eq(reportVersions.reportId, report.id),
+          eq(reportVersions.organisationId, actor.organisationId),
+        ),
+      )
+      .for("update");
+    if (!version || version.version !== report.currentVersion)
+      throw new ReportScopeError(
+        "This is no longer the current report version",
+      );
+    if (
+      version.immutable ||
+      !["draft", "changes_requested"].includes(version.status)
+    )
+      throw new Error("Only draft reports or requested changes can be edited");
+    if (["queued", "running"].includes(version.renderStatus))
+      throw new Error("Wait for report generation to finish before editing");
+    const current = version.content as ReportDocumentModel;
+    if ((current.editRevision ?? "initial") !== input.expectedRevision)
+      throw new Error(
+        "This draft changed in another window. Reload before saving.",
+      );
+    const definition = input.definition;
+    const content: ReportDocumentModel = {
+      ...current,
+      editRevision: randomUUID(),
+      exam: definition.exam,
+      classification: definition.classification,
+      organisationName:
+        definition.branding.organisationName || current.organisationName,
+      sections: definition.sections.map((section) => ({
+        definition: { ...section, content: undefined },
+        content: section.content,
+      })),
+      theme: {
+        ...current.theme,
+        primaryColour: definition.branding.primaryColour,
+        accentColour: definition.branding.accentColour,
+        headerLeft: definition.header.left,
+        headerRight: definition.header.right,
+        footerLeft: definition.footer.left,
+        customCss: input.customCss,
+      },
+    };
+    await tx
+      .update(reportVersions)
+      .set({
+        content,
+        renderStatus: "not_requested",
+        renderError: null,
+        renderedAt: null,
+        exportKeys: {},
+        exportChecksums: {},
+        storageKeyPdf: null,
+        storageKeyDocx: null,
+        checksum: null,
+      })
+      .where(eq(reportVersions.id, version.id));
+    await tx
+      .update(reports)
+      .set({ updatedAt: new Date() })
+      .where(eq(reports.id, report.id));
+    await tx.insert(auditEvents).values({
+      organisationId: actor.organisationId,
+      actorId: actor.userId,
+      action: "report.draft_saved",
+      targetType: "report",
+      targetId: report.id,
+      metadata: { version: version.version, blocks: content.sections.length },
+    });
+    return content;
+  });
+}
+
 export async function createReportRevision(
   actor: ReportActor,
   reportId: string,
@@ -291,6 +392,15 @@ export async function createReportRevision(
       engagement,
       template,
     });
+    const previousContent = current.content as ReportDocumentModel;
+    if (previousContent.editRevision) {
+      content.sections = previousContent.sections;
+      content.exam = previousContent.exam;
+      content.theme = previousContent.theme;
+      content.classification = previousContent.classification;
+      content.organisationName = previousContent.organisationName;
+      content.editRevision = randomUUID();
+    }
     await tx
       .update(reportVersions)
       .set({ status: "superseded" })
@@ -411,12 +521,24 @@ export async function queueReportGeneration(
   reportId: string,
   formats: ReportFormat[] = ["pdf", "docx", "html", "markdown", "json"],
 ) {
-  const report = await requireReport(db, actor.organisationId, reportId);
-  const version = await requireCurrentVersion(db, actor.organisationId, report);
-  if (version.immutable)
-    throw new Error("Published report versions are immutable");
   const selected = [...new Set(formats)];
-  await db.transaction(async (tx) => {
+  return db.transaction(async (tx) => {
+    const report = await requireReport(tx, actor.organisationId, reportId);
+    const [version] = await tx
+      .select()
+      .from(reportVersions)
+      .where(
+        and(
+          eq(reportVersions.reportId, report.id),
+          eq(reportVersions.version, report.currentVersion),
+          eq(reportVersions.organisationId, actor.organisationId),
+        ),
+      )
+      .for("update");
+    if (!version || version.immutable)
+      throw new Error("Published report versions are immutable");
+    if (["queued", "running"].includes(version.renderStatus))
+      throw new Error("Report generation is already in progress");
     await tx
       .update(reportVersions)
       .set({ renderStatus: "queued", renderError: null })
@@ -427,7 +549,9 @@ export async function queueReportGeneration(
         organisationId: actor.organisationId,
         type: "report.generate",
         payload: { reportVersionId: version.id, formats: selected },
-        idempotencyKey: `report.generate:${version.id}:${selected.sort().join(",")}`,
+        // The locked render status rejects concurrent requests; a new attempt
+        // needs its own key after a completed or failed generation.
+        idempotencyKey: `report.generate:${version.id}:${randomUUID()}`,
       })
       .onConflictDoNothing();
     await tx.insert(auditEvents).values({
@@ -438,8 +562,8 @@ export async function queueReportGeneration(
       targetId: report.id,
       metadata: { version: version.version, formats: selected },
     });
+    return version;
   });
-  return version;
 }
 
 export async function generateReportJob(
@@ -731,7 +855,10 @@ async function buildReportModel(input: {
         title: interpolate(section.title),
         content: undefined,
       },
-      content: interpolate(resolveSectionContent(section, definition)),
+      content:
+        section.type === "code"
+          ? resolveSectionContent(section, definition)
+          : interpolate(resolveSectionContent(section, definition)),
     }));
   const recommendations = findingRows
     .filter((finding) => finding.remediation)
@@ -742,6 +869,8 @@ async function buildReportModel(input: {
       remediation: finding.remediation ?? "",
     }));
   return {
+    editRevision: undefined as string | undefined,
+    exam: definition.exam,
     reportId: input.reportId,
     reportVersionId: input.reportVersionId,
     version: input.version,

@@ -210,8 +210,9 @@ test("report workspace and live preview share the seeded report model", async ({
     page.getByText("Northstar Customer Portal Assessment", { exact: true }),
   ).toBeVisible();
   const reportPath = await page
-    .getByRole("link", { name: "Open" })
-    .first()
+    .getByText("Northstar Customer Portal Assessment", { exact: true })
+    .locator("../../..")
+    .getByRole("link", { name: "Open", exact: true })
     .getAttribute("href");
   expect(reportPath).toBeTruthy();
   await page.goto(reportPath!);

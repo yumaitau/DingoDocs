@@ -1,39 +1,19 @@
-import { and, desc, eq, isNull } from "drizzle-orm";
+import Link from "next/link";
+import { desc, eq } from "drizzle-orm";
 import { BookOpen, Plus } from "lucide-react";
 import { db } from "@/db";
-import {
-  clients,
-  reportTemplates,
-  type ReportTemplateDefinition,
-} from "@/db/schema";
+import { reportTemplates } from "@/db/schema";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
-import { requireOrganisationContext } from "@/lib/permissions/require";
-import {
-  createReportTemplateAction,
-  reviseReportTemplateAction,
-} from "@/server/actions/reports";
-import { professionalPentestTemplate } from "@/lib/reports/professional-template";
+import { requireInternalOrganisationContext } from "@/lib/permissions/require";
 
 export default async function TemplatesPage() {
-  const context = await requireOrganisationContext();
-  const [rows, clientRows] = await Promise.all([
-    db
-      .select()
-      .from(reportTemplates)
-      .where(eq(reportTemplates.organisationId, context.organisationId))
-      .orderBy(desc(reportTemplates.createdAt)),
-    db
-      .select({ id: clients.id, name: clients.name })
-      .from(clients)
-      .where(
-        and(
-          eq(clients.organisationId, context.organisationId),
-          isNull(clients.deletedAt),
-        ),
-      )
-      .orderBy(clients.name),
-  ]);
+  const context = await requireInternalOrganisationContext();
+  const rows = await db
+    .select()
+    .from(reportTemplates)
+    .where(eq(reportTemplates.organisationId, context.organisationId))
+    .orderBy(desc(reportTemplates.createdAt));
   return (
     <>
       <PageHeader
@@ -46,54 +26,14 @@ export default async function TemplatesPage() {
             <Plus className="size-4" />
             <h2 className="font-semibold">New report template</h2>
           </div>
-          <p className="mt-1 text-sm text-slate-500">
-            Starts from a client-ready penetration test structure: cover,
-            document control, confidentiality, table of contents, executive
-            summary, severity ratings, scope, methodology, findings,
-            recommendations, glossary, and contacts. Set{" "}
-            <code>branding.whiteLabel</code> and logo data URIs to issue the
-            report in your consultancy brand.
+          <p className="mt-2 text-sm text-slate-600">
+            Create reusable report layouts with drag-and-drop text, commands,
+            screenshots and engagement data. Start with the OSAI exam structure,
+            a professional pentest report, or a blank page.
           </p>
-          <form
-            action={createReportTemplateAction}
-            className="mt-4 grid gap-3 md:grid-cols-2"
-          >
-            <label className="text-sm font-medium">
-              Template name
-              <input className={field} name="name" required />
-            </label>
-            <label className="text-sm font-medium">
-              Client scope
-              <select className={field} name="clientId" defaultValue="">
-                <option value="">Organisation-wide</option>
-                {clientRows.map((client) => (
-                  <option key={client.id} value={client.id}>
-                    {client.name}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label className="text-sm font-medium md:col-span-2">
-              Definition (JSON)
-              <textarea
-                className={`${area} min-h-[32rem] font-mono text-xs`}
-                name="definition"
-                required
-                defaultValue={JSON.stringify(starterDefinition, null, 2)}
-              />
-            </label>
-            <label className="text-sm font-medium md:col-span-2">
-              Custom print CSS
-              <textarea
-                className={area}
-                name="customCss"
-                placeholder="Optional CSS applied to HTML preview and export"
-              />
-            </label>
-            <Button type="submit" className="md:col-span-2 md:w-fit">
-              Create template v1
-            </Button>
-          </form>
+          <Button asChild className="mt-4">
+            <Link href="/templates/new">Open template builder</Link>
+          </Button>
         </section>
         <div className="grid gap-4 xl:grid-cols-2">
           {rows.map((template) => (
@@ -123,42 +63,18 @@ export default async function TemplatesPage() {
                   </span>
                 ))}
               </div>
-              {!template.supersededAt ? (
-                <details className="mt-5 rounded-lg border p-4">
-                  <summary className="cursor-pointer font-medium">
-                    Create revised version
-                  </summary>
-                  <form
-                    action={reviseReportTemplateAction.bind(null, template.id)}
-                    className="mt-3 space-y-3"
-                  >
-                    <label className="text-sm font-medium">
-                      Definition (JSON)
-                      <textarea
-                        className={`${area} min-h-[30rem] font-mono text-xs`}
-                        name="definition"
-                        required
-                        defaultValue={JSON.stringify(
-                          template.definition,
-                          null,
-                          2,
-                        )}
-                      />
-                    </label>
-                    <label className="text-sm font-medium">
-                      Custom print CSS
-                      <textarea
-                        className={area}
-                        name="customCss"
-                        defaultValue={template.customCss ?? ""}
-                      />
-                    </label>
-                    <Button type="submit">
-                      Create v{template.version + 1}
-                    </Button>
-                  </form>
-                </details>
-              ) : null}
+              <div className="mt-5 flex gap-3">
+                {!template.supersededAt && (
+                  <Button asChild variant="secondary">
+                    <Link href={`/templates/${template.id}`}>Edit layout</Link>
+                  </Button>
+                )}
+                <Button asChild variant="secondary">
+                  <Link href={`/templates/new?copy=${template.id}`}>
+                    Use as starting point
+                  </Link>
+                </Button>
+              </div>
             </article>
           ))}
           {!rows.length ? (
@@ -171,9 +87,3 @@ export default async function TemplatesPage() {
     </>
   );
 }
-
-const field =
-  "mt-1 min-h-11 w-full rounded-md border bg-paper px-3 text-sm outline-none focus:border-[var(--harbour-500)]";
-const area = `${field} min-h-24 py-2`;
-const starterDefinition: ReportTemplateDefinition =
-  professionalPentestTemplate();

@@ -4,6 +4,7 @@ const nextConfig: NextConfig = {
   output: "standalone",
   outputFileTracingIncludes: {
     "/*": [
+      "public/fonts/**/*",
       "node_modules/node-cron/**/*",
       "node_modules/@aws-sdk/client-license-manager/**/*",
       "node_modules/@aws-sdk/client-sesv2/**/*",
@@ -39,7 +40,7 @@ const nextConfig: NextConfig = {
     ];
   },
   experimental: {
-    serverActions: { bodySizeLimit: "2mb" },
+    serverActions: { bodySizeLimit: "16mb" },
   },
 };
 
