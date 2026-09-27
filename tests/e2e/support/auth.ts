@@ -19,9 +19,10 @@ export async function signIn(page: Page) {
     );
     await page.getByRole("button", { name: "Sign in", exact: true }).click();
     const response = await responsePromise;
-    const retryAfter = Number(response.headers()["retry-after"]);
+    const retryAfter = Number(response.headers()["retry-after"] ?? 60);
     // Full browser suites can exceed the real IP rate limit. Respect its
-    // advertised cooldown once; never bypass it or retry account lockouts.
+    // advertised cooldown once (or the configured 60-second window when
+    // Better Auth omits Retry-After); never bypass it or retry account lockouts.
     if (
       attempt === 0 &&
       response.status() === 429 &&
