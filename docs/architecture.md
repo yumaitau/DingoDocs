@@ -62,6 +62,8 @@ Email/password, magic-link, TOTP, session revocation data, and OAuth proxy found
 
 Generic OAuth and Entra sign-in now use the social sign-in API. Before deploying this version, register `/api/auth/callback/oidc` (or the configured `OIDC_PROVIDER_ID`) and `/api/auth/callback/microsoft-entra-id` at the corresponding identity provider instead of the old `/api/auth/oauth2/callback/...` URLs. OIDC issuer validation now comes from `OIDC_DISCOVERY_URL`; `OIDC_ISSUER` is no longer used. Entra requires a concrete tenant GUID.
 
+Run database migrations before starting the updated app. Migration `0012_better_auth_1_7_mfa` adds the MFA verification and lockout columns, preserving verified enrolments from each user's existing MFA-enabled flag.
+
 Existing Microsoft accounts require a data migration before accepting sign-in traffic: map each `microsoft-entra-id` account's old `sub` identifier to its verified directory `oid`. Use verified stored ID tokens or a trusted Entra export; do not infer the mapping or merge users by email. Check for duplicate `(providerId, accountId)` pairs using the configured database column names. See the [Better Auth 1.7 upgrade guide](https://better-auth.com/docs/guides/1-7-upgrade-guide) for the required identity migration. The 1.6 account schema needs no new issuer column when upgrading directly to 1.7.5.
 
 ## Authorisation and multi-tenancy
