@@ -1,3 +1,14 @@
+CREATE OR REPLACE FUNCTION dingodocs_text_array_to_string(items text[], delimiter text)
+RETURNS text
+LANGUAGE plpgsql
+IMMUTABLE
+PARALLEL SAFE
+AS $$
+BEGIN
+  RETURN array_to_string(items, delimiter);
+END;
+$$;
+--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "search_clients_identity_gin" ON "clients" USING gin (to_tsvector('simple', coalesce(name,'')||' '||coalesce(legal_name,'')||' '||coalesce(industry,'')));
 --> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "search_engagements_name_gin" ON "engagements" USING gin (to_tsvector('simple', coalesce(name,'')||' '||coalesce(reference,'')||' '||coalesce(objectives,'')));
@@ -6,9 +17,9 @@ CREATE INDEX IF NOT EXISTS "search_findings_full_gin" ON "findings" USING gin (t
 --> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "search_findings_portal_gin" ON "findings" USING gin (to_tsvector('simple', coalesce(title,'')||' '||coalesce(identifier,'')||' '||coalesce(executive_summary,'')||' '||coalesce(remediation,'')));
 --> statement-breakpoint
-CREATE INDEX IF NOT EXISTS "search_finding_templates_text_gin" ON "finding_templates" USING gin (to_tsvector('simple', coalesce(title,'')||' '||coalesce(summary,'')||' '||coalesce(technical_description,'')||' '||array_to_string(tags,' ')));
+CREATE INDEX IF NOT EXISTS "search_finding_templates_text_gin" ON "finding_templates" USING gin (to_tsvector('simple', coalesce(title,'')||' '||coalesce(summary,'')||' '||coalesce(technical_description,'')||' '||dingodocs_text_array_to_string(tags,' ')));
 --> statement-breakpoint
-CREATE INDEX IF NOT EXISTS "search_runbook_templates_text_gin" ON "runbook_templates" USING gin (to_tsvector('simple', coalesce(name,'')||' '||coalesce(description,'')||' '||array_to_string(assessment_types,' ')||' '||array_to_string(tags,' ')));
+CREATE INDEX IF NOT EXISTS "search_runbook_templates_text_gin" ON "runbook_templates" USING gin (to_tsvector('simple', coalesce(name,'')||' '||coalesce(description,'')||' '||dingodocs_text_array_to_string(assessment_types,' ')||' '||dingodocs_text_array_to_string(tags,' ')));
 --> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "search_assets_identity_gin" ON "assets" USING gin (to_tsvector('simple', coalesce(name,'')||' '||coalesce(identifier,'')||' '||coalesce(notes,'')));
 --> statement-breakpoint
