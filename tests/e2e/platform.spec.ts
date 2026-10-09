@@ -63,6 +63,8 @@ test("personal preferences redirect unauthenticated users to sign in", async ({
 test("owner can reach every workspace and follow seeded assessment records", async ({
   page,
 }) => {
+  // First Chromium pass compiles every workspace. That exceeds 30s on CI.
+  test.setTimeout(90_000);
   await signIn(page);
   for (const [path, heading] of productRoutes) {
     await page.goto(path);
