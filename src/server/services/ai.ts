@@ -244,9 +244,7 @@ export async function requestFindingAssist(
     .limit(1);
   if (!finding) throw new Error("Finding is unavailable");
 
-  let image:
-    | { mediaType: string; base64: string }
-    | undefined;
+  let image: { mediaType: string; base64: string } | undefined;
   if (input.action === "vision_caption") {
     if (provider === "ollama")
       throw new Error("Vision caption requires OpenAI or Anthropic");

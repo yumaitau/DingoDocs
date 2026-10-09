@@ -740,7 +740,8 @@ export async function bulkUpdateFindings(
   },
 ) {
   if (!input.ids.length) return [];
-  if (input.ids.length > 100) throw new Error("Bulk update is capped at 100 findings");
+  if (input.ids.length > 100)
+    throw new Error("Bulk update is capped at 100 findings");
   const uniqueIds = [...new Set(input.ids)];
   const rows = await db
     .select()
@@ -818,7 +819,8 @@ export async function enrichFindingIntel(
   try {
     const finding = await requireFinding(db, actor.organisationId, findingId);
     const cve = normaliseCve(finding.cve);
-    if (!cve) return { ok: false, error: "Finding CVE must match CVE-YYYY-NNNN" };
+    if (!cve)
+      return { ok: false, error: "Finding CVE must match CVE-YYYY-NNNN" };
 
     const [epssEndpoint, kevEndpoint] = await Promise.all([
       assertPublicHttpUrl(epssUrl(cve)),
@@ -1369,9 +1371,7 @@ function validateFindingNarrative(input: {
   cvssScore?: string;
 }) {
   const vector = input.cvssVector?.trim();
-  let cvssScore = input.cvssScore?.trim()
-    ? Number(input.cvssScore)
-    : undefined;
+  let cvssScore = input.cvssScore?.trim() ? Number(input.cvssScore) : undefined;
   if (vector) {
     const scored = scoreCvss(vector);
     if (cvssScore === undefined || !Number.isFinite(cvssScore))

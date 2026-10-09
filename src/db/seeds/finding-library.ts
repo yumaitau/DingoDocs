@@ -23,32 +23,48 @@ export const FINDING_LIBRARY: FindingLibraryTemplate[] = [
     title: "SQL injection",
     severity: "critical",
     summary: "User input reaches database queries without parameterisation.",
-    technicalDescription: "Concatenated or interpolated SQL allows attackers to alter query logic and read or modify data.",
-    remediation: "Use parameterised queries or a safe ORM for every database call; reject dynamic SQL built from request data.",
-    tags: ["web","injection","sql","locale:en"],
-    mappings: [{"framework":"CWE","reference":"CWE-89"},{"framework":"OWASP","reference":"A03:2021"}],
-    assessmentTypes: ["Web Application Assessment","API Assessment"],
+    technicalDescription:
+      "Concatenated or interpolated SQL allows attackers to alter query logic and read or modify data.",
+    remediation:
+      "Use parameterised queries or a safe ORM for every database call; reject dynamic SQL built from request data.",
+    tags: ["web", "injection", "sql", "locale:en"],
+    mappings: [
+      { framework: "CWE", reference: "CWE-89" },
+      { framework: "OWASP", reference: "A03:2021" },
+    ],
+    assessmentTypes: ["Web Application Assessment", "API Assessment"],
   },
   {
     stableKey: "reflected-xss",
     title: "Reflected cross-site scripting",
     severity: "high",
     summary: "Untrusted input is echoed into HTML responses without encoding.",
-    technicalDescription: "A crafted URL or form value is reflected into the page and executes in the victim browser.",
-    remediation: "Context-encode all untrusted output; prefer frameworks that auto-escape; set a strict CSP.",
-    tags: ["web","xss","locale:en"],
-    mappings: [{"framework":"CWE","reference":"CWE-79"},{"framework":"OWASP","reference":"A03:2021"}],
+    technicalDescription:
+      "A crafted URL or form value is reflected into the page and executes in the victim browser.",
+    remediation:
+      "Context-encode all untrusted output; prefer frameworks that auto-escape; set a strict CSP.",
+    tags: ["web", "xss", "locale:en"],
+    mappings: [
+      { framework: "CWE", reference: "CWE-79" },
+      { framework: "OWASP", reference: "A03:2021" },
+    ],
     assessmentTypes: ["Web Application Assessment"],
   },
   {
     stableKey: "stored-xss",
     title: "Stored cross-site scripting",
     severity: "high",
-    summary: "Persisted user content is rendered without sanitisation or encoding.",
-    technicalDescription: "Malicious scripts saved in the database execute for every user who views the content.",
-    remediation: "Sanitise and encode stored content on write and render; apply CSP and HttpOnly session cookies.",
-    tags: ["web","xss","locale:en"],
-    mappings: [{"framework":"CWE","reference":"CWE-79"},{"framework":"OWASP","reference":"A03:2021"}],
+    summary:
+      "Persisted user content is rendered without sanitisation or encoding.",
+    technicalDescription:
+      "Malicious scripts saved in the database execute for every user who views the content.",
+    remediation:
+      "Sanitise and encode stored content on write and render; apply CSP and HttpOnly session cookies.",
+    tags: ["web", "xss", "locale:en"],
+    mappings: [
+      { framework: "CWE", reference: "CWE-79" },
+      { framework: "OWASP", reference: "A03:2021" },
+    ],
     assessmentTypes: ["Web Application Assessment"],
   },
   {
@@ -56,10 +72,15 @@ export const FINDING_LIBRARY: FindingLibraryTemplate[] = [
     title: "DOM-based cross-site scripting",
     severity: "high",
     summary: "Client-side script writes untrusted data into the DOM unsafely.",
-    technicalDescription: "Sources such as location.hash flow into sinks like innerHTML without sanitisation.",
-    remediation: "Avoid dangerous sinks; use textContent or trusted types; review client routing and template usage.",
-    tags: ["web","xss","dom","locale:en"],
-    mappings: [{"framework":"CWE","reference":"CWE-79"},{"framework":"OWASP","reference":"A03:2021"}],
+    technicalDescription:
+      "Sources such as location.hash flow into sinks like innerHTML without sanitisation.",
+    remediation:
+      "Avoid dangerous sinks; use textContent or trusted types; review client routing and template usage.",
+    tags: ["web", "xss", "dom", "locale:en"],
+    mappings: [
+      { framework: "CWE", reference: "CWE-79" },
+      { framework: "OWASP", reference: "A03:2021" },
+    ],
     assessmentTypes: ["Web Application Assessment"],
   },
   {
@@ -67,10 +88,15 @@ export const FINDING_LIBRARY: FindingLibraryTemplate[] = [
     title: "Cross-site request forgery",
     severity: "medium",
     summary: "State-changing requests lack anti-CSRF protection.",
-    technicalDescription: "An authenticated browser can be tricked into submitting unintended actions from a third-party origin.",
-    remediation: "Require synchroniser tokens or SameSite=strict cookies on mutating endpoints; verify Origin/Referer.",
-    tags: ["web","csrf","session","locale:en"],
-    mappings: [{"framework":"CWE","reference":"CWE-352"},{"framework":"OWASP","reference":"A01:2021"}],
+    technicalDescription:
+      "An authenticated browser can be tricked into submitting unintended actions from a third-party origin.",
+    remediation:
+      "Require synchroniser tokens or SameSite=strict cookies on mutating endpoints; verify Origin/Referer.",
+    tags: ["web", "csrf", "session", "locale:en"],
+    mappings: [
+      { framework: "CWE", reference: "CWE-352" },
+      { framework: "OWASP", reference: "A01:2021" },
+    ],
     assessmentTypes: ["Web Application Assessment"],
   },
   {
@@ -78,65 +104,101 @@ export const FINDING_LIBRARY: FindingLibraryTemplate[] = [
     title: "Server-side request forgery",
     severity: "high",
     summary: "Application fetches attacker-controlled URLs from the server.",
-    technicalDescription: "Internal services, cloud metadata, and non-routable hosts can be reached via crafted request targets.",
-    remediation: "Allowlist outbound destinations; block link-local and private ranges; prefer fixed service endpoints.",
-    tags: ["web","ssrf","cloud","locale:en"],
-    mappings: [{"framework":"CWE","reference":"CWE-918"},{"framework":"OWASP","reference":"A10:2021"}],
-    assessmentTypes: ["Web Application Assessment","API Assessment","Cloud Assessment"],
+    technicalDescription:
+      "Internal services, cloud metadata, and non-routable hosts can be reached via crafted request targets.",
+    remediation:
+      "Allowlist outbound destinations; block link-local and private ranges; prefer fixed service endpoints.",
+    tags: ["web", "ssrf", "cloud", "locale:en"],
+    mappings: [
+      { framework: "CWE", reference: "CWE-918" },
+      { framework: "OWASP", reference: "A10:2021" },
+    ],
+    assessmentTypes: [
+      "Web Application Assessment",
+      "API Assessment",
+      "Cloud Assessment",
+    ],
   },
   {
     stableKey: "idor",
     title: "Insecure direct object reference",
     severity: "high",
-    summary: "Object identifiers can be swapped to access another user's records.",
-    technicalDescription: "Server responses omit ownership checks when loading records by ID.",
-    remediation: "Authorise every object access against the authenticated principal before returning data.",
-    tags: ["web","access-control","idor","locale:en"],
-    mappings: [{"framework":"CWE","reference":"CWE-639"},{"framework":"OWASP","reference":"A01:2021"}],
-    assessmentTypes: ["Web Application Assessment","API Assessment"],
+    summary:
+      "Object identifiers can be swapped to access another user's records.",
+    technicalDescription:
+      "Server responses omit ownership checks when loading records by ID.",
+    remediation:
+      "Authorise every object access against the authenticated principal before returning data.",
+    tags: ["web", "access-control", "idor", "locale:en"],
+    mappings: [
+      { framework: "CWE", reference: "CWE-639" },
+      { framework: "OWASP", reference: "A01:2021" },
+    ],
+    assessmentTypes: ["Web Application Assessment", "API Assessment"],
   },
   {
     stableKey: "xxe",
     title: "XML external entity injection",
     severity: "high",
     summary: "XML parsers resolve external entities from untrusted documents.",
-    technicalDescription: "Crafted XML can disclose local files or trigger outbound requests from the parser host.",
-    remediation: "Disable external entity and DTD processing; prefer JSON unless XML is required.",
-    tags: ["web","xxe","injection","locale:en"],
-    mappings: [{"framework":"CWE","reference":"CWE-611"},{"framework":"OWASP","reference":"A05:2021"}],
-    assessmentTypes: ["Web Application Assessment","API Assessment"],
+    technicalDescription:
+      "Crafted XML can disclose local files or trigger outbound requests from the parser host.",
+    remediation:
+      "Disable external entity and DTD processing; prefer JSON unless XML is required.",
+    tags: ["web", "xxe", "injection", "locale:en"],
+    mappings: [
+      { framework: "CWE", reference: "CWE-611" },
+      { framework: "OWASP", reference: "A05:2021" },
+    ],
+    assessmentTypes: ["Web Application Assessment", "API Assessment"],
   },
   {
     stableKey: "ssti",
     title: "Server-side template injection",
     severity: "critical",
     summary: "User input is evaluated inside a server template engine.",
-    technicalDescription: "Template expressions can escape the sandbox and execute code or read secrets on the host.",
-    remediation: "Never concatenate user input into templates; pass data as variables only; sandbox engines tightly.",
-    tags: ["web","ssti","injection","locale:en"],
-    mappings: [{"framework":"CWE","reference":"CWE-1336"},{"framework":"OWASP","reference":"A03:2021"}],
+    technicalDescription:
+      "Template expressions can escape the sandbox and execute code or read secrets on the host.",
+    remediation:
+      "Never concatenate user input into templates; pass data as variables only; sandbox engines tightly.",
+    tags: ["web", "ssti", "injection", "locale:en"],
+    mappings: [
+      { framework: "CWE", reference: "CWE-1336" },
+      { framework: "OWASP", reference: "A03:2021" },
+    ],
     assessmentTypes: ["Web Application Assessment"],
   },
   {
     stableKey: "broken-access-control",
     title: "Broken access control",
     severity: "high",
-    summary: "Endpoints enforce authentication but not authorisation for privileged actions.",
-    technicalDescription: "Lower-privilege users can invoke administrative or cross-tenant operations by calling hidden routes.",
-    remediation: "Centralise authorisation checks; deny by default; test every privileged route with lesser roles.",
-    tags: ["web","access-control","locale:en"],
-    mappings: [{"framework":"CWE","reference":"CWE-284"},{"framework":"OWASP","reference":"A01:2021"}],
-    assessmentTypes: ["Web Application Assessment","API Assessment"],
+    summary:
+      "Endpoints enforce authentication but not authorisation for privileged actions.",
+    technicalDescription:
+      "Lower-privilege users can invoke administrative or cross-tenant operations by calling hidden routes.",
+    remediation:
+      "Centralise authorisation checks; deny by default; test every privileged route with lesser roles.",
+    tags: ["web", "access-control", "locale:en"],
+    mappings: [
+      { framework: "CWE", reference: "CWE-284" },
+      { framework: "OWASP", reference: "A01:2021" },
+    ],
+    assessmentTypes: ["Web Application Assessment", "API Assessment"],
   },
   {
     stableKey: "open-redirect",
     title: "Open redirect",
     severity: "low",
     summary: "Redirect targets are taken from untrusted query parameters.",
-    technicalDescription: "Attackers craft links that bounce users to phishing sites under the trusted domain reputation.",
-    remediation: "Allowlist redirect destinations or map opaque tokens to fixed URLs.",
-    tags: ["web","redirect","locale:en"],
-    mappings: [{"framework":"CWE","reference":"CWE-601"},{"framework":"OWASP","reference":"A01:2021"}],
+    technicalDescription:
+      "Attackers craft links that bounce users to phishing sites under the trusted domain reputation.",
+    remediation:
+      "Allowlist redirect destinations or map opaque tokens to fixed URLs.",
+    tags: ["web", "redirect", "locale:en"],
+    mappings: [
+      { framework: "CWE", reference: "CWE-601" },
+      { framework: "OWASP", reference: "A01:2021" },
+    ],
     assessmentTypes: ["Web Application Assessment"],
   },
   {
@@ -144,109 +206,164 @@ export const FINDING_LIBRARY: FindingLibraryTemplate[] = [
     title: "Clickjacking",
     severity: "medium",
     summary: "Application pages can be framed by untrusted sites.",
-    technicalDescription: "Users may click disguised controls that perform authenticated actions inside a hidden iframe.",
-    remediation: "Send Content-Security-Policy frame-ancestors and X-Frame-Options DENY or SAMEORIGIN.",
-    tags: ["web","ui","locale:en"],
-    mappings: [{"framework":"CWE","reference":"CWE-1021"},{"framework":"OWASP","reference":"A05:2021"}],
+    technicalDescription:
+      "Users may click disguised controls that perform authenticated actions inside a hidden iframe.",
+    remediation:
+      "Send Content-Security-Policy frame-ancestors and X-Frame-Options DENY or SAMEORIGIN.",
+    tags: ["web", "ui", "locale:en"],
+    mappings: [
+      { framework: "CWE", reference: "CWE-1021" },
+      { framework: "OWASP", reference: "A05:2021" },
+    ],
     assessmentTypes: ["Web Application Assessment"],
   },
   {
     stableKey: "path-traversal",
     title: "Path traversal",
     severity: "high",
-    summary: "File path parameters accept ../ sequences that escape the intended directory.",
-    technicalDescription: "Attackers read or overwrite files outside the application content root.",
-    remediation: "Canonicalise paths and reject any result outside the allowed base directory.",
-    tags: ["web","filesystem","locale:en"],
-    mappings: [{"framework":"CWE","reference":"CWE-22"},{"framework":"OWASP","reference":"A01:2021"}],
-    assessmentTypes: ["Web Application Assessment","API Assessment"],
+    summary:
+      "File path parameters accept ../ sequences that escape the intended directory.",
+    technicalDescription:
+      "Attackers read or overwrite files outside the application content root.",
+    remediation:
+      "Canonicalise paths and reject any result outside the allowed base directory.",
+    tags: ["web", "filesystem", "locale:en"],
+    mappings: [
+      { framework: "CWE", reference: "CWE-22" },
+      { framework: "OWASP", reference: "A01:2021" },
+    ],
+    assessmentTypes: ["Web Application Assessment", "API Assessment"],
   },
   {
     stableKey: "command-injection",
     title: "OS command injection",
     severity: "critical",
     summary: "Shell commands incorporate unsanitised user input.",
-    technicalDescription: "Attackers append shell metacharacters to run arbitrary commands on the host.",
-    remediation: "Avoid shells; call APIs with argument arrays; strictly validate any unavoidable input.",
-    tags: ["web","injection","os","locale:en"],
-    mappings: [{"framework":"CWE","reference":"CWE-78"},{"framework":"OWASP","reference":"A03:2021"}],
-    assessmentTypes: ["Web Application Assessment","API Assessment"],
+    technicalDescription:
+      "Attackers append shell metacharacters to run arbitrary commands on the host.",
+    remediation:
+      "Avoid shells; call APIs with argument arrays; strictly validate any unavoidable input.",
+    tags: ["web", "injection", "os", "locale:en"],
+    mappings: [
+      { framework: "CWE", reference: "CWE-78" },
+      { framework: "OWASP", reference: "A03:2021" },
+    ],
+    assessmentTypes: ["Web Application Assessment", "API Assessment"],
   },
   {
     stableKey: "unrestricted-file-upload",
     title: "Unrestricted file upload",
     severity: "high",
-    summary: "Upload endpoints accept dangerous file types or executable content.",
-    technicalDescription: "Uploaded malware or web shells can be stored and later executed or served to victims.",
-    remediation: "Validate type by content, store outside web root, rename files, and scan uploads.",
-    tags: ["web","upload","locale:en"],
-    mappings: [{"framework":"CWE","reference":"CWE-434"},{"framework":"OWASP","reference":"A04:2021"}],
+    summary:
+      "Upload endpoints accept dangerous file types or executable content.",
+    technicalDescription:
+      "Uploaded malware or web shells can be stored and later executed or served to victims.",
+    remediation:
+      "Validate type by content, store outside web root, rename files, and scan uploads.",
+    tags: ["web", "upload", "locale:en"],
+    mappings: [
+      { framework: "CWE", reference: "CWE-434" },
+      { framework: "OWASP", reference: "A04:2021" },
+    ],
     assessmentTypes: ["Web Application Assessment"],
   },
   {
     stableKey: "insecure-deserialization",
     title: "Insecure deserialization",
     severity: "critical",
-    summary: "Untrusted serialized objects are restored into application objects.",
-    technicalDescription: "Gadget chains can trigger remote code execution during deserialization.",
-    remediation: "Prefer safe formats like JSON with schema validation; never deserialize untrusted binary blobs.",
-    tags: ["web","deserialization","locale:en"],
-    mappings: [{"framework":"CWE","reference":"CWE-502"},{"framework":"OWASP","reference":"A08:2021"}],
-    assessmentTypes: ["Web Application Assessment","API Assessment"],
+    summary:
+      "Untrusted serialized objects are restored into application objects.",
+    technicalDescription:
+      "Gadget chains can trigger remote code execution during deserialization.",
+    remediation:
+      "Prefer safe formats like JSON with schema validation; never deserialize untrusted binary blobs.",
+    tags: ["web", "deserialization", "locale:en"],
+    mappings: [
+      { framework: "CWE", reference: "CWE-502" },
+      { framework: "OWASP", reference: "A08:2021" },
+    ],
+    assessmentTypes: ["Web Application Assessment", "API Assessment"],
   },
   {
     stableKey: "verbose-errors",
     title: "Verbose error messages",
     severity: "low",
     summary: "Error responses expose stack traces, SQL, or internal paths.",
-    technicalDescription: "Attackers learn framework versions, query structure, and filesystem layout from failures.",
+    technicalDescription:
+      "Attackers learn framework versions, query structure, and filesystem layout from failures.",
     remediation: "Return generic client errors; log details server-side only.",
-    tags: ["web","info-disclosure","locale:en"],
-    mappings: [{"framework":"CWE","reference":"CWE-209"},{"framework":"OWASP","reference":"A05:2021"}],
-    assessmentTypes: ["Web Application Assessment","API Assessment"],
+    tags: ["web", "info-disclosure", "locale:en"],
+    mappings: [
+      { framework: "CWE", reference: "CWE-209" },
+      { framework: "OWASP", reference: "A05:2021" },
+    ],
+    assessmentTypes: ["Web Application Assessment", "API Assessment"],
   },
   {
     stableKey: "missing-security-headers",
     title: "Missing security headers",
     severity: "low",
     summary: "Responses omit CSP, HSTS, and related browser hardening headers.",
-    technicalDescription: "Browsers lack guidance that would mitigate XSS, clickjacking, and downgrade attacks.",
-    remediation: "Deploy CSP, HSTS, Referrer-Policy, and Permissions-Policy appropriate to the app.",
-    tags: ["web","headers","locale:en"],
-    mappings: [{"framework":"CWE","reference":"CWE-693"},{"framework":"OWASP","reference":"A05:2021"}],
+    technicalDescription:
+      "Browsers lack guidance that would mitigate XSS, clickjacking, and downgrade attacks.",
+    remediation:
+      "Deploy CSP, HSTS, Referrer-Policy, and Permissions-Policy appropriate to the app.",
+    tags: ["web", "headers", "locale:en"],
+    mappings: [
+      { framework: "CWE", reference: "CWE-693" },
+      { framework: "OWASP", reference: "A05:2021" },
+    ],
     assessmentTypes: ["Web Application Assessment"],
   },
   {
     stableKey: "insecure-cookie-flags",
     title: "Insecure session cookie flags",
     severity: "medium",
-    summary: "Session cookies lack Secure, HttpOnly, or appropriate SameSite attributes.",
-    technicalDescription: "Tokens may leak over HTTP, to scripts, or on cross-site requests.",
-    remediation: "Set Secure, HttpOnly, and SameSite=Lax or Strict on all session cookies.",
-    tags: ["web","session","cookies","locale:en"],
-    mappings: [{"framework":"CWE","reference":"CWE-614"},{"framework":"OWASP","reference":"A07:2021"}],
+    summary:
+      "Session cookies lack Secure, HttpOnly, or appropriate SameSite attributes.",
+    technicalDescription:
+      "Tokens may leak over HTTP, to scripts, or on cross-site requests.",
+    remediation:
+      "Set Secure, HttpOnly, and SameSite=Lax or Strict on all session cookies.",
+    tags: ["web", "session", "cookies", "locale:en"],
+    mappings: [
+      { framework: "CWE", reference: "CWE-614" },
+      { framework: "OWASP", reference: "A07:2021" },
+    ],
     assessmentTypes: ["Web Application Assessment"],
   },
   {
     stableKey: "cors-misconfiguration",
     title: "CORS misconfiguration",
     severity: "medium",
-    summary: "Access-Control-Allow-Origin reflects arbitrary origins with credentials.",
-    technicalDescription: "Hostile sites can read authenticated API responses from victim browsers.",
-    remediation: "Allowlist exact trusted origins; never combine wildcard origins with credentials.",
-    tags: ["web","cors","api","locale:en"],
-    mappings: [{"framework":"CWE","reference":"CWE-942"},{"framework":"OWASP","reference":"A05:2021"}],
-    assessmentTypes: ["Web Application Assessment","API Assessment"],
+    summary:
+      "Access-Control-Allow-Origin reflects arbitrary origins with credentials.",
+    technicalDescription:
+      "Hostile sites can read authenticated API responses from victim browsers.",
+    remediation:
+      "Allowlist exact trusted origins; never combine wildcard origins with credentials.",
+    tags: ["web", "cors", "api", "locale:en"],
+    mappings: [
+      { framework: "CWE", reference: "CWE-942" },
+      { framework: "OWASP", reference: "A05:2021" },
+    ],
+    assessmentTypes: ["Web Application Assessment", "API Assessment"],
   },
   {
     stableKey: "host-header-injection",
     title: "Host header injection",
     severity: "medium",
-    summary: "Password reset and absolute URL generation trust the Host header.",
-    technicalDescription: "Attackers poison links in emails or caches to point at attacker-controlled hosts.",
-    remediation: "Use a configured canonical host; ignore or validate Host against an allowlist.",
-    tags: ["web","headers","locale:en"],
-    mappings: [{"framework":"CWE","reference":"CWE-644"},{"framework":"OWASP","reference":"A05:2021"}],
+    summary:
+      "Password reset and absolute URL generation trust the Host header.",
+    technicalDescription:
+      "Attackers poison links in emails or caches to point at attacker-controlled hosts.",
+    remediation:
+      "Use a configured canonical host; ignore or validate Host against an allowlist.",
+    tags: ["web", "headers", "locale:en"],
+    mappings: [
+      { framework: "CWE", reference: "CWE-644" },
+      { framework: "OWASP", reference: "A05:2021" },
+    ],
     assessmentTypes: ["Web Application Assessment"],
   },
   {
@@ -254,10 +371,15 @@ export const FINDING_LIBRARY: FindingLibraryTemplate[] = [
     title: "Session fixation",
     severity: "medium",
     summary: "Session identifiers are not rotated after authentication.",
-    technicalDescription: "An attacker who sets a known session ID can hijack the account after the victim logs in.",
-    remediation: "Issue a new session identifier on every privilege change including login.",
-    tags: ["web","session","locale:en"],
-    mappings: [{"framework":"CWE","reference":"CWE-384"},{"framework":"OWASP","reference":"A07:2021"}],
+    technicalDescription:
+      "An attacker who sets a known session ID can hijack the account after the victim logs in.",
+    remediation:
+      "Issue a new session identifier on every privilege change including login.",
+    tags: ["web", "session", "locale:en"],
+    mappings: [
+      { framework: "CWE", reference: "CWE-384" },
+      { framework: "OWASP", reference: "A07:2021" },
+    ],
     assessmentTypes: ["Web Application Assessment"],
   },
   {
@@ -265,10 +387,15 @@ export const FINDING_LIBRARY: FindingLibraryTemplate[] = [
     title: "Weak password policy",
     severity: "medium",
     summary: "Accounts accept short or commonly breached passwords.",
-    technicalDescription: "Credential stuffing and guessing succeed against low-entropy passwords.",
-    remediation: "Enforce length and breached-password checks; support MFA and password managers.",
-    tags: ["web","auth","locale:en"],
-    mappings: [{"framework":"CWE","reference":"CWE-521"},{"framework":"OWASP","reference":"A07:2021"}],
+    technicalDescription:
+      "Credential stuffing and guessing succeed against low-entropy passwords.",
+    remediation:
+      "Enforce length and breached-password checks; support MFA and password managers.",
+    tags: ["web", "auth", "locale:en"],
+    mappings: [
+      { framework: "CWE", reference: "CWE-521" },
+      { framework: "OWASP", reference: "A07:2021" },
+    ],
     assessmentTypes: ["Web Application Assessment"],
   },
   {
@@ -276,21 +403,32 @@ export const FINDING_LIBRARY: FindingLibraryTemplate[] = [
     title: "Missing rate limiting",
     severity: "medium",
     summary: "Authentication and sensitive actions lack request throttling.",
-    technicalDescription: "Attackers brute-force credentials or abuse costly endpoints without friction.",
-    remediation: "Apply per-account and per-IP rate limits with lockout or progressive delays.",
-    tags: ["web","auth","dos","locale:en"],
-    mappings: [{"framework":"CWE","reference":"CWE-770"},{"framework":"OWASP","reference":"A07:2021"}],
-    assessmentTypes: ["Web Application Assessment","API Assessment"],
+    technicalDescription:
+      "Attackers brute-force credentials or abuse costly endpoints without friction.",
+    remediation:
+      "Apply per-account and per-IP rate limits with lockout or progressive delays.",
+    tags: ["web", "auth", "dos", "locale:en"],
+    mappings: [
+      { framework: "CWE", reference: "CWE-770" },
+      { framework: "OWASP", reference: "A07:2021" },
+    ],
+    assessmentTypes: ["Web Application Assessment", "API Assessment"],
   },
   {
     stableKey: "account-enumeration",
     title: "Account enumeration",
     severity: "low",
-    summary: "Login and reset flows reveal whether an email or username exists.",
-    technicalDescription: "Attackers harvest valid accounts for phishing and credential stuffing.",
-    remediation: "Return identical responses and timing for valid and invalid identifiers.",
-    tags: ["web","auth","info-disclosure","locale:en"],
-    mappings: [{"framework":"CWE","reference":"CWE-203"},{"framework":"OWASP","reference":"A07:2021"}],
+    summary:
+      "Login and reset flows reveal whether an email or username exists.",
+    technicalDescription:
+      "Attackers harvest valid accounts for phishing and credential stuffing.",
+    remediation:
+      "Return identical responses and timing for valid and invalid identifiers.",
+    tags: ["web", "auth", "info-disclosure", "locale:en"],
+    mappings: [
+      { framework: "CWE", reference: "CWE-203" },
+      { framework: "OWASP", reference: "A07:2021" },
+    ],
     assessmentTypes: ["Web Application Assessment"],
   },
   {
@@ -298,76 +436,117 @@ export const FINDING_LIBRARY: FindingLibraryTemplate[] = [
     title: "HTTP parameter pollution",
     severity: "medium",
     summary: "Duplicate parameters are parsed inconsistently across layers.",
-    technicalDescription: "WAF or front-end checks may see different values than the application backend.",
-    remediation: "Reject duplicate keys or define a single authoritative parse order end to end.",
-    tags: ["web","input","locale:en"],
-    mappings: [{"framework":"CWE","reference":"CWE-235"},{"framework":"OWASP","reference":"A03:2021"}],
-    assessmentTypes: ["Web Application Assessment","API Assessment"],
+    technicalDescription:
+      "WAF or front-end checks may see different values than the application backend.",
+    remediation:
+      "Reject duplicate keys or define a single authoritative parse order end to end.",
+    tags: ["web", "input", "locale:en"],
+    mappings: [
+      { framework: "CWE", reference: "CWE-235" },
+      { framework: "OWASP", reference: "A03:2021" },
+    ],
+    assessmentTypes: ["Web Application Assessment", "API Assessment"],
   },
   {
     stableKey: "cacheable-sensitive-response",
     title: "Cacheable sensitive responses",
     severity: "medium",
-    summary: "Authenticated or personal data is returned with public caching headers.",
-    technicalDescription: "Shared caches or browsers may retain private content for other users.",
-    remediation: "Send Cache-Control: no-store on authenticated and sensitive responses.",
-    tags: ["web","cache","locale:en"],
-    mappings: [{"framework":"CWE","reference":"CWE-524"},{"framework":"OWASP","reference":"A04:2021"}],
+    summary:
+      "Authenticated or personal data is returned with public caching headers.",
+    technicalDescription:
+      "Shared caches or browsers may retain private content for other users.",
+    remediation:
+      "Send Cache-Control: no-store on authenticated and sensitive responses.",
+    tags: ["web", "cache", "locale:en"],
+    mappings: [
+      { framework: "CWE", reference: "CWE-524" },
+      { framework: "OWASP", reference: "A04:2021" },
+    ],
     assessmentTypes: ["Web Application Assessment"],
   },
   {
     stableKey: "prototype-pollution",
     title: "Prototype pollution",
     severity: "high",
-    summary: "Untrusted JSON merges into Object.prototype via recursive assignment.",
-    technicalDescription: "Polluted prototypes alter control flow and can escalate to RCE in some stacks.",
-    remediation: "Freeze prototypes; use Map; block __proto__ and constructor paths in merges.",
-    tags: ["web","javascript","locale:en"],
-    mappings: [{"framework":"CWE","reference":"CWE-1321"},{"framework":"OWASP","reference":"A03:2021"}],
-    assessmentTypes: ["Web Application Assessment","API Assessment"],
+    summary:
+      "Untrusted JSON merges into Object.prototype via recursive assignment.",
+    technicalDescription:
+      "Polluted prototypes alter control flow and can escalate to RCE in some stacks.",
+    remediation:
+      "Freeze prototypes; use Map; block __proto__ and constructor paths in merges.",
+    tags: ["web", "javascript", "locale:en"],
+    mappings: [
+      { framework: "CWE", reference: "CWE-1321" },
+      { framework: "OWASP", reference: "A03:2021" },
+    ],
+    assessmentTypes: ["Web Application Assessment", "API Assessment"],
   },
   {
     stableKey: "race-condition-toc",
     title: "Time-of-check time-of-use race",
     severity: "high",
-    summary: "Authorisation or balance checks are not atomic with the following action.",
-    technicalDescription: "Parallel requests bypass one-time limits such as coupon use or wallet debit.",
-    remediation: "Use transactional locks or idempotency keys around check-and-act sequences.",
-    tags: ["web","logic","race","locale:en"],
-    mappings: [{"framework":"CWE","reference":"CWE-367"},{"framework":"OWASP","reference":"A04:2021"}],
-    assessmentTypes: ["Web Application Assessment","API Assessment"],
+    summary:
+      "Authorisation or balance checks are not atomic with the following action.",
+    technicalDescription:
+      "Parallel requests bypass one-time limits such as coupon use or wallet debit.",
+    remediation:
+      "Use transactional locks or idempotency keys around check-and-act sequences.",
+    tags: ["web", "logic", "race", "locale:en"],
+    mappings: [
+      { framework: "CWE", reference: "CWE-367" },
+      { framework: "OWASP", reference: "A04:2021" },
+    ],
+    assessmentTypes: ["Web Application Assessment", "API Assessment"],
   },
   {
     stableKey: "business-logic-flaw",
     title: "Business logic abuse",
     severity: "medium",
-    summary: "Workflow steps can be skipped or replayed outside intended order.",
-    technicalDescription: "Attackers alter prices, skip payment, or reuse one-time entitlements.",
-    remediation: "Enforce server-side state machines; never trust client-reported workflow stage.",
-    tags: ["web","logic","locale:en"],
-    mappings: [{"framework":"CWE","reference":"CWE-840"},{"framework":"OWASP","reference":"A04:2021"}],
-    assessmentTypes: ["Web Application Assessment","API Assessment"],
+    summary:
+      "Workflow steps can be skipped or replayed outside intended order.",
+    technicalDescription:
+      "Attackers alter prices, skip payment, or reuse one-time entitlements.",
+    remediation:
+      "Enforce server-side state machines; never trust client-reported workflow stage.",
+    tags: ["web", "logic", "locale:en"],
+    mappings: [
+      { framework: "CWE", reference: "CWE-840" },
+      { framework: "OWASP", reference: "A04:2021" },
+    ],
+    assessmentTypes: ["Web Application Assessment", "API Assessment"],
   },
   {
     stableKey: "html-injection",
     title: "HTML injection",
     severity: "medium",
-    summary: "Untrusted markup is injected into pages without script execution.",
-    technicalDescription: "Attackers deface content or craft phishing UI inside the trusted origin.",
-    remediation: "Encode HTML special characters; allowlist tags if rich text is required.",
-    tags: ["web","injection","locale:en"],
-    mappings: [{"framework":"CWE","reference":"CWE-79"},{"framework":"OWASP","reference":"A03:2021"}],
+    summary:
+      "Untrusted markup is injected into pages without script execution.",
+    technicalDescription:
+      "Attackers deface content or craft phishing UI inside the trusted origin.",
+    remediation:
+      "Encode HTML special characters; allowlist tags if rich text is required.",
+    tags: ["web", "injection", "locale:en"],
+    mappings: [
+      { framework: "CWE", reference: "CWE-79" },
+      { framework: "OWASP", reference: "A03:2021" },
+    ],
     assessmentTypes: ["Web Application Assessment"],
   },
   {
     stableKey: "csv-injection",
     title: "CSV formula injection",
     severity: "medium",
-    summary: "Exported spreadsheets include cells that begin with formula characters.",
-    technicalDescription: "Opening the file in Excel may execute formulas that exfiltrate data.",
-    remediation: "Prefix risky cells with a single quote or escape = + - @ on export.",
-    tags: ["web","export","locale:en"],
-    mappings: [{"framework":"CWE","reference":"CWE-1236"},{"framework":"OWASP","reference":"A03:2021"}],
+    summary:
+      "Exported spreadsheets include cells that begin with formula characters.",
+    technicalDescription:
+      "Opening the file in Excel may execute formulas that exfiltrate data.",
+    remediation:
+      "Prefix risky cells with a single quote or escape = + - @ on export.",
+    tags: ["web", "export", "locale:en"],
+    mappings: [
+      { framework: "CWE", reference: "CWE-1236" },
+      { framework: "OWASP", reference: "A03:2021" },
+    ],
     assessmentTypes: ["Web Application Assessment"],
   },
   {
@@ -375,10 +554,15 @@ export const FINDING_LIBRARY: FindingLibraryTemplate[] = [
     title: "WebSocket origin bypass",
     severity: "medium",
     summary: "WebSocket upgrade handlers do not validate Origin.",
-    technicalDescription: "Cross-site pages can open authenticated sockets and issue privileged messages.",
-    remediation: "Validate Origin against an allowlist and authenticate before accepting messages.",
-    tags: ["web","websocket","locale:en"],
-    mappings: [{"framework":"CWE","reference":"CWE-346"},{"framework":"OWASP","reference":"A01:2021"}],
+    technicalDescription:
+      "Cross-site pages can open authenticated sockets and issue privileged messages.",
+    remediation:
+      "Validate Origin against an allowlist and authenticate before accepting messages.",
+    tags: ["web", "websocket", "locale:en"],
+    mappings: [
+      { framework: "CWE", reference: "CWE-346" },
+      { framework: "OWASP", reference: "A01:2021" },
+    ],
     assessmentTypes: ["Web Application Assessment"],
   },
   {
@@ -386,21 +570,31 @@ export const FINDING_LIBRARY: FindingLibraryTemplate[] = [
     title: "Sensitive data in URLs",
     severity: "low",
     summary: "Tokens or PII appear in query strings and referrer logs.",
-    technicalDescription: "Secrets leak via browser history, proxies, and analytics beacons.",
-    remediation: "Pass secrets in headers or POST bodies; avoid placing tokens in URLs.",
-    tags: ["web","info-disclosure","locale:en"],
-    mappings: [{"framework":"CWE","reference":"CWE-598"},{"framework":"OWASP","reference":"A02:2021"}],
-    assessmentTypes: ["Web Application Assessment","API Assessment"],
+    technicalDescription:
+      "Secrets leak via browser history, proxies, and analytics beacons.",
+    remediation:
+      "Pass secrets in headers or POST bodies; avoid placing tokens in URLs.",
+    tags: ["web", "info-disclosure", "locale:en"],
+    mappings: [
+      { framework: "CWE", reference: "CWE-598" },
+      { framework: "OWASP", reference: "A02:2021" },
+    ],
+    assessmentTypes: ["Web Application Assessment", "API Assessment"],
   },
   {
     stableKey: "missing-mfa",
     title: "Missing multi-factor authentication",
     severity: "high",
     summary: "Privileged accounts authenticate with password alone.",
-    technicalDescription: "Stolen or phished passwords grant full access without a second factor.",
-    remediation: "Require MFA for administrators and high-risk actions; prefer phishing-resistant factors.",
-    tags: ["web","auth","mfa","locale:en"],
-    mappings: [{"framework":"CWE","reference":"CWE-308"},{"framework":"OWASP","reference":"A07:2021"}],
+    technicalDescription:
+      "Stolen or phished passwords grant full access without a second factor.",
+    remediation:
+      "Require MFA for administrators and high-risk actions; prefer phishing-resistant factors.",
+    tags: ["web", "auth", "mfa", "locale:en"],
+    mappings: [
+      { framework: "CWE", reference: "CWE-308" },
+      { framework: "OWASP", reference: "A07:2021" },
+    ],
     assessmentTypes: ["Web Application Assessment"],
   },
   {
@@ -408,10 +602,15 @@ export const FINDING_LIBRARY: FindingLibraryTemplate[] = [
     title: "Broken object level authorisation",
     severity: "high",
     summary: "API object IDs are accepted without verifying tenant ownership.",
-    technicalDescription: "Authenticated callers retrieve or modify other customers' resources by changing IDs.",
-    remediation: "Enforce object-level checks on every read and write; add automated BOLA tests.",
-    tags: ["api","access-control","bola","locale:en"],
-    mappings: [{"framework":"CWE","reference":"CWE-639"},{"framework":"OWASP API","reference":"API1:2023"}],
+    technicalDescription:
+      "Authenticated callers retrieve or modify other customers' resources by changing IDs.",
+    remediation:
+      "Enforce object-level checks on every read and write; add automated BOLA tests.",
+    tags: ["api", "access-control", "bola", "locale:en"],
+    mappings: [
+      { framework: "CWE", reference: "CWE-639" },
+      { framework: "OWASP API", reference: "API1:2023" },
+    ],
     assessmentTypes: ["API Assessment"],
   },
   {
@@ -419,10 +618,15 @@ export const FINDING_LIBRARY: FindingLibraryTemplate[] = [
     title: "GraphQL introspection enabled",
     severity: "low",
     summary: "Production GraphQL exposes the full schema via introspection.",
-    technicalDescription: "Attackers map queries, mutations, and types to find sensitive fields quickly.",
-    remediation: "Disable introspection in production; expose a curated public schema only.",
-    tags: ["api","graphql","locale:en"],
-    mappings: [{"framework":"CWE","reference":"CWE-200"},{"framework":"OWASP API","reference":"API9:2023"}],
+    technicalDescription:
+      "Attackers map queries, mutations, and types to find sensitive fields quickly.",
+    remediation:
+      "Disable introspection in production; expose a curated public schema only.",
+    tags: ["api", "graphql", "locale:en"],
+    mappings: [
+      { framework: "CWE", reference: "CWE-200" },
+      { framework: "OWASP API", reference: "API9:2023" },
+    ],
     assessmentTypes: ["API Assessment"],
   },
   {
@@ -430,10 +634,15 @@ export const FINDING_LIBRARY: FindingLibraryTemplate[] = [
     title: "GraphQL batching denial of service",
     severity: "medium",
     summary: "Batched or deeply nested queries are unbounded.",
-    technicalDescription: "A single request can amplify load enough to degrade or crash the API.",
-    remediation: "Limit depth, complexity, and batch size; apply timeouts and cost analysis.",
-    tags: ["api","graphql","dos","locale:en"],
-    mappings: [{"framework":"CWE","reference":"CWE-770"},{"framework":"OWASP API","reference":"API4:2023"}],
+    technicalDescription:
+      "A single request can amplify load enough to degrade or crash the API.",
+    remediation:
+      "Limit depth, complexity, and batch size; apply timeouts and cost analysis.",
+    tags: ["api", "graphql", "dos", "locale:en"],
+    mappings: [
+      { framework: "CWE", reference: "CWE-770" },
+      { framework: "OWASP API", reference: "API4:2023" },
+    ],
     assessmentTypes: ["API Assessment"],
   },
   {
@@ -441,32 +650,48 @@ export const FINDING_LIBRARY: FindingLibraryTemplate[] = [
     title: "JWT none algorithm accepted",
     severity: "critical",
     summary: "Token verification accepts alg=none or unsigned tokens.",
-    technicalDescription: "Attackers forge identities by stripping signatures while keeping claims intact.",
-    remediation: "Allow only explicit strong algorithms; reject none and unsigned tokens.",
-    tags: ["api","jwt","auth","locale:en"],
-    mappings: [{"framework":"CWE","reference":"CWE-347"},{"framework":"OWASP API","reference":"API2:2023"}],
-    assessmentTypes: ["API Assessment","Web Application Assessment"],
+    technicalDescription:
+      "Attackers forge identities by stripping signatures while keeping claims intact.",
+    remediation:
+      "Allow only explicit strong algorithms; reject none and unsigned tokens.",
+    tags: ["api", "jwt", "auth", "locale:en"],
+    mappings: [
+      { framework: "CWE", reference: "CWE-347" },
+      { framework: "OWASP API", reference: "API2:2023" },
+    ],
+    assessmentTypes: ["API Assessment", "Web Application Assessment"],
   },
   {
     stableKey: "jwt-weak-secret",
     title: "JWT weak HMAC secret",
     severity: "high",
     summary: "HMAC-signed JWTs use a short or guessable secret.",
-    technicalDescription: "Offline cracking of the secret enables universal token forgery.",
-    remediation: "Use long random secrets or asymmetric keys; rotate and store secrets in a vault.",
-    tags: ["api","jwt","auth","locale:en"],
-    mappings: [{"framework":"CWE","reference":"CWE-326"},{"framework":"OWASP API","reference":"API2:2023"}],
+    technicalDescription:
+      "Offline cracking of the secret enables universal token forgery.",
+    remediation:
+      "Use long random secrets or asymmetric keys; rotate and store secrets in a vault.",
+    tags: ["api", "jwt", "auth", "locale:en"],
+    mappings: [
+      { framework: "CWE", reference: "CWE-326" },
+      { framework: "OWASP API", reference: "API2:2023" },
+    ],
     assessmentTypes: ["API Assessment"],
   },
   {
     stableKey: "jwt-alg-confusion",
     title: "JWT algorithm confusion",
     severity: "high",
-    summary: "Verifier trusts the token header algorithm without pinning expected type.",
-    technicalDescription: "RS256 tokens may be accepted as HS256 using the public key as HMAC secret.",
-    remediation: "Pin allowed algorithms server-side; never take alg from untrusted input.",
-    tags: ["api","jwt","auth","locale:en"],
-    mappings: [{"framework":"CWE","reference":"CWE-327"},{"framework":"OWASP API","reference":"API2:2023"}],
+    summary:
+      "Verifier trusts the token header algorithm without pinning expected type.",
+    technicalDescription:
+      "RS256 tokens may be accepted as HS256 using the public key as HMAC secret.",
+    remediation:
+      "Pin allowed algorithms server-side; never take alg from untrusted input.",
+    tags: ["api", "jwt", "auth", "locale:en"],
+    mappings: [
+      { framework: "CWE", reference: "CWE-327" },
+      { framework: "OWASP API", reference: "API2:2023" },
+    ],
     assessmentTypes: ["API Assessment"],
   },
   {
@@ -474,10 +699,15 @@ export const FINDING_LIBRARY: FindingLibraryTemplate[] = [
     title: "Broken function level authorisation",
     severity: "high",
     summary: "Administrative API functions are reachable without role checks.",
-    technicalDescription: "Guessable /admin routes perform privileged operations for any authenticated user.",
-    remediation: "Authorise by role on every function; hide and deny undocumented admin APIs.",
-    tags: ["api","access-control","locale:en"],
-    mappings: [{"framework":"CWE","reference":"CWE-285"},{"framework":"OWASP API","reference":"API5:2023"}],
+    technicalDescription:
+      "Guessable /admin routes perform privileged operations for any authenticated user.",
+    remediation:
+      "Authorise by role on every function; hide and deny undocumented admin APIs.",
+    tags: ["api", "access-control", "locale:en"],
+    mappings: [
+      { framework: "CWE", reference: "CWE-285" },
+      { framework: "OWASP API", reference: "API5:2023" },
+    ],
     assessmentTypes: ["API Assessment"],
   },
   {
@@ -485,10 +715,15 @@ export const FINDING_LIBRARY: FindingLibraryTemplate[] = [
     title: "Excessive data exposure",
     severity: "medium",
     summary: "API responses include fields the client never displays.",
-    technicalDescription: "Hidden properties such as internal IDs or hashes leak through generic serializers.",
-    remediation: "Return explicit DTOs; never dump entire database entities to clients.",
-    tags: ["api","info-disclosure","locale:en"],
-    mappings: [{"framework":"CWE","reference":"CWE-213"},{"framework":"OWASP API","reference":"API3:2023"}],
+    technicalDescription:
+      "Hidden properties such as internal IDs or hashes leak through generic serializers.",
+    remediation:
+      "Return explicit DTOs; never dump entire database entities to clients.",
+    tags: ["api", "info-disclosure", "locale:en"],
+    mappings: [
+      { framework: "CWE", reference: "CWE-213" },
+      { framework: "OWASP API", reference: "API3:2023" },
+    ],
     assessmentTypes: ["API Assessment"],
   },
   {
@@ -496,10 +731,15 @@ export const FINDING_LIBRARY: FindingLibraryTemplate[] = [
     title: "API mass assignment",
     severity: "high",
     summary: "Request bodies bind directly to privileged model fields.",
-    technicalDescription: "Clients set roles, prices, or ownership by including unexpected properties.",
-    remediation: "Allowlist writable fields per endpoint; ignore unknown properties.",
-    tags: ["api","mass-assignment","locale:en"],
-    mappings: [{"framework":"CWE","reference":"CWE-915"},{"framework":"OWASP API","reference":"API3:2023"}],
+    technicalDescription:
+      "Clients set roles, prices, or ownership by including unexpected properties.",
+    remediation:
+      "Allowlist writable fields per endpoint; ignore unknown properties.",
+    tags: ["api", "mass-assignment", "locale:en"],
+    mappings: [
+      { framework: "CWE", reference: "CWE-915" },
+      { framework: "OWASP API", reference: "API3:2023" },
+    ],
     assessmentTypes: ["API Assessment"],
   },
   {
@@ -507,10 +747,15 @@ export const FINDING_LIBRARY: FindingLibraryTemplate[] = [
     title: "API keys in URLs",
     severity: "medium",
     summary: "API keys travel in query strings rather than headers.",
-    technicalDescription: "Keys appear in logs, history, and referrer headers of third parties.",
-    remediation: "Accept keys only via Authorization headers; rotate exposed keys.",
-    tags: ["api","secrets","locale:en"],
-    mappings: [{"framework":"CWE","reference":"CWE-598"},{"framework":"OWASP API","reference":"API8:2023"}],
+    technicalDescription:
+      "Keys appear in logs, history, and referrer headers of third parties.",
+    remediation:
+      "Accept keys only via Authorization headers; rotate exposed keys.",
+    tags: ["api", "secrets", "locale:en"],
+    mappings: [
+      { framework: "CWE", reference: "CWE-598" },
+      { framework: "OWASP API", reference: "API8:2023" },
+    ],
     assessmentTypes: ["API Assessment"],
   },
   {
@@ -518,21 +763,31 @@ export const FINDING_LIBRARY: FindingLibraryTemplate[] = [
     title: "OAuth redirect URI validation failure",
     severity: "high",
     summary: "Redirect URI checks allow partial or substring matches.",
-    technicalDescription: "Attackers register lookalike callbacks and steal authorization codes.",
-    remediation: "Compare redirect URIs with exact string equality against pre-registered values.",
-    tags: ["api","oauth","auth","locale:en"],
-    mappings: [{"framework":"CWE","reference":"CWE-601"},{"framework":"OWASP API","reference":"API2:2023"}],
-    assessmentTypes: ["API Assessment","Web Application Assessment"],
+    technicalDescription:
+      "Attackers register lookalike callbacks and steal authorization codes.",
+    remediation:
+      "Compare redirect URIs with exact string equality against pre-registered values.",
+    tags: ["api", "oauth", "auth", "locale:en"],
+    mappings: [
+      { framework: "CWE", reference: "CWE-601" },
+      { framework: "OWASP API", reference: "API2:2023" },
+    ],
+    assessmentTypes: ["API Assessment", "Web Application Assessment"],
   },
   {
     stableKey: "shadow-api-endpoints",
     title: "Undocumented shadow API endpoints",
     severity: "medium",
     summary: "Old or debug API routes remain reachable in production.",
-    technicalDescription: "Forgotten endpoints skip newer auth controls and expose legacy data models.",
-    remediation: "Inventory and retire unused routes; gate non-prod endpoints behind environment checks.",
-    tags: ["api","inventory","locale:en"],
-    mappings: [{"framework":"CWE","reference":"CWE-1059"},{"framework":"OWASP API","reference":"API9:2023"}],
+    technicalDescription:
+      "Forgotten endpoints skip newer auth controls and expose legacy data models.",
+    remediation:
+      "Inventory and retire unused routes; gate non-prod endpoints behind environment checks.",
+    tags: ["api", "inventory", "locale:en"],
+    mappings: [
+      { framework: "CWE", reference: "CWE-1059" },
+      { framework: "OWASP API", reference: "API9:2023" },
+    ],
     assessmentTypes: ["API Assessment"],
   },
   {
@@ -540,32 +795,48 @@ export const FINDING_LIBRARY: FindingLibraryTemplate[] = [
     title: "NoSQL injection",
     severity: "high",
     summary: "Query operators from JSON bodies reach the database unchecked.",
-    technicalDescription: "Payloads with $gt or $where alter query logic and bypass filters.",
-    remediation: "Validate types; cast inputs; avoid passing raw objects into query builders.",
-    tags: ["api","injection","nosql","locale:en"],
-    mappings: [{"framework":"CWE","reference":"CWE-943"},{"framework":"OWASP API","reference":"API8:2023"}],
+    technicalDescription:
+      "Payloads with $gt or $where alter query logic and bypass filters.",
+    remediation:
+      "Validate types; cast inputs; avoid passing raw objects into query builders.",
+    tags: ["api", "injection", "nosql", "locale:en"],
+    mappings: [
+      { framework: "CWE", reference: "CWE-943" },
+      { framework: "OWASP API", reference: "API8:2023" },
+    ],
     assessmentTypes: ["API Assessment"],
   },
   {
     stableKey: "webhook-ssrf",
     title: "Webhook SSRF",
     severity: "high",
-    summary: "User-defined webhook URLs are fetched by the platform without restrictions.",
-    technicalDescription: "Callbacks hit internal metadata endpoints or peer services on the private network.",
-    remediation: "Allowlist schemes and hosts; block private ranges; require HTTPS with validation.",
-    tags: ["api","ssrf","locale:en"],
-    mappings: [{"framework":"CWE","reference":"CWE-918"},{"framework":"OWASP API","reference":"API7:2023"}],
-    assessmentTypes: ["API Assessment","Cloud Assessment"],
+    summary:
+      "User-defined webhook URLs are fetched by the platform without restrictions.",
+    technicalDescription:
+      "Callbacks hit internal metadata endpoints or peer services on the private network.",
+    remediation:
+      "Allowlist schemes and hosts; block private ranges; require HTTPS with validation.",
+    tags: ["api", "ssrf", "locale:en"],
+    mappings: [
+      { framework: "CWE", reference: "CWE-918" },
+      { framework: "OWASP API", reference: "API7:2023" },
+    ],
+    assessmentTypes: ["API Assessment", "Cloud Assessment"],
   },
   {
     stableKey: "improper-asset-management",
     title: "Improper API asset management",
     severity: "medium",
     summary: "Multiple API versions run without retirement or inventory.",
-    technicalDescription: "Older versions retain weaker auth while newer ones are hardened.",
-    remediation: "Maintain an API catalogue; deprecate with deadlines; monitor unused versions.",
-    tags: ["api","inventory","locale:en"],
-    mappings: [{"framework":"CWE","reference":"CWE-1059"},{"framework":"OWASP API","reference":"API9:2023"}],
+    technicalDescription:
+      "Older versions retain weaker auth while newer ones are hardened.",
+    remediation:
+      "Maintain an API catalogue; deprecate with deadlines; monitor unused versions.",
+    tags: ["api", "inventory", "locale:en"],
+    mappings: [
+      { framework: "CWE", reference: "CWE-1059" },
+      { framework: "OWASP API", reference: "API9:2023" },
+    ],
     assessmentTypes: ["API Assessment"],
   },
   {
@@ -573,10 +844,15 @@ export const FINDING_LIBRARY: FindingLibraryTemplate[] = [
     title: "GraphQL field-level authorisation gap",
     severity: "high",
     summary: "Resolvers return sensitive fields without per-field auth checks.",
-    technicalDescription: "Introspected schema lets callers request privileged fields on otherwise allowed types.",
-    remediation: "Authorise in each resolver; use field middleware for sensitive attributes.",
-    tags: ["api","graphql","access-control","locale:en"],
-    mappings: [{"framework":"CWE","reference":"CWE-285"},{"framework":"OWASP API","reference":"API1:2023"}],
+    technicalDescription:
+      "Introspected schema lets callers request privileged fields on otherwise allowed types.",
+    remediation:
+      "Authorise in each resolver; use field middleware for sensitive attributes.",
+    tags: ["api", "graphql", "access-control", "locale:en"],
+    mappings: [
+      { framework: "CWE", reference: "CWE-285" },
+      { framework: "OWASP API", reference: "API1:2023" },
+    ],
     assessmentTypes: ["API Assessment"],
   },
   {
@@ -584,10 +860,15 @@ export const FINDING_LIBRARY: FindingLibraryTemplate[] = [
     title: "API pagination bypass",
     severity: "low",
     summary: "Offset or limit parameters accept unbounded values.",
-    technicalDescription: "Callers pull entire datasets or cause expensive full-table reads.",
-    remediation: "Cap page size server-side; prefer cursor pagination with hard limits.",
-    tags: ["api","dos","locale:en"],
-    mappings: [{"framework":"CWE","reference":"CWE-770"},{"framework":"OWASP API","reference":"API4:2023"}],
+    technicalDescription:
+      "Callers pull entire datasets or cause expensive full-table reads.",
+    remediation:
+      "Cap page size server-side; prefer cursor pagination with hard limits.",
+    tags: ["api", "dos", "locale:en"],
+    mappings: [
+      { framework: "CWE", reference: "CWE-770" },
+      { framework: "OWASP API", reference: "API4:2023" },
+    ],
     assessmentTypes: ["API Assessment"],
   },
   {
@@ -595,10 +876,15 @@ export const FINDING_LIBRARY: FindingLibraryTemplate[] = [
     title: "Unsigned webhook payloads",
     severity: "medium",
     summary: "Inbound webhooks are accepted without signature verification.",
-    technicalDescription: "Attackers forge events that trigger privileged workflows.",
-    remediation: "Require HMAC signatures with rotating secrets; reject stale timestamps.",
-    tags: ["api","webhooks","auth","locale:en"],
-    mappings: [{"framework":"CWE","reference":"CWE-345"},{"framework":"OWASP API","reference":"API2:2023"}],
+    technicalDescription:
+      "Attackers forge events that trigger privileged workflows.",
+    remediation:
+      "Require HMAC signatures with rotating secrets; reject stale timestamps.",
+    tags: ["api", "webhooks", "auth", "locale:en"],
+    mappings: [
+      { framework: "CWE", reference: "CWE-345" },
+      { framework: "OWASP API", reference: "API2:2023" },
+    ],
     assessmentTypes: ["API Assessment"],
   },
   {
@@ -606,10 +892,15 @@ export const FINDING_LIBRARY: FindingLibraryTemplate[] = [
     title: "Weak TLS configuration",
     severity: "medium",
     summary: "Services negotiate outdated protocols or weak cipher suites.",
-    technicalDescription: "Passive or active attackers can downgrade or decrypt sessions.",
-    remediation: "Disable TLS 1.0/1.1 and weak ciphers; prefer TLS 1.2+ with modern suites.",
-    tags: ["network","tls","locale:en"],
-    mappings: [{"framework":"CWE","reference":"CWE-326"},{"framework":"CIS","reference":"TLS"}],
+    technicalDescription:
+      "Passive or active attackers can downgrade or decrypt sessions.",
+    remediation:
+      "Disable TLS 1.0/1.1 and weak ciphers; prefer TLS 1.2+ with modern suites.",
+    tags: ["network", "tls", "locale:en"],
+    mappings: [
+      { framework: "CWE", reference: "CWE-326" },
+      { framework: "CIS", reference: "TLS" },
+    ],
     assessmentTypes: ["Network Assessment"],
   },
   {
@@ -617,10 +908,15 @@ export const FINDING_LIBRARY: FindingLibraryTemplate[] = [
     title: "Expired or untrusted TLS certificate",
     severity: "medium",
     summary: "Presented certificates are expired, self-signed, or mismatched.",
-    technicalDescription: "Users learn to ignore warnings, enabling easier MITM attacks.",
-    remediation: "Automate renewal; use publicly trusted certificates with correct SANs.",
-    tags: ["network","tls","locale:en"],
-    mappings: [{"framework":"CWE","reference":"CWE-295"},{"framework":"CIS","reference":"TLS"}],
+    technicalDescription:
+      "Users learn to ignore warnings, enabling easier MITM attacks.",
+    remediation:
+      "Automate renewal; use publicly trusted certificates with correct SANs.",
+    tags: ["network", "tls", "locale:en"],
+    mappings: [
+      { framework: "CWE", reference: "CWE-295" },
+      { framework: "CIS", reference: "TLS" },
+    ],
     assessmentTypes: ["Network Assessment"],
   },
   {
@@ -628,32 +924,49 @@ export const FINDING_LIBRARY: FindingLibraryTemplate[] = [
     title: "Default credentials",
     severity: "critical",
     summary: "Network or application services still use vendor default logins.",
-    technicalDescription: "Public default lists grant immediate privileged access.",
-    remediation: "Change defaults before deployment; scan for known credential pairs regularly.",
-    tags: ["network","auth","credentials","locale:en"],
-    mappings: [{"framework":"CWE","reference":"CWE-798"},{"framework":"CIS","reference":"IAM"}],
-    assessmentTypes: ["Network Assessment","Cloud Assessment"],
+    technicalDescription:
+      "Public default lists grant immediate privileged access.",
+    remediation:
+      "Change defaults before deployment; scan for known credential pairs regularly.",
+    tags: ["network", "auth", "credentials", "locale:en"],
+    mappings: [
+      { framework: "CWE", reference: "CWE-798" },
+      { framework: "CIS", reference: "IAM" },
+    ],
+    assessmentTypes: ["Network Assessment", "Cloud Assessment"],
   },
   {
     stableKey: "unnecessary-services-exposed",
     title: "Unnecessary services exposed",
     severity: "medium",
-    summary: "Management interfaces and legacy protocols listen on reachable interfaces.",
-    technicalDescription: "Attack surface includes unused services that are rarely patched.",
-    remediation: "Disable unused services; bind management ports to admin networks only.",
-    tags: ["network","hardening","locale:en"],
-    mappings: [{"framework":"CWE","reference":"CWE-1059"},{"framework":"CIS","reference":"Network"}],
+    summary:
+      "Management interfaces and legacy protocols listen on reachable interfaces.",
+    technicalDescription:
+      "Attack surface includes unused services that are rarely patched.",
+    remediation:
+      "Disable unused services; bind management ports to admin networks only.",
+    tags: ["network", "hardening", "locale:en"],
+    mappings: [
+      { framework: "CWE", reference: "CWE-1059" },
+      { framework: "CIS", reference: "Network" },
+    ],
     assessmentTypes: ["Network Assessment"],
   },
   {
     stableKey: "missing-network-segmentation",
     title: "Missing network segmentation",
     severity: "high",
-    summary: "Flat networks allow lateral movement between user, server, and OT zones.",
-    technicalDescription: "Compromise of one host reaches high-value systems without choke points.",
-    remediation: "Segment by trust zone; enforce firewall rules between tiers; monitor east-west traffic.",
-    tags: ["network","segmentation","locale:en"],
-    mappings: [{"framework":"CWE","reference":"CWE-653"},{"framework":"CIS","reference":"Network"}],
+    summary:
+      "Flat networks allow lateral movement between user, server, and OT zones.",
+    technicalDescription:
+      "Compromise of one host reaches high-value systems without choke points.",
+    remediation:
+      "Segment by trust zone; enforce firewall rules between tiers; monitor east-west traffic.",
+    tags: ["network", "segmentation", "locale:en"],
+    mappings: [
+      { framework: "CWE", reference: "CWE-653" },
+      { framework: "CIS", reference: "Network" },
+    ],
     assessmentTypes: ["Network Assessment"],
   },
   {
@@ -661,32 +974,48 @@ export const FINDING_LIBRARY: FindingLibraryTemplate[] = [
     title: "SNMP community string public",
     severity: "medium",
     summary: "SNMP agents accept the default public community.",
-    technicalDescription: "Attackers enumerate device configuration and sometimes write settings.",
-    remediation: "Disable SNMP v1/v2c or set strong communities; prefer SNMPv3 with authPriv.",
-    tags: ["network","snmp","locale:en"],
-    mappings: [{"framework":"CWE","reference":"CWE-798"},{"framework":"CIS","reference":"Network"}],
+    technicalDescription:
+      "Attackers enumerate device configuration and sometimes write settings.",
+    remediation:
+      "Disable SNMP v1/v2c or set strong communities; prefer SNMPv3 with authPriv.",
+    tags: ["network", "snmp", "locale:en"],
+    mappings: [
+      { framework: "CWE", reference: "CWE-798" },
+      { framework: "CIS", reference: "Network" },
+    ],
     assessmentTypes: ["Network Assessment"],
   },
   {
     stableKey: "llmnr-nbtns-poisoning",
     title: "LLMNR and NBT-NS poisoning",
     severity: "high",
-    summary: "Name resolution fallbacks respond to multicast queries on the LAN.",
-    technicalDescription: "Attackers poison responses and capture hashes from mistyped names.",
-    remediation: "Disable LLMNR and NBT-NS via GPO; require DNS for name resolution.",
-    tags: ["network","ad","poisoning","locale:en"],
-    mappings: [{"framework":"MITRE ATT&CK","reference":"T1557.001"},{"framework":"CIS","reference":"Windows"}],
-    assessmentTypes: ["Network Assessment","Active Directory Assessment"],
+    summary:
+      "Name resolution fallbacks respond to multicast queries on the LAN.",
+    technicalDescription:
+      "Attackers poison responses and capture hashes from mistyped names.",
+    remediation:
+      "Disable LLMNR and NBT-NS via GPO; require DNS for name resolution.",
+    tags: ["network", "ad", "poisoning", "locale:en"],
+    mappings: [
+      { framework: "MITRE ATT&CK", reference: "T1557.001" },
+      { framework: "CIS", reference: "Windows" },
+    ],
+    assessmentTypes: ["Network Assessment", "Active Directory Assessment"],
   },
   {
     stableKey: "cleartext-protocols",
     title: "Cleartext management protocols",
     severity: "high",
     summary: "Telnet, FTP, or HTTP manage devices without encryption.",
-    technicalDescription: "Credentials and session content are visible to network observers.",
-    remediation: "Replace with SSH, SFTP, and HTTPS; block cleartext protocols at the firewall.",
-    tags: ["network","crypto","locale:en"],
-    mappings: [{"framework":"CWE","reference":"CWE-319"},{"framework":"CIS","reference":"Network"}],
+    technicalDescription:
+      "Credentials and session content are visible to network observers.",
+    remediation:
+      "Replace with SSH, SFTP, and HTTPS; block cleartext protocols at the firewall.",
+    tags: ["network", "crypto", "locale:en"],
+    mappings: [
+      { framework: "CWE", reference: "CWE-319" },
+      { framework: "CIS", reference: "Network" },
+    ],
     assessmentTypes: ["Network Assessment"],
   },
   {
@@ -694,10 +1023,14 @@ export const FINDING_LIBRARY: FindingLibraryTemplate[] = [
     title: "DNS zone transfer allowed",
     severity: "low",
     summary: "AXFR requests succeed from untrusted networks.",
-    technicalDescription: "Full zone data reveals internal hostnames and targeting information.",
+    technicalDescription:
+      "Full zone data reveals internal hostnames and targeting information.",
     remediation: "Restrict zone transfers to authorised secondaries only.",
-    tags: ["network","dns","locale:en"],
-    mappings: [{"framework":"CWE","reference":"CWE-200"},{"framework":"CIS","reference":"DNS"}],
+    tags: ["network", "dns", "locale:en"],
+    mappings: [
+      { framework: "CWE", reference: "CWE-200" },
+      { framework: "CIS", reference: "DNS" },
+    ],
     assessmentTypes: ["Network Assessment"],
   },
   {
@@ -705,10 +1038,15 @@ export const FINDING_LIBRARY: FindingLibraryTemplate[] = [
     title: "IPMI cipher zero authentication bypass",
     severity: "critical",
     summary: "BMC interfaces accept cipher suite zero.",
-    technicalDescription: "Attackers authenticate to out-of-band management without a valid password.",
-    remediation: "Disable cipher zero; restrict IPMI to management VLANs; update BMC firmware.",
-    tags: ["network","bmc","locale:en"],
-    mappings: [{"framework":"CWE","reference":"CWE-287"},{"framework":"CIS","reference":"Server"}],
+    technicalDescription:
+      "Attackers authenticate to out-of-band management without a valid password.",
+    remediation:
+      "Disable cipher zero; restrict IPMI to management VLANs; update BMC firmware.",
+    tags: ["network", "bmc", "locale:en"],
+    mappings: [
+      { framework: "CWE", reference: "CWE-287" },
+      { framework: "CIS", reference: "Server" },
+    ],
     assessmentTypes: ["Network Assessment"],
   },
   {
@@ -716,21 +1054,31 @@ export const FINDING_LIBRARY: FindingLibraryTemplate[] = [
     title: "Open SMB share without authentication",
     severity: "high",
     summary: "File shares allow anonymous or guest read or write access.",
-    technicalDescription: "Sensitive files are readable or ransomware can encrypt shared content.",
-    remediation: "Require authentication; remove guest access; audit share ACLs.",
-    tags: ["network","smb","locale:en"],
-    mappings: [{"framework":"CWE","reference":"CWE-276"},{"framework":"CIS","reference":"Windows"}],
-    assessmentTypes: ["Network Assessment","Active Directory Assessment"],
+    technicalDescription:
+      "Sensitive files are readable or ransomware can encrypt shared content.",
+    remediation:
+      "Require authentication; remove guest access; audit share ACLs.",
+    tags: ["network", "smb", "locale:en"],
+    mappings: [
+      { framework: "CWE", reference: "CWE-276" },
+      { framework: "CIS", reference: "Windows" },
+    ],
+    assessmentTypes: ["Network Assessment", "Active Directory Assessment"],
   },
   {
     stableKey: "ike-aggressive-mode",
     title: "IKE aggressive mode enabled",
     severity: "medium",
     summary: "VPN gateways accept IKE aggressive mode with PSKs.",
-    technicalDescription: "Hash captures enable offline cracking of pre-shared keys.",
-    remediation: "Disable aggressive mode; prefer certificate auth and IKEv2 main mode.",
-    tags: ["network","vpn","locale:en"],
-    mappings: [{"framework":"CWE","reference":"CWE-326"},{"framework":"CIS","reference":"Network"}],
+    technicalDescription:
+      "Hash captures enable offline cracking of pre-shared keys.",
+    remediation:
+      "Disable aggressive mode; prefer certificate auth and IKEv2 main mode.",
+    tags: ["network", "vpn", "locale:en"],
+    mappings: [
+      { framework: "CWE", reference: "CWE-326" },
+      { framework: "CIS", reference: "Network" },
+    ],
     assessmentTypes: ["Network Assessment"],
   },
   {
@@ -738,21 +1086,32 @@ export const FINDING_LIBRARY: FindingLibraryTemplate[] = [
     title: "Publicly accessible object storage",
     severity: "high",
     summary: "Cloud storage buckets allow unauthenticated list or get.",
-    technicalDescription: "Sensitive objects are downloadable from the internet without credentials.",
-    remediation: "Block public ACLs; enable account public access blocks; audit bucket policies.",
-    tags: ["cloud","aws","storage","locale:en"],
-    mappings: [{"framework":"CWE","reference":"CWE-284"},{"framework":"CIS AWS","reference":"2.1.5"}],
+    technicalDescription:
+      "Sensitive objects are downloadable from the internet without credentials.",
+    remediation:
+      "Block public ACLs; enable account public access blocks; audit bucket policies.",
+    tags: ["cloud", "aws", "storage", "locale:en"],
+    mappings: [
+      { framework: "CWE", reference: "CWE-284" },
+      { framework: "CIS AWS", reference: "2.1.5" },
+    ],
     assessmentTypes: ["Cloud Assessment"],
   },
   {
     stableKey: "imdsv1-enabled",
     title: "IMDSv1 enabled on compute instances",
     severity: "high",
-    summary: "Instance metadata service accepts IMDSv1 requests without hop limits.",
-    technicalDescription: "SSRF to the metadata endpoint yields temporary credentials.",
-    remediation: "Require IMDSv2 with hop limit 1; update SDKs and userdata accordingly.",
-    tags: ["cloud","aws","ssrf","locale:en"],
-    mappings: [{"framework":"CWE","reference":"CWE-668"},{"framework":"CIS AWS","reference":"5.6"}],
+    summary:
+      "Instance metadata service accepts IMDSv1 requests without hop limits.",
+    technicalDescription:
+      "SSRF to the metadata endpoint yields temporary credentials.",
+    remediation:
+      "Require IMDSv2 with hop limit 1; update SDKs and userdata accordingly.",
+    tags: ["cloud", "aws", "ssrf", "locale:en"],
+    mappings: [
+      { framework: "CWE", reference: "CWE-668" },
+      { framework: "CIS AWS", reference: "5.6" },
+    ],
     assessmentTypes: ["Cloud Assessment"],
   },
   {
@@ -760,10 +1119,15 @@ export const FINDING_LIBRARY: FindingLibraryTemplate[] = [
     title: "Overly permissive security group",
     severity: "high",
     summary: "Security groups allow 0.0.0.0/0 to administrative ports.",
-    technicalDescription: "SSH, RDP, or databases are reachable from the entire internet.",
-    remediation: "Restrict sources to known networks; prefer bastions or VPN access.",
-    tags: ["cloud","aws","network","locale:en"],
-    mappings: [{"framework":"CWE","reference":"CWE-284"},{"framework":"CIS AWS","reference":"5.2"}],
+    technicalDescription:
+      "SSH, RDP, or databases are reachable from the entire internet.",
+    remediation:
+      "Restrict sources to known networks; prefer bastions or VPN access.",
+    tags: ["cloud", "aws", "network", "locale:en"],
+    mappings: [
+      { framework: "CWE", reference: "CWE-284" },
+      { framework: "CIS AWS", reference: "5.2" },
+    ],
     assessmentTypes: ["Cloud Assessment"],
   },
   {
@@ -771,10 +1135,15 @@ export const FINDING_LIBRARY: FindingLibraryTemplate[] = [
     title: "Missing root or owner MFA",
     severity: "critical",
     summary: "Cloud account root or owner identity has no MFA.",
-    technicalDescription: "Compromise of a single password yields full account control.",
-    remediation: "Enable hardware MFA on root; remove access keys; use break-glass procedures.",
-    tags: ["cloud","aws","mfa","locale:en"],
-    mappings: [{"framework":"CWE","reference":"CWE-308"},{"framework":"CIS AWS","reference":"1.5"}],
+    technicalDescription:
+      "Compromise of a single password yields full account control.",
+    remediation:
+      "Enable hardware MFA on root; remove access keys; use break-glass procedures.",
+    tags: ["cloud", "aws", "mfa", "locale:en"],
+    mappings: [
+      { framework: "CWE", reference: "CWE-308" },
+      { framework: "CIS AWS", reference: "1.5" },
+    ],
     assessmentTypes: ["Cloud Assessment"],
   },
   {
@@ -782,10 +1151,15 @@ export const FINDING_LIBRARY: FindingLibraryTemplate[] = [
     title: "Overly permissive IAM policies",
     severity: "high",
     summary: "Roles grant Action:* or Resource:* beyond least privilege.",
-    technicalDescription: "Compromise of one workload credential escalates across the account.",
-    remediation: "Scope actions and resources; use permission boundaries and access analyzer.",
-    tags: ["cloud","iam","locale:en"],
-    mappings: [{"framework":"CWE","reference":"CWE-269"},{"framework":"CIS AWS","reference":"1.16"}],
+    technicalDescription:
+      "Compromise of one workload credential escalates across the account.",
+    remediation:
+      "Scope actions and resources; use permission boundaries and access analyzer.",
+    tags: ["cloud", "iam", "locale:en"],
+    mappings: [
+      { framework: "CWE", reference: "CWE-269" },
+      { framework: "CIS AWS", reference: "1.16" },
+    ],
     assessmentTypes: ["Cloud Assessment"],
   },
   {
@@ -793,10 +1167,15 @@ export const FINDING_LIBRARY: FindingLibraryTemplate[] = [
     title: "Public database snapshot",
     severity: "high",
     summary: "RDS or similar snapshots are shared publicly.",
-    technicalDescription: "Anyone can restore a copy of production data into their account.",
-    remediation: "Audit snapshot sharing; revoke public shares; encrypt snapshots.",
-    tags: ["cloud","aws","database","locale:en"],
-    mappings: [{"framework":"CWE","reference":"CWE-284"},{"framework":"CIS AWS","reference":"2.2"}],
+    technicalDescription:
+      "Anyone can restore a copy of production data into their account.",
+    remediation:
+      "Audit snapshot sharing; revoke public shares; encrypt snapshots.",
+    tags: ["cloud", "aws", "database", "locale:en"],
+    mappings: [
+      { framework: "CWE", reference: "CWE-284" },
+      { framework: "CIS AWS", reference: "2.2" },
+    ],
     assessmentTypes: ["Cloud Assessment"],
   },
   {
@@ -804,10 +1183,15 @@ export const FINDING_LIBRARY: FindingLibraryTemplate[] = [
     title: "Unencrypted cloud volumes or buckets",
     severity: "medium",
     summary: "Persistent storage lacks encryption at rest.",
-    technicalDescription: "Stolen media or mis-copied snapshots expose plaintext data.",
-    remediation: "Enable default encryption with customer-managed keys where required.",
-    tags: ["cloud","crypto","locale:en"],
-    mappings: [{"framework":"CWE","reference":"CWE-311"},{"framework":"CIS AWS","reference":"2.2.1"}],
+    technicalDescription:
+      "Stolen media or mis-copied snapshots expose plaintext data.",
+    remediation:
+      "Enable default encryption with customer-managed keys where required.",
+    tags: ["cloud", "crypto", "locale:en"],
+    mappings: [
+      { framework: "CWE", reference: "CWE-311" },
+      { framework: "CIS AWS", reference: "2.2.1" },
+    ],
     assessmentTypes: ["Cloud Assessment"],
   },
   {
@@ -815,10 +1199,15 @@ export const FINDING_LIBRARY: FindingLibraryTemplate[] = [
     title: "Cloud audit logging disabled",
     severity: "high",
     summary: "Management events are not recorded across regions.",
-    technicalDescription: "Intrusions leave little forensic trail for investigation.",
-    remediation: "Enable multi-region trail with log file validation and locked storage.",
-    tags: ["cloud","aws","logging","locale:en"],
-    mappings: [{"framework":"CWE","reference":"CWE-778"},{"framework":"CIS AWS","reference":"3.1"}],
+    technicalDescription:
+      "Intrusions leave little forensic trail for investigation.",
+    remediation:
+      "Enable multi-region trail with log file validation and locked storage.",
+    tags: ["cloud", "aws", "logging", "locale:en"],
+    mappings: [
+      { framework: "CWE", reference: "CWE-778" },
+      { framework: "CIS AWS", reference: "3.1" },
+    ],
     assessmentTypes: ["Cloud Assessment"],
   },
   {
@@ -826,10 +1215,15 @@ export const FINDING_LIBRARY: FindingLibraryTemplate[] = [
     title: "Azure blob container public access",
     severity: "high",
     summary: "Blob containers allow anonymous public access.",
-    technicalDescription: "Objects are readable without Entra ID or SAS controls.",
-    remediation: "Disable public access at the storage account; use private endpoints.",
-    tags: ["cloud","azure","storage","locale:en"],
-    mappings: [{"framework":"CWE","reference":"CWE-284"},{"framework":"CIS Azure","reference":"3.5"}],
+    technicalDescription:
+      "Objects are readable without Entra ID or SAS controls.",
+    remediation:
+      "Disable public access at the storage account; use private endpoints.",
+    tags: ["cloud", "azure", "storage", "locale:en"],
+    mappings: [
+      { framework: "CWE", reference: "CWE-284" },
+      { framework: "CIS Azure", reference: "3.5" },
+    ],
     assessmentTypes: ["Cloud Assessment"],
   },
   {
@@ -837,10 +1231,15 @@ export const FINDING_LIBRARY: FindingLibraryTemplate[] = [
     title: "GCP storage bucket public IAM",
     severity: "high",
     summary: "allUsers or allAuthenticatedUsers have objectViewer on a bucket.",
-    technicalDescription: "Internet principals can list and download bucket contents.",
-    remediation: "Remove public IAM members; enforce uniform bucket-level access.",
-    tags: ["cloud","gcp","storage","locale:en"],
-    mappings: [{"framework":"CWE","reference":"CWE-284"},{"framework":"CIS GCP","reference":"5.1"}],
+    technicalDescription:
+      "Internet principals can list and download bucket contents.",
+    remediation:
+      "Remove public IAM members; enforce uniform bucket-level access.",
+    tags: ["cloud", "gcp", "storage", "locale:en"],
+    mappings: [
+      { framework: "CWE", reference: "CWE-284" },
+      { framework: "CIS GCP", reference: "5.1" },
+    ],
     assessmentTypes: ["Cloud Assessment"],
   },
   {
@@ -848,21 +1247,32 @@ export const FINDING_LIBRARY: FindingLibraryTemplate[] = [
     title: "GCP service account key exposed",
     severity: "critical",
     summary: "Long-lived service account JSON keys are committed or shared.",
-    technicalDescription: "Stolen keys provide persistent API access until rotation.",
-    remediation: "Prefer attached service accounts; disable key creation; rotate and revoke leaked keys.",
-    tags: ["cloud","gcp","secrets","locale:en"],
-    mappings: [{"framework":"CWE","reference":"CWE-798"},{"framework":"CIS GCP","reference":"1.4"}],
+    technicalDescription:
+      "Stolen keys provide persistent API access until rotation.",
+    remediation:
+      "Prefer attached service accounts; disable key creation; rotate and revoke leaked keys.",
+    tags: ["cloud", "gcp", "secrets", "locale:en"],
+    mappings: [
+      { framework: "CWE", reference: "CWE-798" },
+      { framework: "CIS GCP", reference: "1.4" },
+    ],
     assessmentTypes: ["Cloud Assessment"],
   },
   {
     stableKey: "lambda-env-secrets",
     title: "Secrets in function environment variables",
     severity: "medium",
-    summary: "API keys and passwords sit in plaintext Lambda environment config.",
-    technicalDescription: "Anyone with console or IAM read can extract production secrets.",
-    remediation: "Store secrets in Secrets Manager or SSM; inject at runtime with least privilege.",
-    tags: ["cloud","aws","secrets","locale:en"],
-    mappings: [{"framework":"CWE","reference":"CWE-522"},{"framework":"CIS AWS","reference":"1.4"}],
+    summary:
+      "API keys and passwords sit in plaintext Lambda environment config.",
+    technicalDescription:
+      "Anyone with console or IAM read can extract production secrets.",
+    remediation:
+      "Store secrets in Secrets Manager or SSM; inject at runtime with least privilege.",
+    tags: ["cloud", "aws", "secrets", "locale:en"],
+    mappings: [
+      { framework: "CWE", reference: "CWE-522" },
+      { framework: "CIS AWS", reference: "1.4" },
+    ],
     assessmentTypes: ["Cloud Assessment"],
   },
   {
@@ -870,10 +1280,15 @@ export const FINDING_LIBRARY: FindingLibraryTemplate[] = [
     title: "Overbroad container task role",
     severity: "high",
     summary: "ECS/EKS task roles can modify IAM or read all S3 buckets.",
-    technicalDescription: "Container escape or app RCE inherits powerful cloud privileges.",
-    remediation: "Scope task roles to required actions; separate roles per service.",
-    tags: ["cloud","aws","iam","locale:en"],
-    mappings: [{"framework":"CWE","reference":"CWE-269"},{"framework":"CIS AWS","reference":"5.4"}],
+    technicalDescription:
+      "Container escape or app RCE inherits powerful cloud privileges.",
+    remediation:
+      "Scope task roles to required actions; separate roles per service.",
+    tags: ["cloud", "aws", "iam", "locale:en"],
+    mappings: [
+      { framework: "CWE", reference: "CWE-269" },
+      { framework: "CIS AWS", reference: "5.4" },
+    ],
     assessmentTypes: ["Cloud Assessment"],
   },
   {
@@ -882,9 +1297,13 @@ export const FINDING_LIBRARY: FindingLibraryTemplate[] = [
     severity: "high",
     summary: "Managed identities hold Contributor or Owner on broad scopes.",
     technicalDescription: "App compromise becomes subscription-wide control.",
-    remediation: "Assign minimal RBAC roles; prefer resource-scoped custom roles.",
-    tags: ["cloud","azure","iam","locale:en"],
-    mappings: [{"framework":"CWE","reference":"CWE-269"},{"framework":"CIS Azure","reference":"1.2"}],
+    remediation:
+      "Assign minimal RBAC roles; prefer resource-scoped custom roles.",
+    tags: ["cloud", "azure", "iam", "locale:en"],
+    mappings: [
+      { framework: "CWE", reference: "CWE-269" },
+      { framework: "CIS Azure", reference: "1.2" },
+    ],
     assessmentTypes: ["Cloud Assessment"],
   },
   {
@@ -892,10 +1311,15 @@ export const FINDING_LIBRARY: FindingLibraryTemplate[] = [
     title: "KMS key policy too public",
     severity: "critical",
     summary: "Key policies allow broad principals to decrypt or manage keys.",
-    technicalDescription: "Unauthorized decrypt enables reading ciphertext across services.",
-    remediation: "Restrict key admins and users; avoid Principal:* with Decrypt.",
-    tags: ["cloud","aws","crypto","locale:en"],
-    mappings: [{"framework":"CWE","reference":"CWE-284"},{"framework":"CIS AWS","reference":"3.8"}],
+    technicalDescription:
+      "Unauthorized decrypt enables reading ciphertext across services.",
+    remediation:
+      "Restrict key admins and users; avoid Principal:* with Decrypt.",
+    tags: ["cloud", "aws", "crypto", "locale:en"],
+    mappings: [
+      { framework: "CWE", reference: "CWE-284" },
+      { framework: "CIS AWS", reference: "3.8" },
+    ],
     assessmentTypes: ["Cloud Assessment"],
   },
   {
@@ -903,10 +1327,15 @@ export const FINDING_LIBRARY: FindingLibraryTemplate[] = [
     title: "Certificate pinning bypass",
     severity: "medium",
     summary: "Pinning is absent or trivially bypassed in release builds.",
-    technicalDescription: "Intercepting proxies can decrypt API traffic on compromised devices.",
-    remediation: "Implement pinning with backup pins; detect instrumentation; fail closed on mismatch.",
-    tags: ["mobile","tls","locale:en"],
-    mappings: [{"framework":"CWE","reference":"CWE-295"},{"framework":"OWASP MASVS","reference":"MASVS-NETWORK"}],
+    technicalDescription:
+      "Intercepting proxies can decrypt API traffic on compromised devices.",
+    remediation:
+      "Implement pinning with backup pins; detect instrumentation; fail closed on mismatch.",
+    tags: ["mobile", "tls", "locale:en"],
+    mappings: [
+      { framework: "CWE", reference: "CWE-295" },
+      { framework: "OWASP MASVS", reference: "MASVS-NETWORK" },
+    ],
     assessmentTypes: ["Mobile Application Assessment"],
   },
   {
@@ -914,10 +1343,15 @@ export const FINDING_LIBRARY: FindingLibraryTemplate[] = [
     title: "Exported Android activity",
     severity: "high",
     summary: "Activities or receivers are exported without permission guards.",
-    technicalDescription: "Other apps can launch privileged screens or inject intents.",
-    remediation: "Set exported=false unless required; enforce custom permissions and input checks.",
-    tags: ["mobile","android","locale:en"],
-    mappings: [{"framework":"CWE","reference":"CWE-926"},{"framework":"OWASP MASVS","reference":"MASVS-PLATFORM"}],
+    technicalDescription:
+      "Other apps can launch privileged screens or inject intents.",
+    remediation:
+      "Set exported=false unless required; enforce custom permissions and input checks.",
+    tags: ["mobile", "android", "locale:en"],
+    mappings: [
+      { framework: "CWE", reference: "CWE-926" },
+      { framework: "OWASP MASVS", reference: "MASVS-PLATFORM" },
+    ],
     assessmentTypes: ["Mobile Application Assessment"],
   },
   {
@@ -926,9 +1360,13 @@ export const FINDING_LIBRARY: FindingLibraryTemplate[] = [
     severity: "high",
     summary: "Tokens and PII sit in plaintext SharedPreferences or files.",
     technicalDescription: "Rooted devices or backups expose session material.",
-    remediation: "Use platform keystore-backed storage; avoid storing long-lived secrets on device.",
-    tags: ["mobile","storage","locale:en"],
-    mappings: [{"framework":"CWE","reference":"CWE-312"},{"framework":"OWASP MASVS","reference":"MASVS-STORAGE"}],
+    remediation:
+      "Use platform keystore-backed storage; avoid storing long-lived secrets on device.",
+    tags: ["mobile", "storage", "locale:en"],
+    mappings: [
+      { framework: "CWE", reference: "CWE-312" },
+      { framework: "OWASP MASVS", reference: "MASVS-STORAGE" },
+    ],
     assessmentTypes: ["Mobile Application Assessment"],
   },
   {
@@ -936,10 +1374,15 @@ export const FINDING_LIBRARY: FindingLibraryTemplate[] = [
     title: "Deep link hijacking",
     severity: "medium",
     summary: "Custom URL schemes are not verified against app links.",
-    technicalDescription: "Malicious apps register the same scheme and intercept tokens in links.",
-    remediation: "Use verified App Links / Universal Links; validate deep link parameters.",
-    tags: ["mobile","deeplink","locale:en"],
-    mappings: [{"framework":"CWE","reference":"CWE-940"},{"framework":"OWASP MASVS","reference":"MASVS-PLATFORM"}],
+    technicalDescription:
+      "Malicious apps register the same scheme and intercept tokens in links.",
+    remediation:
+      "Use verified App Links / Universal Links; validate deep link parameters.",
+    tags: ["mobile", "deeplink", "locale:en"],
+    mappings: [
+      { framework: "CWE", reference: "CWE-940" },
+      { framework: "OWASP MASVS", reference: "MASVS-PLATFORM" },
+    ],
     assessmentTypes: ["Mobile Application Assessment"],
   },
   {
@@ -948,9 +1391,13 @@ export const FINDING_LIBRARY: FindingLibraryTemplate[] = [
     severity: "medium",
     summary: "iOS ATS exceptions allow cleartext or weak TLS broadly.",
     technicalDescription: "API calls may proceed over insecure channels.",
-    remediation: "Remove global ATS exceptions; allowlist only justified endpoints.",
-    tags: ["mobile","ios","tls","locale:en"],
-    mappings: [{"framework":"CWE","reference":"CWE-319"},{"framework":"OWASP MASVS","reference":"MASVS-NETWORK"}],
+    remediation:
+      "Remove global ATS exceptions; allowlist only justified endpoints.",
+    tags: ["mobile", "ios", "tls", "locale:en"],
+    mappings: [
+      { framework: "CWE", reference: "CWE-319" },
+      { framework: "OWASP MASVS", reference: "MASVS-NETWORK" },
+    ],
     assessmentTypes: ["Mobile Application Assessment"],
   },
   {
@@ -958,10 +1405,15 @@ export const FINDING_LIBRARY: FindingLibraryTemplate[] = [
     title: "Hardcoded API keys in mobile app",
     severity: "high",
     summary: "Secrets are embedded in the application binary.",
-    technicalDescription: "Decompilation recovers keys usable against backend APIs.",
-    remediation: "Move secrets to the backend; use short-lived tokens obtained after auth.",
-    tags: ["mobile","secrets","locale:en"],
-    mappings: [{"framework":"CWE","reference":"CWE-798"},{"framework":"OWASP MASVS","reference":"MASVS-STORAGE"}],
+    technicalDescription:
+      "Decompilation recovers keys usable against backend APIs.",
+    remediation:
+      "Move secrets to the backend; use short-lived tokens obtained after auth.",
+    tags: ["mobile", "secrets", "locale:en"],
+    mappings: [
+      { framework: "CWE", reference: "CWE-798" },
+      { framework: "OWASP MASVS", reference: "MASVS-STORAGE" },
+    ],
     assessmentTypes: ["Mobile Application Assessment"],
   },
   {
@@ -969,10 +1421,15 @@ export const FINDING_LIBRARY: FindingLibraryTemplate[] = [
     title: "Sensitive data on clipboard",
     severity: "low",
     summary: "The app copies passwords or tokens to the system clipboard.",
-    technicalDescription: "Other apps on the device can read clipboard contents.",
-    remediation: "Avoid copying secrets; clear clipboard after timed use where unavoidable.",
-    tags: ["mobile","privacy","locale:en"],
-    mappings: [{"framework":"CWE","reference":"CWE-200"},{"framework":"OWASP MASVS","reference":"MASVS-STORAGE"}],
+    technicalDescription:
+      "Other apps on the device can read clipboard contents.",
+    remediation:
+      "Avoid copying secrets; clear clipboard after timed use where unavoidable.",
+    tags: ["mobile", "privacy", "locale:en"],
+    mappings: [
+      { framework: "CWE", reference: "CWE-200" },
+      { framework: "OWASP MASVS", reference: "MASVS-STORAGE" },
+    ],
     assessmentTypes: ["Mobile Application Assessment"],
   },
   {
@@ -980,21 +1437,31 @@ export const FINDING_LIBRARY: FindingLibraryTemplate[] = [
     title: "Android backup of sensitive data",
     severity: "medium",
     summary: "allowBackup is true and sensitive files are included.",
-    technicalDescription: "ADB backup extracts tokens and personal data from the app sandbox.",
+    technicalDescription:
+      "ADB backup extracts tokens and personal data from the app sandbox.",
     remediation: "Disable backup or exclude sensitive paths via backup rules.",
-    tags: ["mobile","android","backup","locale:en"],
-    mappings: [{"framework":"CWE","reference":"CWE-312"},{"framework":"OWASP MASVS","reference":"MASVS-STORAGE"}],
+    tags: ["mobile", "android", "backup", "locale:en"],
+    mappings: [
+      { framework: "CWE", reference: "CWE-312" },
+      { framework: "OWASP MASVS", reference: "MASVS-STORAGE" },
+    ],
     assessmentTypes: ["Mobile Application Assessment"],
   },
   {
     stableKey: "webview-javascript-bridge",
     title: "Insecure WebView JavaScript bridge",
     severity: "high",
-    summary: "JavaScript interfaces expose native methods to untrusted web content.",
-    technicalDescription: "Compromised or injected pages call native features and access device data.",
-    remediation: "Avoid addJavascriptInterface for untrusted URLs; validate origins strictly.",
-    tags: ["mobile","webview","locale:en"],
-    mappings: [{"framework":"CWE","reference":"CWE-749"},{"framework":"OWASP MASVS","reference":"MASVS-PLATFORM"}],
+    summary:
+      "JavaScript interfaces expose native methods to untrusted web content.",
+    technicalDescription:
+      "Compromised or injected pages call native features and access device data.",
+    remediation:
+      "Avoid addJavascriptInterface for untrusted URLs; validate origins strictly.",
+    tags: ["mobile", "webview", "locale:en"],
+    mappings: [
+      { framework: "CWE", reference: "CWE-749" },
+      { framework: "OWASP MASVS", reference: "MASVS-PLATFORM" },
+    ],
     assessmentTypes: ["Mobile Application Assessment"],
   },
   {
@@ -1002,10 +1469,15 @@ export const FINDING_LIBRARY: FindingLibraryTemplate[] = [
     title: "Weak biometric fallback",
     severity: "medium",
     summary: "Biometric auth falls back to device PIN without re-binding keys.",
-    technicalDescription: "Attackers with the PIN unlock high-value app functions silently.",
-    remediation: "Invalidate crypto keys on biometric change; require re-auth for sensitive actions.",
-    tags: ["mobile","auth","locale:en"],
-    mappings: [{"framework":"CWE","reference":"CWE-287"},{"framework":"OWASP MASVS","reference":"MASVS-AUTH"}],
+    technicalDescription:
+      "Attackers with the PIN unlock high-value app functions silently.",
+    remediation:
+      "Invalidate crypto keys on biometric change; require re-auth for sensitive actions.",
+    tags: ["mobile", "auth", "locale:en"],
+    mappings: [
+      { framework: "CWE", reference: "CWE-287" },
+      { framework: "OWASP MASVS", reference: "MASVS-AUTH" },
+    ],
     assessmentTypes: ["Mobile Application Assessment"],
   },
   {
@@ -1013,10 +1485,15 @@ export const FINDING_LIBRARY: FindingLibraryTemplate[] = [
     title: "Kerberoasting exposure",
     severity: "high",
     summary: "Service accounts with SPNs use weak passwords crackable offline.",
-    technicalDescription: "Attackers request service tickets and brute-force the TGS encryption material.",
-    remediation: "Use long random gMSA passwords; limit SPNs; monitor unusual TGS requests.",
-    tags: ["ad","kerberos","locale:en"],
-    mappings: [{"framework":"MITRE ATT&CK","reference":"T1558.003"},{"framework":"CIS","reference":"Active Directory"}],
+    technicalDescription:
+      "Attackers request service tickets and brute-force the TGS encryption material.",
+    remediation:
+      "Use long random gMSA passwords; limit SPNs; monitor unusual TGS requests.",
+    tags: ["ad", "kerberos", "locale:en"],
+    mappings: [
+      { framework: "MITRE ATT&CK", reference: "T1558.003" },
+      { framework: "CIS", reference: "Active Directory" },
+    ],
     assessmentTypes: ["Active Directory Assessment"],
   },
   {
@@ -1024,43 +1501,66 @@ export const FINDING_LIBRARY: FindingLibraryTemplate[] = [
     title: "AS-REP roasting",
     severity: "high",
     summary: "Accounts have Kerberos pre-authentication disabled.",
-    technicalDescription: "AS-REP responses can be cracked offline without touching the target host.",
-    remediation: "Require pre-authentication; audit userAccountControl for DONT_REQ_PREAUTH.",
-    tags: ["ad","kerberos","locale:en"],
-    mappings: [{"framework":"MITRE ATT&CK","reference":"T1558.004"},{"framework":"CIS","reference":"Active Directory"}],
+    technicalDescription:
+      "AS-REP responses can be cracked offline without touching the target host.",
+    remediation:
+      "Require pre-authentication; audit userAccountControl for DONT_REQ_PREAUTH.",
+    tags: ["ad", "kerberos", "locale:en"],
+    mappings: [
+      { framework: "MITRE ATT&CK", reference: "T1558.004" },
+      { framework: "CIS", reference: "Active Directory" },
+    ],
     assessmentTypes: ["Active Directory Assessment"],
   },
   {
     stableKey: "unconstrained-delegation",
     title: "Unconstrained delegation",
     severity: "critical",
-    summary: "Computer or user accounts are trusted for unconstrained delegation.",
-    technicalDescription: "Compromise of that host yields TGTs for users who authenticate to it.",
-    remediation: "Remove unconstrained delegation; prefer constrained or resource-based constrained delegation.",
-    tags: ["ad","delegation","locale:en"],
-    mappings: [{"framework":"MITRE ATT&CK","reference":"T1558.001"},{"framework":"CIS","reference":"Active Directory"}],
+    summary:
+      "Computer or user accounts are trusted for unconstrained delegation.",
+    technicalDescription:
+      "Compromise of that host yields TGTs for users who authenticate to it.",
+    remediation:
+      "Remove unconstrained delegation; prefer constrained or resource-based constrained delegation.",
+    tags: ["ad", "delegation", "locale:en"],
+    mappings: [
+      { framework: "MITRE ATT&CK", reference: "T1558.001" },
+      { framework: "CIS", reference: "Active Directory" },
+    ],
     assessmentTypes: ["Active Directory Assessment"],
   },
   {
     stableKey: "constrained-delegation-abuse",
     title: "Constrained delegation misconfiguration",
     severity: "high",
-    summary: "Constrained delegation allows impersonation to sensitive services.",
-    technicalDescription: "Compromised front-end services can request tickets to high-value backends.",
-    remediation: "Review msDS-AllowedToDelegateTo; use RBCD with least privilege only.",
-    tags: ["ad","delegation","locale:en"],
-    mappings: [{"framework":"MITRE ATT&CK","reference":"T1558"},{"framework":"CIS","reference":"Active Directory"}],
+    summary:
+      "Constrained delegation allows impersonation to sensitive services.",
+    technicalDescription:
+      "Compromised front-end services can request tickets to high-value backends.",
+    remediation:
+      "Review msDS-AllowedToDelegateTo; use RBCD with least privilege only.",
+    tags: ["ad", "delegation", "locale:en"],
+    mappings: [
+      { framework: "MITRE ATT&CK", reference: "T1558" },
+      { framework: "CIS", reference: "Active Directory" },
+    ],
     assessmentTypes: ["Active Directory Assessment"],
   },
   {
     stableKey: "weak-domain-password-policy",
     title: "Weak domain password policy",
     severity: "high",
-    summary: "Domain policy allows short passwords without complexity or ban lists.",
-    technicalDescription: "Password spraying succeeds against many domain accounts.",
-    remediation: "Enforce long passwords, banned lists, and fine-grained policies for admins.",
-    tags: ["ad","auth","locale:en"],
-    mappings: [{"framework":"CWE","reference":"CWE-521"},{"framework":"CIS","reference":"Active Directory"}],
+    summary:
+      "Domain policy allows short passwords without complexity or ban lists.",
+    technicalDescription:
+      "Password spraying succeeds against many domain accounts.",
+    remediation:
+      "Enforce long passwords, banned lists, and fine-grained policies for admins.",
+    tags: ["ad", "auth", "locale:en"],
+    mappings: [
+      { framework: "CWE", reference: "CWE-521" },
+      { framework: "CIS", reference: "Active Directory" },
+    ],
     assessmentTypes: ["Active Directory Assessment"],
   },
   {
@@ -1068,10 +1568,15 @@ export const FINDING_LIBRARY: FindingLibraryTemplate[] = [
     title: "Legacy NTLM authentication enabled",
     severity: "medium",
     summary: "NTLM remains accepted where Kerberos should be mandatory.",
-    technicalDescription: "Relay and hash-capture attacks remain practical on the network.",
-    remediation: "Audit NTLM usage; restrict via GPO; prefer Kerberos-only where feasible.",
-    tags: ["ad","ntlm","locale:en"],
-    mappings: [{"framework":"MITRE ATT&CK","reference":"T1550.002"},{"framework":"CIS","reference":"Active Directory"}],
+    technicalDescription:
+      "Relay and hash-capture attacks remain practical on the network.",
+    remediation:
+      "Audit NTLM usage; restrict via GPO; prefer Kerberos-only where feasible.",
+    tags: ["ad", "ntlm", "locale:en"],
+    mappings: [
+      { framework: "MITRE ATT&CK", reference: "T1550.002" },
+      { framework: "CIS", reference: "Active Directory" },
+    ],
     assessmentTypes: ["Active Directory Assessment"],
   },
   {
@@ -1079,10 +1584,15 @@ export const FINDING_LIBRARY: FindingLibraryTemplate[] = [
     title: "Excessive Domain Admin membership",
     severity: "high",
     summary: "Too many standing Domain Admin accounts exist.",
-    technicalDescription: "Any compromised DA credential yields forest-wide impact.",
-    remediation: "Shrink DA; use tiered admin and JIT elevation with monitoring.",
-    tags: ["ad","privilege","locale:en"],
-    mappings: [{"framework":"CWE","reference":"CWE-250"},{"framework":"CIS","reference":"Active Directory"}],
+    technicalDescription:
+      "Any compromised DA credential yields forest-wide impact.",
+    remediation:
+      "Shrink DA; use tiered admin and JIT elevation with monitoring.",
+    tags: ["ad", "privilege", "locale:en"],
+    mappings: [
+      { framework: "CWE", reference: "CWE-250" },
+      { framework: "CIS", reference: "Active Directory" },
+    ],
     assessmentTypes: ["Active Directory Assessment"],
   },
   {
@@ -1090,21 +1600,32 @@ export const FINDING_LIBRARY: FindingLibraryTemplate[] = [
     title: "Writable GPO permissions",
     severity: "high",
     summary: "Non-admin principals can edit Group Policy Objects.",
-    technicalDescription: "Attackers deploy startup scripts or scheduled tasks domain-wide.",
-    remediation: "Audit GPO ACLs; remove unnecessary write rights; monitor GPO changes.",
-    tags: ["ad","gpo","locale:en"],
-    mappings: [{"framework":"MITRE ATT&CK","reference":"T1484.001"},{"framework":"CIS","reference":"Active Directory"}],
+    technicalDescription:
+      "Attackers deploy startup scripts or scheduled tasks domain-wide.",
+    remediation:
+      "Audit GPO ACLs; remove unnecessary write rights; monitor GPO changes.",
+    tags: ["ad", "gpo", "locale:en"],
+    mappings: [
+      { framework: "MITRE ATT&CK", reference: "T1484.001" },
+      { framework: "CIS", reference: "Active Directory" },
+    ],
     assessmentTypes: ["Active Directory Assessment"],
   },
   {
     stableKey: "laps-not-configured",
     title: "LAPS not configured",
     severity: "medium",
-    summary: "Local administrator passwords are shared or static across endpoints.",
-    technicalDescription: "One workstation compromise unlocks many others via reused local admin.",
-    remediation: "Deploy Windows LAPS; unique random local admin passwords; restrict readers.",
-    tags: ["ad","endpoint","locale:en"],
-    mappings: [{"framework":"CWE","reference":"CWE-521"},{"framework":"CIS","reference":"Active Directory"}],
+    summary:
+      "Local administrator passwords are shared or static across endpoints.",
+    technicalDescription:
+      "One workstation compromise unlocks many others via reused local admin.",
+    remediation:
+      "Deploy Windows LAPS; unique random local admin passwords; restrict readers.",
+    tags: ["ad", "endpoint", "locale:en"],
+    mappings: [
+      { framework: "CWE", reference: "CWE-521" },
+      { framework: "CIS", reference: "Active Directory" },
+    ],
     assessmentTypes: ["Active Directory Assessment"],
   },
   {
@@ -1112,10 +1633,14 @@ export const FINDING_LIBRARY: FindingLibraryTemplate[] = [
     title: "SMB signing not required",
     severity: "medium",
     summary: "SMB signing is negotiated optionally rather than required.",
-    technicalDescription: "NTLM relay to SMB services succeeds without signing enforcement.",
+    technicalDescription:
+      "NTLM relay to SMB services succeeds without signing enforcement.",
     remediation: "Require SMB signing via GPO on servers and clients.",
-    tags: ["ad","smb","locale:en"],
-    mappings: [{"framework":"MITRE ATT&CK","reference":"T1557"},{"framework":"CIS","reference":"Active Directory"}],
+    tags: ["ad", "smb", "locale:en"],
+    mappings: [
+      { framework: "MITRE ATT&CK", reference: "T1557" },
+      { framework: "CIS", reference: "Active Directory" },
+    ],
     assessmentTypes: ["Active Directory Assessment"],
   },
   {
@@ -1123,21 +1648,32 @@ export const FINDING_LIBRARY: FindingLibraryTemplate[] = [
     title: "LDAP signing not required",
     severity: "medium",
     summary: "Domain controllers accept unsigned LDAP simple binds.",
-    technicalDescription: "Credential and query tampering is possible on the network path.",
-    remediation: "Require LDAP signing and channel binding on domain controllers.",
-    tags: ["ad","ldap","locale:en"],
-    mappings: [{"framework":"CWE","reference":"CWE-319"},{"framework":"CIS","reference":"Active Directory"}],
+    technicalDescription:
+      "Credential and query tampering is possible on the network path.",
+    remediation:
+      "Require LDAP signing and channel binding on domain controllers.",
+    tags: ["ad", "ldap", "locale:en"],
+    mappings: [
+      { framework: "CWE", reference: "CWE-319" },
+      { framework: "CIS", reference: "Active Directory" },
+    ],
     assessmentTypes: ["Active Directory Assessment"],
   },
   {
     stableKey: "printnightmare-risk",
     title: "Print spooler remote abuse risk",
     severity: "high",
-    summary: "Print Spooler runs on domain controllers or exposes dangerous RPC.",
-    technicalDescription: "Remote printer driver installs can yield SYSTEM on the target.",
-    remediation: "Disable spooler on DCs; restrict Point and Print; apply vendor mitigations.",
-    tags: ["ad","print","locale:en"],
-    mappings: [{"framework":"MITRE ATT&CK","reference":"T1068"},{"framework":"CIS","reference":"Active Directory"}],
+    summary:
+      "Print Spooler runs on domain controllers or exposes dangerous RPC.",
+    technicalDescription:
+      "Remote printer driver installs can yield SYSTEM on the target.",
+    remediation:
+      "Disable spooler on DCs; restrict Point and Print; apply vendor mitigations.",
+    tags: ["ad", "print", "locale:en"],
+    mappings: [
+      { framework: "MITRE ATT&CK", reference: "T1068" },
+      { framework: "CIS", reference: "Active Directory" },
+    ],
     assessmentTypes: ["Active Directory Assessment"],
   },
   {
@@ -1145,21 +1681,32 @@ export const FINDING_LIBRARY: FindingLibraryTemplate[] = [
     title: "Unnecessary DCSync rights",
     severity: "critical",
     summary: "Non-DC principals hold replication rights equivalent to DCSync.",
-    technicalDescription: "Those principals can dump all domain credentials remotely.",
-    remediation: "Audit DS-Replication-Get-Changes rights; remove from non-DC accounts.",
-    tags: ["ad","privilege","locale:en"],
-    mappings: [{"framework":"MITRE ATT&CK","reference":"T1003.006"},{"framework":"CIS","reference":"Active Directory"}],
+    technicalDescription:
+      "Those principals can dump all domain credentials remotely.",
+    remediation:
+      "Audit DS-Replication-Get-Changes rights; remove from non-DC accounts.",
+    tags: ["ad", "privilege", "locale:en"],
+    mappings: [
+      { framework: "MITRE ATT&CK", reference: "T1003.006" },
+      { framework: "CIS", reference: "Active Directory" },
+    ],
     assessmentTypes: ["Active Directory Assessment"],
   },
   {
     stableKey: "shadow-credentials",
     title: "Shadow credentials exposure",
     severity: "high",
-    summary: "Principals can write msDS-KeyCredentialLink on privileged accounts.",
-    technicalDescription: "Attackers add key credentials and authenticate as the target without passwords.",
-    remediation: "Monitor and restrict write access to KeyCredentialLink; alert on changes.",
-    tags: ["ad","credentials","locale:en"],
-    mappings: [{"framework":"MITRE ATT&CK","reference":"T1556"},{"framework":"CIS","reference":"Active Directory"}],
+    summary:
+      "Principals can write msDS-KeyCredentialLink on privileged accounts.",
+    technicalDescription:
+      "Attackers add key credentials and authenticate as the target without passwords.",
+    remediation:
+      "Monitor and restrict write access to KeyCredentialLink; alert on changes.",
+    tags: ["ad", "credentials", "locale:en"],
+    mappings: [
+      { framework: "MITRE ATT&CK", reference: "T1556" },
+      { framework: "CIS", reference: "Active Directory" },
+    ],
     assessmentTypes: ["Active Directory Assessment"],
   },
   {
@@ -1167,21 +1714,32 @@ export const FINDING_LIBRARY: FindingLibraryTemplate[] = [
     title: "Pre-Windows 2000 Compatible Access misuse",
     severity: "medium",
     summary: "Broad groups remain in Pre-Windows 2000 Compatible Access.",
-    technicalDescription: "Anonymous or authenticated users gain excessive directory read rights.",
-    remediation: "Remove Authenticated Users from the group; verify anonymous LDAP access is closed.",
-    tags: ["ad","ldap","locale:en"],
-    mappings: [{"framework":"CWE","reference":"CWE-276"},{"framework":"CIS","reference":"Active Directory"}],
+    technicalDescription:
+      "Anonymous or authenticated users gain excessive directory read rights.",
+    remediation:
+      "Remove Authenticated Users from the group; verify anonymous LDAP access is closed.",
+    tags: ["ad", "ldap", "locale:en"],
+    mappings: [
+      { framework: "CWE", reference: "CWE-276" },
+      { framework: "CIS", reference: "Active Directory" },
+    ],
     assessmentTypes: ["Active Directory Assessment"],
   },
   {
     stableKey: "http-request-smuggling",
     title: "HTTP request smuggling",
     severity: "high",
-    summary: "Front-end and back-end disagree on Content-Length versus Transfer-Encoding.",
-    technicalDescription: "Smuggled requests bypass WAFs and poison shared connections.",
-    remediation: "Normalise requests at the edge; reject ambiguous length headers.",
-    tags: ["web","http","locale:en"],
-    mappings: [{"framework":"CWE","reference":"CWE-444"},{"framework":"OWASP","reference":"A05:2021"}],
+    summary:
+      "Front-end and back-end disagree on Content-Length versus Transfer-Encoding.",
+    technicalDescription:
+      "Smuggled requests bypass WAFs and poison shared connections.",
+    remediation:
+      "Normalise requests at the edge; reject ambiguous length headers.",
+    tags: ["web", "http", "locale:en"],
+    mappings: [
+      { framework: "CWE", reference: "CWE-444" },
+      { framework: "OWASP", reference: "A05:2021" },
+    ],
     assessmentTypes: ["Web Application Assessment"],
   },
   {
@@ -1189,10 +1747,15 @@ export const FINDING_LIBRARY: FindingLibraryTemplate[] = [
     title: "Web cache poisoning",
     severity: "high",
     summary: "Unkeyed headers influence cached responses for other users.",
-    technicalDescription: "Attackers store malicious payloads in shared caches under popular URLs.",
-    remediation: "Key all relevant inputs; avoid reflecting unkeyed headers into cached bodies.",
-    tags: ["web","cache","locale:en"],
-    mappings: [{"framework":"CWE","reference":"CWE-444"},{"framework":"OWASP","reference":"A04:2021"}],
+    technicalDescription:
+      "Attackers store malicious payloads in shared caches under popular URLs.",
+    remediation:
+      "Key all relevant inputs; avoid reflecting unkeyed headers into cached bodies.",
+    tags: ["web", "cache", "locale:en"],
+    mappings: [
+      { framework: "CWE", reference: "CWE-444" },
+      { framework: "OWASP", reference: "A04:2021" },
+    ],
     assessmentTypes: ["Web Application Assessment"],
   },
   {
@@ -1200,32 +1763,46 @@ export const FINDING_LIBRARY: FindingLibraryTemplate[] = [
     title: "SSRF to cloud metadata",
     severity: "critical",
     summary: "SSRF reaches 169.254.169.254 and retrieves instance credentials.",
-    technicalDescription: "Stolen roles enable cloud API abuse beyond the application boundary.",
-    remediation: "Block link-local ranges; enforce IMDSv2; avoid server-side URL fetch from users.",
-    tags: ["cloud","ssrf","locale:en"],
-    mappings: [{"framework":"CWE","reference":"CWE-918"},{"framework":"CIS AWS","reference":"5.6"}],
-    assessmentTypes: ["Cloud Assessment","Web Application Assessment"],
+    technicalDescription:
+      "Stolen roles enable cloud API abuse beyond the application boundary.",
+    remediation:
+      "Block link-local ranges; enforce IMDSv2; avoid server-side URL fetch from users.",
+    tags: ["cloud", "ssrf", "locale:en"],
+    mappings: [
+      { framework: "CWE", reference: "CWE-918" },
+      { framework: "CIS AWS", reference: "5.6" },
+    ],
+    assessmentTypes: ["Cloud Assessment", "Web Application Assessment"],
   },
   {
     stableKey: "insecure-random",
     title: "Insecure random for security tokens",
     severity: "medium",
     summary: "Security tokens use Math.random or time-based generators.",
-    technicalDescription: "Predictable tokens enable session guessing and CSRF bypass.",
+    technicalDescription:
+      "Predictable tokens enable session guessing and CSRF bypass.",
     remediation: "Use CSPRNG APIs for all security-sensitive values.",
-    tags: ["web","crypto","locale:en"],
-    mappings: [{"framework":"CWE","reference":"CWE-330"},{"framework":"OWASP","reference":"A02:2021"}],
-    assessmentTypes: ["Web Application Assessment","API Assessment"],
+    tags: ["web", "crypto", "locale:en"],
+    mappings: [
+      { framework: "CWE", reference: "CWE-330" },
+      { framework: "OWASP", reference: "A02:2021" },
+    ],
+    assessmentTypes: ["Web Application Assessment", "API Assessment"],
   },
   {
     stableKey: "missing-integrity-cdn",
     title: "Missing SRI on third-party scripts",
     severity: "medium",
     summary: "CDN scripts load without Subresource Integrity hashes.",
-    technicalDescription: "CDN compromise or DNS hijack executes attacker script in your origin.",
-    remediation: "Add integrity and crossorigin attributes; prefer self-hosting critical scripts.",
-    tags: ["web","supply-chain","locale:en"],
-    mappings: [{"framework":"CWE","reference":"CWE-353"},{"framework":"OWASP","reference":"A08:2021"}],
+    technicalDescription:
+      "CDN compromise or DNS hijack executes attacker script in your origin.",
+    remediation:
+      "Add integrity and crossorigin attributes; prefer self-hosting critical scripts.",
+    tags: ["web", "supply-chain", "locale:en"],
+    mappings: [
+      { framework: "CWE", reference: "CWE-353" },
+      { framework: "OWASP", reference: "A08:2021" },
+    ],
     assessmentTypes: ["Web Application Assessment"],
   },
   {
@@ -1233,10 +1810,15 @@ export const FINDING_LIBRARY: FindingLibraryTemplate[] = [
     title: "Email header injection",
     severity: "medium",
     summary: "Newlines in user input alter outbound email headers.",
-    technicalDescription: "Attackers BCC themselves or rewrite subjects on messages sent by the app.",
-    remediation: "Strip CR/LF from header fields; use a mail library that encodes headers safely.",
-    tags: ["web","injection","locale:en"],
-    mappings: [{"framework":"CWE","reference":"CWE-93"},{"framework":"OWASP","reference":"A03:2021"}],
+    technicalDescription:
+      "Attackers BCC themselves or rewrite subjects on messages sent by the app.",
+    remediation:
+      "Strip CR/LF from header fields; use a mail library that encodes headers safely.",
+    tags: ["web", "injection", "locale:en"],
+    mappings: [
+      { framework: "CWE", reference: "CWE-93" },
+      { framework: "OWASP", reference: "A03:2021" },
+    ],
     assessmentTypes: ["Web Application Assessment"],
   },
   {
@@ -1244,32 +1826,51 @@ export const FINDING_LIBRARY: FindingLibraryTemplate[] = [
     title: "XPath injection",
     severity: "high",
     summary: "XPath queries concatenate untrusted input.",
-    technicalDescription: "Attackers alter query logic to bypass auth or extract XML nodes.",
-    remediation: "Parameterise XPath or escape according to the engine; validate types.",
-    tags: ["web","injection","locale:en"],
-    mappings: [{"framework":"CWE","reference":"CWE-643"},{"framework":"OWASP","reference":"A03:2021"}],
-    assessmentTypes: ["Web Application Assessment","API Assessment"],
+    technicalDescription:
+      "Attackers alter query logic to bypass auth or extract XML nodes.",
+    remediation:
+      "Parameterise XPath or escape according to the engine; validate types.",
+    tags: ["web", "injection", "locale:en"],
+    mappings: [
+      { framework: "CWE", reference: "CWE-643" },
+      { framework: "OWASP", reference: "A03:2021" },
+    ],
+    assessmentTypes: ["Web Application Assessment", "API Assessment"],
   },
   {
     stableKey: "ldap-injection",
     title: "LDAP injection",
     severity: "high",
     summary: "LDAP filters include raw user input.",
-    technicalDescription: "Crafted filters bypass authentication or dump directory entries.",
-    remediation: "Escape LDAP filter metacharacters; use safe APIs for bind and search.",
-    tags: ["web","ldap","injection","locale:en"],
-    mappings: [{"framework":"CWE","reference":"CWE-90"},{"framework":"OWASP","reference":"A03:2021"}],
-    assessmentTypes: ["Web Application Assessment","Active Directory Assessment"],
+    technicalDescription:
+      "Crafted filters bypass authentication or dump directory entries.",
+    remediation:
+      "Escape LDAP filter metacharacters; use safe APIs for bind and search.",
+    tags: ["web", "ldap", "injection", "locale:en"],
+    mappings: [
+      { framework: "CWE", reference: "CWE-90" },
+      { framework: "OWASP", reference: "A03:2021" },
+    ],
+    assessmentTypes: [
+      "Web Application Assessment",
+      "Active Directory Assessment",
+    ],
   },
   {
     stableKey: "spring4shell-class-pattern",
     title: "Unsafe Java class binding",
     severity: "critical",
-    summary: "Framework data binding allows classloader manipulation properties.",
-    technicalDescription: "Attackers write webshells via crafted request parameters on vulnerable stacks.",
-    remediation: "Upgrade frameworks; block class/module/ClassLoader bindings at the edge.",
-    tags: ["web","java","rce","locale:en"],
-    mappings: [{"framework":"CWE","reference":"CWE-94"},{"framework":"OWASP","reference":"A03:2021"}],
+    summary:
+      "Framework data binding allows classloader manipulation properties.",
+    technicalDescription:
+      "Attackers write webshells via crafted request parameters on vulnerable stacks.",
+    remediation:
+      "Upgrade frameworks; block class/module/ClassLoader bindings at the edge.",
+    tags: ["web", "java", "rce", "locale:en"],
+    mappings: [
+      { framework: "CWE", reference: "CWE-94" },
+      { framework: "OWASP", reference: "A03:2021" },
+    ],
     assessmentTypes: ["Web Application Assessment"],
   },
   {
@@ -1277,10 +1878,15 @@ export const FINDING_LIBRARY: FindingLibraryTemplate[] = [
     title: "Unsafe log message interpolation",
     severity: "critical",
     summary: "Log frameworks resolve attacker-controlled lookup strings.",
-    technicalDescription: "JNDI or similar lookups can reach remote code execution from a logged header.",
-    remediation: "Upgrade logging libraries; disable message lookups; sanitise logged input.",
-    tags: ["web","java","rce","locale:en"],
-    mappings: [{"framework":"CWE","reference":"CWE-917"},{"framework":"OWASP","reference":"A06:2021"}],
+    technicalDescription:
+      "JNDI or similar lookups can reach remote code execution from a logged header.",
+    remediation:
+      "Upgrade logging libraries; disable message lookups; sanitise logged input.",
+    tags: ["web", "java", "rce", "locale:en"],
+    mappings: [
+      { framework: "CWE", reference: "CWE-917" },
+      { framework: "OWASP", reference: "A06:2021" },
+    ],
     assessmentTypes: ["Web Application Assessment"],
   },
   {
@@ -1288,21 +1894,31 @@ export const FINDING_LIBRARY: FindingLibraryTemplate[] = [
     title: "SQL-Injection",
     severity: "critical",
     summary: "Kritische SQL-Injection durch unsichere Abfrageverkettung.",
-    technicalDescription: "Concatenated or interpolated SQL allows attackers to alter query logic and read or modify data.",
-    remediation: "Use parameterised queries or a safe ORM for every database call; reject dynamic SQL built from request data.",
-    tags: ["web","injection","sql","locale:de"],
-    mappings: [{"framework":"CWE","reference":"CWE-89"},{"framework":"OWASP","reference":"A03:2021"}],
-    assessmentTypes: ["Web Application Assessment","API Assessment"],
+    technicalDescription:
+      "Concatenated or interpolated SQL allows attackers to alter query logic and read or modify data.",
+    remediation:
+      "Use parameterised queries or a safe ORM for every database call; reject dynamic SQL built from request data.",
+    tags: ["web", "injection", "sql", "locale:de"],
+    mappings: [
+      { framework: "CWE", reference: "CWE-89" },
+      { framework: "OWASP", reference: "A03:2021" },
+    ],
+    assessmentTypes: ["Web Application Assessment", "API Assessment"],
   },
   {
     stableKey: "reflected-xss-de",
     title: "Reflektiertes Cross-Site-Scripting",
     severity: "high",
     summary: "Unsichere Ausgabe spiegelt Angreifer-Input im HTML wider.",
-    technicalDescription: "A crafted URL or form value is reflected into the page and executes in the victim browser.",
-    remediation: "Context-encode all untrusted output; prefer frameworks that auto-escape; set a strict CSP.",
-    tags: ["web","xss","locale:de"],
-    mappings: [{"framework":"CWE","reference":"CWE-79"},{"framework":"OWASP","reference":"A03:2021"}],
+    technicalDescription:
+      "A crafted URL or form value is reflected into the page and executes in the victim browser.",
+    remediation:
+      "Context-encode all untrusted output; prefer frameworks that auto-escape; set a strict CSP.",
+    tags: ["web", "xss", "locale:de"],
+    mappings: [
+      { framework: "CWE", reference: "CWE-79" },
+      { framework: "OWASP", reference: "A03:2021" },
+    ],
     assessmentTypes: ["Web Application Assessment"],
   },
   {
@@ -1310,10 +1926,15 @@ export const FINDING_LIBRARY: FindingLibraryTemplate[] = [
     title: "Gespeichertes Cross-Site-Scripting",
     severity: "high",
     summary: "Persistente Skripte werden ohne Kodierung ausgeliefert.",
-    technicalDescription: "Malicious scripts saved in the database execute for every user who views the content.",
-    remediation: "Sanitise and encode stored content on write and render; apply CSP and HttpOnly session cookies.",
-    tags: ["web","xss","locale:de"],
-    mappings: [{"framework":"CWE","reference":"CWE-79"},{"framework":"OWASP","reference":"A03:2021"}],
+    technicalDescription:
+      "Malicious scripts saved in the database execute for every user who views the content.",
+    remediation:
+      "Sanitise and encode stored content on write and render; apply CSP and HttpOnly session cookies.",
+    tags: ["web", "xss", "locale:de"],
+    mappings: [
+      { framework: "CWE", reference: "CWE-79" },
+      { framework: "OWASP", reference: "A03:2021" },
+    ],
     assessmentTypes: ["Web Application Assessment"],
   },
   {
@@ -1321,10 +1942,15 @@ export const FINDING_LIBRARY: FindingLibraryTemplate[] = [
     title: "Cross-Site-Request-Forgery",
     severity: "medium",
     summary: "Zustandsändernde Anfragen ohne Anti-CSRF-Schutz.",
-    technicalDescription: "An authenticated browser can be tricked into submitting unintended actions from a third-party origin.",
-    remediation: "Require synchroniser tokens or SameSite=strict cookies on mutating endpoints; verify Origin/Referer.",
-    tags: ["web","csrf","session","locale:de"],
-    mappings: [{"framework":"CWE","reference":"CWE-352"},{"framework":"OWASP","reference":"A01:2021"}],
+    technicalDescription:
+      "An authenticated browser can be tricked into submitting unintended actions from a third-party origin.",
+    remediation:
+      "Require synchroniser tokens or SameSite=strict cookies on mutating endpoints; verify Origin/Referer.",
+    tags: ["web", "csrf", "session", "locale:de"],
+    mappings: [
+      { framework: "CWE", reference: "CWE-352" },
+      { framework: "OWASP", reference: "A01:2021" },
+    ],
     assessmentTypes: ["Web Application Assessment"],
   },
   {
@@ -1332,43 +1958,67 @@ export const FINDING_LIBRARY: FindingLibraryTemplate[] = [
     title: "Server-Side-Request-Forgery",
     severity: "high",
     summary: "Server ruft angreiferkontrollierte URLs ab.",
-    technicalDescription: "Internal services, cloud metadata, and non-routable hosts can be reached via crafted request targets.",
-    remediation: "Allowlist outbound destinations; block link-local and private ranges; prefer fixed service endpoints.",
-    tags: ["web","ssrf","cloud","locale:de"],
-    mappings: [{"framework":"CWE","reference":"CWE-918"},{"framework":"OWASP","reference":"A10:2021"}],
-    assessmentTypes: ["Web Application Assessment","API Assessment","Cloud Assessment"],
+    technicalDescription:
+      "Internal services, cloud metadata, and non-routable hosts can be reached via crafted request targets.",
+    remediation:
+      "Allowlist outbound destinations; block link-local and private ranges; prefer fixed service endpoints.",
+    tags: ["web", "ssrf", "cloud", "locale:de"],
+    mappings: [
+      { framework: "CWE", reference: "CWE-918" },
+      { framework: "OWASP", reference: "A10:2021" },
+    ],
+    assessmentTypes: [
+      "Web Application Assessment",
+      "API Assessment",
+      "Cloud Assessment",
+    ],
   },
   {
     stableKey: "idor-de",
     title: "Unsichere direkte Objektreferenz",
     severity: "high",
     summary: "Objekt-IDs erlauben Zugriff auf fremde Datensätze.",
-    technicalDescription: "Server responses omit ownership checks when loading records by ID.",
-    remediation: "Authorise every object access against the authenticated principal before returning data.",
-    tags: ["web","access-control","idor","locale:de"],
-    mappings: [{"framework":"CWE","reference":"CWE-639"},{"framework":"OWASP","reference":"A01:2021"}],
-    assessmentTypes: ["Web Application Assessment","API Assessment"],
+    technicalDescription:
+      "Server responses omit ownership checks when loading records by ID.",
+    remediation:
+      "Authorise every object access against the authenticated principal before returning data.",
+    tags: ["web", "access-control", "idor", "locale:de"],
+    mappings: [
+      { framework: "CWE", reference: "CWE-639" },
+      { framework: "OWASP", reference: "A01:2021" },
+    ],
+    assessmentTypes: ["Web Application Assessment", "API Assessment"],
   },
   {
     stableKey: "xxe-de",
     title: "XML-External-Entity-Injection",
     severity: "high",
     summary: "XML-Parser lösen externe Entitäten auf.",
-    technicalDescription: "Crafted XML can disclose local files or trigger outbound requests from the parser host.",
-    remediation: "Disable external entity and DTD processing; prefer JSON unless XML is required.",
-    tags: ["web","xxe","injection","locale:de"],
-    mappings: [{"framework":"CWE","reference":"CWE-611"},{"framework":"OWASP","reference":"A05:2021"}],
-    assessmentTypes: ["Web Application Assessment","API Assessment"],
+    technicalDescription:
+      "Crafted XML can disclose local files or trigger outbound requests from the parser host.",
+    remediation:
+      "Disable external entity and DTD processing; prefer JSON unless XML is required.",
+    tags: ["web", "xxe", "injection", "locale:de"],
+    mappings: [
+      { framework: "CWE", reference: "CWE-611" },
+      { framework: "OWASP", reference: "A05:2021" },
+    ],
+    assessmentTypes: ["Web Application Assessment", "API Assessment"],
   },
   {
     stableKey: "ssti-de",
     title: "Server-Side-Template-Injection",
     severity: "critical",
     summary: "Benutzereingaben werden in Templates ausgewertet.",
-    technicalDescription: "Template expressions can escape the sandbox and execute code or read secrets on the host.",
-    remediation: "Never concatenate user input into templates; pass data as variables only; sandbox engines tightly.",
-    tags: ["web","ssti","injection","locale:de"],
-    mappings: [{"framework":"CWE","reference":"CWE-1336"},{"framework":"OWASP","reference":"A03:2021"}],
+    technicalDescription:
+      "Template expressions can escape the sandbox and execute code or read secrets on the host.",
+    remediation:
+      "Never concatenate user input into templates; pass data as variables only; sandbox engines tightly.",
+    tags: ["web", "ssti", "injection", "locale:de"],
+    mappings: [
+      { framework: "CWE", reference: "CWE-1336" },
+      { framework: "OWASP", reference: "A03:2021" },
+    ],
     assessmentTypes: ["Web Application Assessment"],
   },
   {
@@ -1376,21 +2026,31 @@ export const FINDING_LIBRARY: FindingLibraryTemplate[] = [
     title: "Fehlerhafte Zugriffskontrolle",
     severity: "high",
     summary: "Endpunkte prüfen Authentifizierung, aber nicht Autorisierung.",
-    technicalDescription: "Lower-privilege users can invoke administrative or cross-tenant operations by calling hidden routes.",
-    remediation: "Centralise authorisation checks; deny by default; test every privileged route with lesser roles.",
-    tags: ["web","access-control","locale:de"],
-    mappings: [{"framework":"CWE","reference":"CWE-284"},{"framework":"OWASP","reference":"A01:2021"}],
-    assessmentTypes: ["Web Application Assessment","API Assessment"],
+    technicalDescription:
+      "Lower-privilege users can invoke administrative or cross-tenant operations by calling hidden routes.",
+    remediation:
+      "Centralise authorisation checks; deny by default; test every privileged route with lesser roles.",
+    tags: ["web", "access-control", "locale:de"],
+    mappings: [
+      { framework: "CWE", reference: "CWE-284" },
+      { framework: "OWASP", reference: "A01:2021" },
+    ],
+    assessmentTypes: ["Web Application Assessment", "API Assessment"],
   },
   {
     stableKey: "open-redirect-de",
     title: "Offene Weiterleitung",
     severity: "low",
     summary: "Weiterleitungsziele stammen aus unsicheren Parametern.",
-    technicalDescription: "Attackers craft links that bounce users to phishing sites under the trusted domain reputation.",
-    remediation: "Allowlist redirect destinations or map opaque tokens to fixed URLs.",
-    tags: ["web","redirect","locale:de"],
-    mappings: [{"framework":"CWE","reference":"CWE-601"},{"framework":"OWASP","reference":"A01:2021"}],
+    technicalDescription:
+      "Attackers craft links that bounce users to phishing sites under the trusted domain reputation.",
+    remediation:
+      "Allowlist redirect destinations or map opaque tokens to fixed URLs.",
+    tags: ["web", "redirect", "locale:de"],
+    mappings: [
+      { framework: "CWE", reference: "CWE-601" },
+      { framework: "OWASP", reference: "A01:2021" },
+    ],
     assessmentTypes: ["Web Application Assessment"],
   },
   {
@@ -1398,32 +2058,47 @@ export const FINDING_LIBRARY: FindingLibraryTemplate[] = [
     title: "Pfadtraversal",
     severity: "high",
     summary: "Dateipfade erlauben Escape aus dem Zielverzeichnis.",
-    technicalDescription: "Attackers read or overwrite files outside the application content root.",
-    remediation: "Canonicalise paths and reject any result outside the allowed base directory.",
-    tags: ["web","filesystem","locale:de"],
-    mappings: [{"framework":"CWE","reference":"CWE-22"},{"framework":"OWASP","reference":"A01:2021"}],
-    assessmentTypes: ["Web Application Assessment","API Assessment"],
+    technicalDescription:
+      "Attackers read or overwrite files outside the application content root.",
+    remediation:
+      "Canonicalise paths and reject any result outside the allowed base directory.",
+    tags: ["web", "filesystem", "locale:de"],
+    mappings: [
+      { framework: "CWE", reference: "CWE-22" },
+      { framework: "OWASP", reference: "A01:2021" },
+    ],
+    assessmentTypes: ["Web Application Assessment", "API Assessment"],
   },
   {
     stableKey: "command-injection-de",
     title: "Betriebssystem-Befehlsinjektion",
     severity: "critical",
     summary: "Shell-Befehle enthalten ungeprüfte Benutzereingaben.",
-    technicalDescription: "Attackers append shell metacharacters to run arbitrary commands on the host.",
-    remediation: "Avoid shells; call APIs with argument arrays; strictly validate any unavoidable input.",
-    tags: ["web","injection","os","locale:de"],
-    mappings: [{"framework":"CWE","reference":"CWE-78"},{"framework":"OWASP","reference":"A03:2021"}],
-    assessmentTypes: ["Web Application Assessment","API Assessment"],
+    technicalDescription:
+      "Attackers append shell metacharacters to run arbitrary commands on the host.",
+    remediation:
+      "Avoid shells; call APIs with argument arrays; strictly validate any unavoidable input.",
+    tags: ["web", "injection", "os", "locale:de"],
+    mappings: [
+      { framework: "CWE", reference: "CWE-78" },
+      { framework: "OWASP", reference: "A03:2021" },
+    ],
+    assessmentTypes: ["Web Application Assessment", "API Assessment"],
   },
   {
     stableKey: "unrestricted-file-upload-de",
     title: "Uneingeschränkter Datei-Upload",
     severity: "high",
     summary: "Upload akzeptiert gefährliche Dateitypen.",
-    technicalDescription: "Uploaded malware or web shells can be stored and later executed or served to victims.",
-    remediation: "Validate type by content, store outside web root, rename files, and scan uploads.",
-    tags: ["web","upload","locale:de"],
-    mappings: [{"framework":"CWE","reference":"CWE-434"},{"framework":"OWASP","reference":"A04:2021"}],
+    technicalDescription:
+      "Uploaded malware or web shells can be stored and later executed or served to victims.",
+    remediation:
+      "Validate type by content, store outside web root, rename files, and scan uploads.",
+    tags: ["web", "upload", "locale:de"],
+    mappings: [
+      { framework: "CWE", reference: "CWE-434" },
+      { framework: "OWASP", reference: "A04:2021" },
+    ],
     assessmentTypes: ["Web Application Assessment"],
   },
   {
@@ -1431,21 +2106,30 @@ export const FINDING_LIBRARY: FindingLibraryTemplate[] = [
     title: "Ausführliche Fehlermeldungen",
     severity: "low",
     summary: "Fehlerantworten legen Stacktraces und interne Pfade offen.",
-    technicalDescription: "Attackers learn framework versions, query structure, and filesystem layout from failures.",
+    technicalDescription:
+      "Attackers learn framework versions, query structure, and filesystem layout from failures.",
     remediation: "Return generic client errors; log details server-side only.",
-    tags: ["web","info-disclosure","locale:de"],
-    mappings: [{"framework":"CWE","reference":"CWE-209"},{"framework":"OWASP","reference":"A05:2021"}],
-    assessmentTypes: ["Web Application Assessment","API Assessment"],
+    tags: ["web", "info-disclosure", "locale:de"],
+    mappings: [
+      { framework: "CWE", reference: "CWE-209" },
+      { framework: "OWASP", reference: "A05:2021" },
+    ],
+    assessmentTypes: ["Web Application Assessment", "API Assessment"],
   },
   {
     stableKey: "insecure-cookie-flags-de",
     title: "Unsichere Session-Cookie-Flags",
     severity: "medium",
     summary: "Session-Cookies fehlen Secure, HttpOnly oder SameSite.",
-    technicalDescription: "Tokens may leak over HTTP, to scripts, or on cross-site requests.",
-    remediation: "Set Secure, HttpOnly, and SameSite=Lax or Strict on all session cookies.",
-    tags: ["web","session","cookies","locale:de"],
-    mappings: [{"framework":"CWE","reference":"CWE-614"},{"framework":"OWASP","reference":"A07:2021"}],
+    technicalDescription:
+      "Tokens may leak over HTTP, to scripts, or on cross-site requests.",
+    remediation:
+      "Set Secure, HttpOnly, and SameSite=Lax or Strict on all session cookies.",
+    tags: ["web", "session", "cookies", "locale:de"],
+    mappings: [
+      { framework: "CWE", reference: "CWE-614" },
+      { framework: "OWASP", reference: "A07:2021" },
+    ],
     assessmentTypes: ["Web Application Assessment"],
   },
 ];
@@ -1459,7 +2143,9 @@ export async function seedFindingLibrary(
     .from(findingTemplates)
     .where(eq(findingTemplates.organisationId, organisationId));
   const present = new Set(existing.map((row) => row.stableKey));
-  const missing = FINDING_LIBRARY.filter((item) => !present.has(item.stableKey));
+  const missing = FINDING_LIBRARY.filter(
+    (item) => !present.has(item.stableKey),
+  );
   if (!missing.length) return { inserted: 0, skipped: FINDING_LIBRARY.length };
 
   // Insert in chunks to keep statements bounded.
@@ -1484,5 +2170,8 @@ export async function seedFindingLibrary(
       })),
     );
   }
-  return { inserted: missing.length, skipped: FINDING_LIBRARY.length - missing.length };
+  return {
+    inserted: missing.length,
+    skipped: FINDING_LIBRARY.length - missing.length,
+  };
 }

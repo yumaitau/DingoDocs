@@ -67,7 +67,12 @@ export async function acceptFindingAssistAction(formData: FormData) {
       "technicalDetail",
     ])
     .parse(formData.get("field"));
-  const draft = z.string().trim().min(1).max(50_000).parse(formData.get("draft"));
+  const draft = z
+    .string()
+    .trim()
+    .min(1)
+    .max(50_000)
+    .parse(formData.get("draft"));
   const context = await requirePermission("finding:create", { engagementId });
   await assertFindingEngagement(
     context.organisationId,

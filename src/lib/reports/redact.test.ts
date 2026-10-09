@@ -3,9 +3,9 @@ import { parseRedactionTerms, redactReportText } from "./redact";
 
 describe("redactReportText", () => {
   it("replaces case-insensitive whole phrases", () => {
-    expect(redactReportText("Host ACME-DC01 leaked secrets", ["ACME-DC01"])).toBe(
-      "Host [REDACTED] leaked secrets",
-    );
+    expect(
+      redactReportText("Host ACME-DC01 leaked secrets", ["ACME-DC01"]),
+    ).toBe("Host [REDACTED] leaked secrets");
     expect(redactReportText("acme-dc01 and ACME-DC01", ["acme-dc01"])).toBe(
       "[REDACTED] and [REDACTED]",
     );

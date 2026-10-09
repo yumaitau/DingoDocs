@@ -93,7 +93,9 @@ export async function FindingsSection({
           <h2 className="font-semibold text-amber-950">QA lint</h2>
           <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-amber-950">
             {qaIssues.map((issue) => (
-              <li key={`${issue.code}:${issue.findingId ?? ""}:${issue.message}`}>
+              <li
+                key={`${issue.code}:${issue.findingId ?? ""}:${issue.message}`}
+              >
                 {issue.message}
               </li>
             ))}

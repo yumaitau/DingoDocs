@@ -7,10 +7,7 @@ import { apiReadContext, apiWriteContext } from "@/lib/api/authentication";
 import { apiError, apiNotFound } from "@/lib/api/responses";
 import { engagementVisibility } from "@/lib/permissions/access";
 import type { Permission } from "@/lib/permissions/matrix";
-import {
-  reportStatuses,
-  transitionReport,
-} from "@/server/services/reports";
+import { reportStatuses, transitionReport } from "@/server/services/reports";
 
 const bodySchema = z.object({
   status: z.enum(

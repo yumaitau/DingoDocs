@@ -33,7 +33,10 @@ const opportunityStages = [
 ] as const;
 const savedViewResources = ["tasks", "analytics"] as const;
 
-function addPeriod(isoDate: string, recurrence: "weekly" | "monthly" | "quarterly") {
+function addPeriod(
+  isoDate: string,
+  recurrence: "weekly" | "monthly" | "quarterly",
+) {
   const date = new Date(`${isoDate}T00:00:00.000Z`);
   if (recurrence === "weekly") date.setUTCDate(date.getUTCDate() + 7);
   else if (recurrence === "monthly") date.setUTCMonth(date.getUTCMonth() + 1);
@@ -322,7 +325,9 @@ export async function upsertSlaPolicyAction(formData: FormData) {
       and(
         eq(slaPolicies.organisationId, context.organisationId),
         eq(slaPolicies.severity, input.severity),
-        clientId ? eq(slaPolicies.clientId, clientId) : isNull(slaPolicies.clientId),
+        clientId
+          ? eq(slaPolicies.clientId, clientId)
+          : isNull(slaPolicies.clientId),
       ),
     )
     .limit(1);

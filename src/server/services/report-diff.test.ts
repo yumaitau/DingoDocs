@@ -24,7 +24,11 @@ function base(): ReportDocumentModel {
     },
     sections: [
       {
-        definition: { id: "summary", type: "executive_summary", title: "Summary" },
+        definition: {
+          id: "summary",
+          type: "executive_summary",
+          title: "Summary",
+        },
         content: "One finding.",
       },
       { definition: { id: "findings", type: "findings", title: "Findings" } },

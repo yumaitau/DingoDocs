@@ -3,9 +3,7 @@ import { scoreCvss } from "./cvss";
 
 describe("scoreCvss", () => {
   it("scores the known CVSS 3.1 critical vector as 9.8", () => {
-    const result = scoreCvss(
-      "CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H",
-    );
+    const result = scoreCvss("CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:H");
     expect(result).toEqual({
       version: "3.1",
       score: 9.8,
@@ -23,7 +21,9 @@ describe("scoreCvss", () => {
   });
 
   it("rejects unknown prefixes and metrics", () => {
-    expect(() => scoreCvss("CVSS:2.0/AV:N")).toThrow(/CVSS:3.1\/ or CVSS:4.0\//);
+    expect(() => scoreCvss("CVSS:2.0/AV:N")).toThrow(
+      /CVSS:3.1\/ or CVSS:4.0\//,
+    );
     expect(() =>
       scoreCvss("CVSS:3.1/AV:N/AC:L/PR:N/UI:N/S:U/C:H/I:H/A:X"),
     ).toThrow(/Unknown CVSS metric value/);

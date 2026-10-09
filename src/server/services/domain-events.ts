@@ -79,8 +79,12 @@ export async function emitDomainEvent(input: DomainEventInput): Promise<void> {
     }
     const message = { eventType, title, actionUrl };
     const audience = resolveAudience(input, eventType);
-    await guard(input.organisationId, eventType, "domain_event.inbox_failed", () =>
-      insertInbox(input.organisationId, input.actorUserId, message, audience),
+    await guard(
+      input.organisationId,
+      eventType,
+      "domain_event.inbox_failed",
+      () =>
+        insertInbox(input.organisationId, input.actorUserId, message, audience),
     );
     await guard(
       input.organisationId,

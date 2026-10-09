@@ -106,7 +106,9 @@ export default async function SchedulePage({
                 key={week.label}
                 className="rounded-lg border bg-[var(--mist)] px-3 py-2 text-sm"
               >
-                <span className="block text-xs text-slate-500">{week.label}</span>
+                <span className="block text-xs text-slate-500">
+                  {week.label}
+                </span>
                 <span className="mt-1 block font-semibold tabular-nums">
                   {week.count} overlapping
                 </span>
@@ -288,7 +290,9 @@ function chunk<T>(items: T[], size: number) {
 }
 
 function shiftMonth(date: Date, delta: number) {
-  return new Date(Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + delta, 1));
+  return new Date(
+    Date.UTC(date.getUTCFullYear(), date.getUTCMonth() + delta, 1),
+  );
 }
 
 function isoMonth(date: Date) {

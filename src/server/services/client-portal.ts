@@ -300,10 +300,13 @@ export function buildPortalAnalytics(
   }>,
 ) {
   const closed = new Set(["resolved", "closed", "risk_accepted"]);
-  const openFindings = findings.filter((finding) => !closed.has(finding.status));
+  const openFindings = findings.filter(
+    (finding) => !closed.has(finding.status),
+  );
   const openBySeverity: Record<string, number> = {};
   for (const finding of openFindings) {
-    openBySeverity[finding.severity] = (openBySeverity[finding.severity] ?? 0) + 1;
+    openBySeverity[finding.severity] =
+      (openBySeverity[finding.severity] ?? 0) + 1;
   }
   const latestRemediation = new Map<string, string>();
   const sortedUpdates = [...remediationUpdates].sort(
@@ -315,7 +318,8 @@ export function buildPortalAnalytics(
   const remediationStatusCounts: Record<string, number> = {};
   for (const finding of findings) {
     const status = latestRemediation.get(finding.id) ?? "open";
-    remediationStatusCounts[status] = (remediationStatusCounts[status] ?? 0) + 1;
+    remediationStatusCounts[status] =
+      (remediationStatusCounts[status] ?? 0) + 1;
   }
   const retestOutcomeCounts: Record<string, number> = {};
   for (const attempt of retestAttempts) {

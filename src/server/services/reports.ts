@@ -34,11 +34,12 @@ import {
   MAX_LAYOUT_LENGTH,
 } from "@/lib/reports/layout";
 import { safeLogoDataUri } from "@/lib/reports/branding";
+import { parseRedactionTerms, redactReportText } from "@/lib/reports/redact";
 import {
-  parseRedactionTerms,
-  redactReportText,
-} from "@/lib/reports/redact";
-import { applyClientReportPreferences, positiveDays, retainUntilFromDays } from "@/lib/clients/policy";
+  applyClientReportPreferences,
+  positiveDays,
+  retainUntilFromDays,
+} from "@/lib/clients/policy";
 import { readClientReportDefaults } from "./client-defaults";
 import { emitDomainEvent } from "./domain-events";
 import {
@@ -875,7 +876,10 @@ export async function refreshReportFindings(
 type EngagementRow = typeof engagements.$inferSelect;
 type TemplateRow = typeof reportTemplates.$inferSelect;
 
-function withKindSections(template: TemplateRow, kind: ReportKind): TemplateRow {
+function withKindSections(
+  template: TemplateRow,
+  kind: ReportKind,
+): TemplateRow {
   const sections = sectionsForKind(kind);
   if (!sections) return template;
   return {

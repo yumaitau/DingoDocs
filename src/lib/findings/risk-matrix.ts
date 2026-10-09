@@ -1,6 +1,7 @@
 import type { RiskMatrixDefinition } from "@/db/schema/findings";
 
-export type MatrixSeverity = RiskMatrixDefinition["ratings"][number]["severity"];
+export type MatrixSeverity =
+  RiskMatrixDefinition["ratings"][number]["severity"];
 
 export function severityFromMatrix(
   definition: RiskMatrixDefinition,

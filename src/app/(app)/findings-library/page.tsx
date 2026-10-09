@@ -175,11 +175,7 @@ export default async function FindingsLibraryPage({
             </label>
             <label className="text-sm font-medium">
               Severity
-              <select
-                name="severity"
-                defaultValue={severity}
-                className={field}
-              >
+              <select name="severity" defaultValue={severity} className={field}>
                 <option value="">Any</option>
                 {severities.map((item) => (
                   <option key={item} value={item}>

@@ -22,9 +22,15 @@ const reviseSchema = z
     riskRationale: z.string().trim().max(20_000).optional(),
     remediation: z.string().trim().min(1).max(20_000).optional(),
     verificationSteps: z.string().trim().max(20_000).optional(),
-    references: z.array(z.string().trim().min(1).max(2_000)).max(100).optional(),
+    references: z
+      .array(z.string().trim().min(1).max(2_000))
+      .max(100)
+      .optional(),
     tags: z.array(z.string().trim().min(1).max(80)).max(50).optional(),
-    assessmentTypes: z.array(z.string().trim().min(1).max(80)).max(50).optional(),
+    assessmentTypes: z
+      .array(z.string().trim().min(1).max(80))
+      .max(50)
+      .optional(),
   })
   .refine((value) => Object.keys(value).length > 0, {
     message: "Provide at least one field to revise",

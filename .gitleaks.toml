@@ -1,0 +1,10 @@
+title = "DingoDocs"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Finding-library stable keys are catalog identifiers, not credentials"
+paths = [
+  '''src/db/seeds/finding-library\.ts''',
+]

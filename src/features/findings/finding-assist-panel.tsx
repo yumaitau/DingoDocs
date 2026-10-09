@@ -47,7 +47,9 @@ export function FindingAssistPanel({
 
   return (
     <details className="rounded-lg border p-4">
-      <summary className="cursor-pointer font-medium">AI assist and intel</summary>
+      <summary className="cursor-pointer font-medium">
+        AI assist and intel
+      </summary>
       <div className="mt-3 space-y-3">
         <form action={action} className="space-y-2">
           <input type="hidden" name="engagementId" value={engagementId} />

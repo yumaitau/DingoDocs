@@ -402,7 +402,10 @@ export async function getRiskAnalytics(
   }
   const topCwes = [...cweCounts.entries()]
     .map(([cwe, count]) => ({ cwe, count }))
-    .sort((left, right) => right.count - left.count || left.cwe.localeCompare(right.cwe))
+    .sort(
+      (left, right) =>
+        right.count - left.count || left.cwe.localeCompare(right.cwe),
+    )
     .slice(0, 10);
 
   const monthKeys: string[] = [];
@@ -425,7 +428,13 @@ export async function getRiskAnalytics(
 
   const timeByUser = new Map<
     string,
-    { userId: string; userName: string; hours: number; billable: number; nonBillable: number }
+    {
+      userId: string;
+      userName: string;
+      hours: number;
+      billable: number;
+      nonBillable: number;
+    }
   >();
   const timeByEngagement = new Map<
     string,
@@ -534,9 +543,9 @@ function sqlIn(
 function isPastDue(row: { dueAt: Date | null; status: string }, now: Date) {
   return Boolean(
     row.dueAt &&
-      row.dueAt < now &&
-      !terminalStatuses.has(row.status) &&
-      row.status !== "risk_accepted",
+    row.dueAt < now &&
+    !terminalStatuses.has(row.status) &&
+    row.status !== "risk_accepted",
   );
 }
 
@@ -549,7 +558,11 @@ function titleCase(value: string) {
 function monthLabel(month: string) {
   const [year, monthNumber] = month.split("-");
   const date = new Date(Date.UTC(Number(year), Number(monthNumber) - 1, 1));
-  return date.toLocaleString("en-AU", { month: "short", year: "2-digit", timeZone: "UTC" });
+  return date.toLocaleString("en-AU", {
+    month: "short",
+    year: "2-digit",
+    timeZone: "UTC",
+  });
 }
 
 function roundHours(value: number) {

@@ -775,7 +775,9 @@ async function resolveImportId(
     const [row] = await db
       .select({ id: clients.id })
       .from(clients)
-      .where(and(eq(clients.id, id), eq(clients.organisationId, organisationId)))
+      .where(
+        and(eq(clients.id, id), eq(clients.organisationId, organisationId)),
+      )
       .limit(1);
     return row ? id : randomUUID();
   }
@@ -878,7 +880,9 @@ export async function importOrganisationBundle(
     templates: 0,
     runbooks: 0,
     riskMatrices: 0,
-    evidenceSkipped: Array.isArray(bundle.evidence) ? bundle.evidence.length : 0,
+    evidenceSkipped: Array.isArray(bundle.evidence)
+      ? bundle.evidence.length
+      : 0,
   };
 
   await db.transaction(async (tx) => {
@@ -953,7 +957,8 @@ export async function importOrganisationBundle(
         name: String(row.name ?? "Imported engagement"),
         reference: String(row.reference ?? `IMP-${targetId.slice(0, 8)}`),
         type: String(row.type ?? "assessment"),
-        status: (row.status as typeof engagements.$inferInsert.status) ?? "proposed",
+        status:
+          (row.status as typeof engagements.$inferInsert.status) ?? "proposed",
         objectives: (row.objectives as string | null | undefined) ?? null,
         assumptions: (row.assumptions as string | null | undefined) ?? null,
         constraints: (row.constraints as string | null | undefined) ?? null,
@@ -1016,7 +1021,8 @@ export async function importOrganisationBundle(
         executiveDescription:
           (row.executiveDescription as string | null | undefined) ?? null,
         technicalDescription: String(row.technicalDescription ?? ""),
-        businessImpact: (row.businessImpact as string | null | undefined) ?? null,
+        businessImpact:
+          (row.businessImpact as string | null | undefined) ?? null,
         technicalImpact:
           (row.technicalImpact as string | null | undefined) ?? null,
         likelihood: (row.likelihood as string | null | undefined) ?? null,
@@ -1072,7 +1078,8 @@ export async function importOrganisationBundle(
         title: String(row.title ?? "Imported finding"),
         status: (row.status as typeof findings.$inferInsert.status) ?? "draft",
         severity:
-          (row.severity as typeof findings.$inferInsert.severity) ?? "informational",
+          (row.severity as typeof findings.$inferInsert.severity) ??
+          "informational",
         executiveSummary:
           (row.executiveSummary as string | null | undefined) ?? null,
         technicalDetail:
@@ -1175,12 +1182,7 @@ export async function importOrganisationBundle(
           ratings: Array<{
             likelihood: string;
             impact: string;
-            severity:
-              | "informational"
-              | "low"
-              | "medium"
-              | "high"
-              | "critical";
+            severity: "informational" | "low" | "medium" | "high" | "critical";
             label: string;
             colour: string;
           }>;

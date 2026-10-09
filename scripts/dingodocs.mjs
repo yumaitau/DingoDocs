@@ -270,9 +270,7 @@ async function importFindings(args) {
   if (transport.kind === "http") {
     for (const doc of docs) {
       if (!doc.engagementId || !doc.identifier || !doc.title || !doc.severity) {
-        die(
-          "each finding needs engagementId, identifier, title, and severity",
-        );
+        die("each finding needs engagementId, identifier, title, and severity");
       }
       const body = {
         engagementId: doc.engagementId,
@@ -350,7 +348,9 @@ async function gate(args) {
   for (const doc of docs) {
     const severity = String(doc.severity ?? "").toLowerCase();
     if (!(severity in SEVERITY_RANK)) {
-      die(`finding "${doc.identifier ?? doc.title ?? "?"}" has unknown severity "${doc.severity}"`);
+      die(
+        `finding "${doc.identifier ?? doc.title ?? "?"}" has unknown severity "${doc.severity}"`,
+      );
     }
     if (SEVERITY_RANK[severity] > maxRank) {
       offenders.push(

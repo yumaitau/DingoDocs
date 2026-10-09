@@ -21,10 +21,7 @@ import {
   revokeSecureInvitation,
   updateOrganisationMemberRole,
 } from "@/server/services/account-security";
-import {
-  saveJiraConnection,
-  testJiraConnection,
-} from "@/server/services/jira";
+import { saveJiraConnection, testJiraConnection } from "@/server/services/jira";
 import {
   placeLegalHold,
   purgeExpiredEvidence,
@@ -158,7 +155,9 @@ export async function saveJiraConnectionAction(
   } catch (error) {
     return {
       error:
-        error instanceof Error ? error.message : "Could not save Jira connection",
+        error instanceof Error
+          ? error.message
+          : "Could not save Jira connection",
     };
   }
 }
@@ -206,7 +205,12 @@ export async function saveSsoPolicyAction(
   try {
     const context = await requirePermission("integration:configure");
     const protocol = z.enum(["oidc", "saml"]).parse(formData.get("protocol"));
-    const issuer = z.string().trim().min(2).max(500).parse(formData.get("issuer"));
+    const issuer = z
+      .string()
+      .trim()
+      .min(2)
+      .max(500)
+      .parse(formData.get("issuer"));
     const clientId = z
       .string()
       .trim()
@@ -275,7 +279,8 @@ export async function saveSsoPolicyAction(
     };
   } catch (error) {
     return {
-      error: error instanceof Error ? error.message : "Could not save SSO policy",
+      error:
+        error instanceof Error ? error.message : "Could not save SSO policy",
     };
   }
 }

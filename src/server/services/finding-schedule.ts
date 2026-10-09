@@ -6,7 +6,8 @@ import { clients, slaPolicies } from "@/db/schema";
 import { positiveDays, retainUntilFromDays } from "@/lib/clients/policy";
 import { dueAtFromSla } from "@/lib/findings/sla";
 
-type Queryable = typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0];
+type Queryable =
+  typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0];
 
 export async function findingScheduleDefaults(
   query: Queryable,

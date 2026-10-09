@@ -422,14 +422,13 @@ export const mcpTools: McpToolDefinition[] = [
       approvedOnly: z.boolean().optional(),
     }),
     call: (api, input) =>
-      api.listTemplates(
-        input as { q?: string; approvedOnly?: boolean },
-      ),
+      api.listTemplates(input as { q?: string; approvedOnly?: boolean }),
   },
   {
     name: "get_template",
     title: "Get a finding template",
-    description: "Read one finding template by id from the organisation library.",
+    description:
+      "Read one finding template by id from the organisation library.",
     requiredScopes: ["findings:read"],
     annotations: { readOnlyHint: true, openWorldHint: false },
     inputSchema: z.object({ templateId: z.string().uuid() }),

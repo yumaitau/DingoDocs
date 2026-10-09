@@ -85,15 +85,9 @@ async function runJob(job: JobRow) {
       typeof reportVersionId !== "string" ||
       !Array.isArray(formats) ||
       !formats.every((format) =>
-        [
-          "pdf",
-          "docx",
-          "html",
-          "markdown",
-          "json",
-          "xlsx",
-          "pptx",
-        ].includes(String(format)),
+        ["pdf", "docx", "html", "markdown", "json", "xlsx", "pptx"].includes(
+          String(format),
+        ),
       )
     )
       throw new Error("Report generation job payload is invalid");

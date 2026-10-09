@@ -104,7 +104,11 @@ export async function createAzureDevOpsIssue(
       accept: "application/json",
     },
     body: JSON.stringify([
-      { op: "add", path: "/fields/System.Title", value: input.title.slice(0, 255) },
+      {
+        op: "add",
+        path: "/fields/System.Title",
+        value: input.title.slice(0, 255),
+      },
       {
         op: "add",
         path: "/fields/System.Description",
@@ -115,7 +119,9 @@ export async function createAzureDevOpsIssue(
     ...outboundFetchInit,
   });
   if (!response.ok)
-    throw new Error(`Azure DevOps create issue failed (HTTP ${response.status})`);
+    throw new Error(
+      `Azure DevOps create issue failed (HTTP ${response.status})`,
+    );
   const body = (await response.json()) as { id?: number; url?: string };
   await db.insert(auditEvents).values({
     organisationId: actor.organisationId,

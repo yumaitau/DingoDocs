@@ -223,11 +223,7 @@ export async function applyRetention(
     .returning({ id: engagements.id });
   softDeleted.engagements = expiredEngagements.length;
 
-  if (
-    softDeleted.findings ||
-    softDeleted.reports ||
-    softDeleted.engagements
-  ) {
+  if (softDeleted.findings || softDeleted.reports || softDeleted.engagements) {
     await db.insert(auditEvents).values({
       organisationId,
       action: "retention.apply",

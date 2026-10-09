@@ -256,7 +256,9 @@ export default async function ReportPage({
                   Diff vs version {current.version - 1}
                 </p>
                 <ul className="mt-2 space-y-1 text-slate-600">
-                  <li>Added findings: {versionDiff.added.join(", ") || "none"}</li>
+                  <li>
+                    Added findings: {versionDiff.added.join(", ") || "none"}
+                  </li>
                   <li>
                     Removed findings: {versionDiff.removed.join(", ") || "none"}
                   </li>

@@ -39,9 +39,7 @@ export async function importOrganisationBundleAction(
   } catch (error) {
     return {
       error:
-        error instanceof Error
-          ? error.message
-          : "Organisation import failed",
+        error instanceof Error ? error.message : "Organisation import failed",
     };
   }
 }

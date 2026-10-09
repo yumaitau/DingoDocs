@@ -130,9 +130,7 @@ function scoreCvss31(vector: string, metrics: Record<string, string>): number {
  * availability impact across vulnerable and subsequent systems. Monotonic in
  * each metric severity and stable for identical vectors.
  */
-function scoreCvss40Approx(
-  metrics: Record<string, string>,
-): number {
+function scoreCvss40Approx(metrics: Record<string, string>): number {
   requireMetrics(metrics, REQUIRED_40, ALLOWED_40);
   const exploitability =
     W_AV[metrics.AV as keyof typeof W_AV] *

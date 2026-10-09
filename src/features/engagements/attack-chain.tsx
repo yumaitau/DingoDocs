@@ -36,11 +36,7 @@ function groupByTechnique(entries: TimelineLike[]): TechniqueGroup[] {
   }));
 }
 
-export function AttackChain({
-  timeline,
-}: {
-  timeline: TimelineLike[];
-}) {
+export function AttackChain({ timeline }: { timeline: TimelineLike[] }) {
   const groups = groupByTechnique(timeline);
 
   if (!groups.length) {

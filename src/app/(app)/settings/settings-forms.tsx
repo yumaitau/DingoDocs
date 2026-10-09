@@ -97,7 +97,11 @@ export function JiraConnectionForm({
         </label>
         <label className="block text-sm font-medium">
           Issue type
-          <input className={`${field} mt-1`} name="issueType" placeholder="Task" />
+          <input
+            className={`${field} mt-1`}
+            name="issueType"
+            placeholder="Task"
+          />
         </label>
         <label className="flex items-center gap-2 text-sm">
           <input name="enabled" type="checkbox" defaultChecked /> Enabled
@@ -116,7 +120,10 @@ export function JiraConnectionForm({
 }
 
 export function ScimTokenForm() {
-  const [state, action, pending] = useActionState(createScimTokenAction, initial);
+  const [state, action, pending] = useActionState(
+    createScimTokenAction,
+    initial,
+  );
   return (
     <form action={action}>
       <Button disabled={pending}>
@@ -219,7 +226,9 @@ export function SsoPolicyForm({
           placeholder='{"admins":"organisation_administrator"}'
         />
       </label>
-      <Button disabled={pending}>{pending ? "Saving…" : "Save SSO policy"}</Button>
+      <Button disabled={pending}>
+        {pending ? "Saving…" : "Save SSO policy"}
+      </Button>
       <Result state={state} />
     </form>
   );

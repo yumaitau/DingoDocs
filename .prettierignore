@@ -1,1 +1,4 @@
 dist
+
+# pnpm owns this file. Prettier rewrites it into a diff pnpm will not keep.
+pnpm-lock.yaml

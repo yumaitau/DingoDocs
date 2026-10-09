@@ -22,13 +22,7 @@ import { StatusPill } from "@/components/ui/status-pill";
 import { updateTaskStatusAction } from "@/server/actions/planning";
 import { cn } from "@/lib/utils";
 
-const columns = [
-  "backlog",
-  "todo",
-  "in_progress",
-  "blocked",
-  "done",
-] as const;
+const columns = ["backlog", "todo", "in_progress", "blocked", "done"] as const;
 
 type BoardStatus = (typeof columns)[number];
 
@@ -101,11 +95,7 @@ export function TaskBoard({ tasks }: { tasks: BoardTask[] }) {
         )}
       >
         {columns.map((status) => (
-          <BoardColumn
-            key={status}
-            status={status}
-            tasks={grouped[status]}
-          />
+          <BoardColumn key={status} status={status} tasks={grouped[status]} />
         ))}
       </div>
       <DragOverlay>
@@ -154,8 +144,14 @@ function BoardColumn({
 }
 
 function SortableTask({ task }: { task: BoardTask }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
-    useSortable({ id: task.id });
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: task.id });
   const style = {
     transform: transform
       ? `translate3d(${transform.x}px, ${transform.y}px, 0)`

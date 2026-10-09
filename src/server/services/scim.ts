@@ -84,10 +84,7 @@ export async function authenticateScimRequest(
   if (!row) throw new ScimAuthError("Invalid SCIM token");
   const expected = Buffer.from(row.tokenHash);
   const actual = Buffer.from(tokenHash);
-  if (
-    expected.length !== actual.length ||
-    !timingSafeEqual(expected, actual)
-  )
+  if (expected.length !== actual.length || !timingSafeEqual(expected, actual))
     throw new ScimAuthError("Invalid SCIM token");
   return {
     organisationId: row.organisationId,
@@ -338,7 +335,10 @@ export async function patchScimGroup(
   const role = roleName as Role;
   const memberIds = new Set<string>();
   for (const operation of body.Operations ?? []) {
-    if (operation.op.toLowerCase() !== "add" && operation.op.toLowerCase() !== "replace")
+    if (
+      operation.op.toLowerCase() !== "add" &&
+      operation.op.toLowerCase() !== "replace"
+    )
       continue;
     if (operation.path && operation.path !== "members") continue;
     const value = operation.value;

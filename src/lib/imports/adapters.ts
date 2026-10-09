@@ -296,14 +296,17 @@ function parseTrivy(source: string) {
           : undefined,
         severity: mapSeverity(vuln.Severity),
         assetIdentifier: target || string(vuln.PkgName) || undefined,
-        references: string(vuln.PrimaryURL) ? [string(vuln.PrimaryURL)] : undefined,
+        references: string(vuln.PrimaryURL)
+          ? [string(vuln.PrimaryURL)]
+          : undefined,
       });
     }
     const misconfigs = Array.isArray(result.Misconfigurations)
       ? result.Misconfigurations.filter(isRecord)
       : [];
     for (const mis of misconfigs) {
-      const title = string(mis.Title) || string(mis.ID) || "Trivy misconfiguration";
+      const title =
+        string(mis.Title) || string(mis.ID) || "Trivy misconfiguration";
       items.push({
         externalId: string(mis.ID ?? title),
         title,
@@ -335,13 +338,14 @@ function parseGrype(source: string) {
       description: string(vuln.description),
       severity: mapSeverity(vuln.severity),
       assetIdentifier:
-        [string(artifact.name), string(artifact.version)].filter(Boolean).join("@") ||
-        undefined,
+        [string(artifact.name), string(artifact.version)]
+          .filter(Boolean)
+          .join("@") || undefined,
       cvssScore: number(
         Array.isArray(vuln.cvss) && isRecord(vuln.cvss[0])
-          ? (isRecord(vuln.cvss[0].metrics)
-              ? vuln.cvss[0].metrics.baseScore
-              : undefined)
+          ? isRecord(vuln.cvss[0].metrics)
+            ? vuln.cvss[0].metrics.baseScore
+            : undefined
           : undefined,
       ),
       references: urls?.length ? urls : undefined,
@@ -404,7 +408,9 @@ function parseWpscan(source: string) {
     for (const [index, raw] of value.interesting_findings.entries()) {
       if (!isRecord(raw)) continue;
       const title =
-        string(raw.to_s) || string(raw.type) || `Interesting finding ${index + 1}`;
+        string(raw.to_s) ||
+        string(raw.type) ||
+        `Interesting finding ${index + 1}`;
       items.push({
         externalId: string(raw.type ?? index),
         title,
@@ -429,11 +435,7 @@ function collectWpscanVulnBuckets(
     asset?: string,
   ) => void,
 ) {
-  const walkVulns = (
-    vulns: unknown,
-    fallback: string,
-    asset?: string,
-  ) => {
+  const walkVulns = (vulns: unknown, fallback: string, asset?: string) => {
     if (Array.isArray(vulns)) {
       for (const [index, vuln] of vulns.entries()) {
         if (isRecord(vuln)) pushVuln(vuln, `${fallback} ${index + 1}`, asset);
@@ -445,7 +447,11 @@ function collectWpscanVulnBuckets(
     }
   };
 
-  walkVulns(value.vulnerabilities, "WPScan vulnerability", string(value.target_url));
+  walkVulns(
+    value.vulnerabilities,
+    "WPScan vulnerability",
+    string(value.target_url),
+  );
 
   if (isRecord(value.version)) {
     walkVulns(
@@ -537,7 +543,9 @@ function parseProwler(source: string) {
         raw.FindingUniqueId ?? raw.CheckID ?? raw.check_id ?? index,
       ),
       title,
-      description: string(raw.Description ?? raw.description ?? raw.StatusExtended),
+      description: string(
+        raw.Description ?? raw.description ?? raw.StatusExtended,
+      ),
       remediation: remediation || undefined,
       severity: mapSeverity(raw.Severity ?? raw.severity),
       assetIdentifier: string(
@@ -551,7 +559,8 @@ function parseProwler(source: string) {
 function parseScoutsuite(source: string) {
   const value = JSON.parse(source) as Record<string, unknown>;
   const services = isRecord(value.services) ? value.services : null;
-  if (!services) throw new Error("ScoutSuite JSON must contain services.*.findings");
+  if (!services)
+    throw new Error("ScoutSuite JSON must contain services.*.findings");
   const items: RawItem[] = [];
   for (const [serviceName, service] of Object.entries(services)) {
     if (!isRecord(service) || !isRecord(service.findings)) continue;
@@ -610,8 +619,7 @@ function parseGenericFindings(source: string, adapter: string) {
     : isRecord(value) && Array.isArray(value.findings)
       ? value.findings
       : null;
-  if (!list)
-    throw new Error(`${adapter} JSON must contain a findings array`);
+  if (!list) throw new Error(`${adapter} JSON must contain a findings array`);
   return list.map((raw, index) => {
     if (!isRecord(raw))
       throw new Error(`${adapter} record ${index + 1} is not an object`);
@@ -621,7 +629,9 @@ function parseGenericFindings(source: string, adapter: string) {
       externalId: string(raw.id ?? raw.externalId ?? index),
       title,
       description: string(raw.description ?? raw.detail),
-      remediation: string(raw.remediation ?? raw.recommendation ?? raw.solution),
+      remediation: string(
+        raw.remediation ?? raw.recommendation ?? raw.solution,
+      ),
       severity: mapSeverity(raw.severity ?? raw.risk),
       assetIdentifier: cleanHost(
         string(raw.asset ?? raw.host ?? raw.url ?? raw.affected_asset),
@@ -889,7 +899,9 @@ function cleanHost(value?: string) {
   }
 }
 function mapSeverity(value: unknown): NormalizedImportItem["severity"] {
-  const raw = String(value ?? "").trim().toLowerCase();
+  const raw = String(value ?? "")
+    .trim()
+    .toLowerCase();
   const lead = raw.match(/^(?:very\s+high|\d+|[a-z]+)/)?.[0] ?? "";
   if (lead === "4" || lead === "critical" || lead === "very high")
     return "critical";

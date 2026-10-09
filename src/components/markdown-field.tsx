@@ -52,7 +52,9 @@ function markdownToHtml(markdown: string) {
         html.push(`<${next}>`);
         inList = next;
       }
-      html.push(`<li>${inlineMarkdown(bullet?.[1] ?? ordered?.[1] ?? "")}</li>`);
+      html.push(
+        `<li>${inlineMarkdown(bullet?.[1] ?? ordered?.[1] ?? "")}</li>`,
+      );
       continue;
     }
     closeList();
@@ -64,7 +66,9 @@ function markdownToHtml(markdown: string) {
       continue;
     }
     if (line.startsWith("> ")) {
-      html.push(`<blockquote><p>${inlineMarkdown(line.slice(2))}</p></blockquote>`);
+      html.push(
+        `<blockquote><p>${inlineMarkdown(line.slice(2))}</p></blockquote>`,
+      );
       continue;
     }
     const image = line.match(/^!\[([^\]]*)\]\((https?:\/\/[^)\s]+)\)$/);
@@ -80,7 +84,8 @@ function markdownToHtml(markdown: string) {
     html.push(`<p>${inlineMarkdown(line)}</p>`);
   }
   closeList();
-  if (inCode) html.push(`<pre><code>${escapeHtml(code.join("\n"))}</code></pre>`);
+  if (inCode)
+    html.push(`<pre><code>${escapeHtml(code.join("\n"))}</code></pre>`);
   return html.join("") || "<p></p>";
 }
 
@@ -221,8 +226,9 @@ export function MarkdownField({
     if (!editor) return;
     const next = defaultValue ?? "";
     const current = htmlToMarkdown(editor.getHTML());
-    if (next !== current) editor.commands.setContent(markdownToHtml(next));
-    setMarkdown(next);
+    if (next !== current) {
+      editor.commands.setContent(markdownToHtml(next), { emitUpdate: true });
+    }
   }, [defaultValue, editor]);
 
   return (
@@ -245,9 +251,7 @@ export function MarkdownField({
             editor
               .chain()
               .focus()
-              .insertContent(
-                `<img alt="" src="${escapeHtml(src)}" />`,
-              )
+              .insertContent(`<img alt="" src="${escapeHtml(src)}" />`)
               .run();
           }}
         >

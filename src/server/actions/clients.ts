@@ -87,7 +87,8 @@ export async function saveClientDefaults(formData: FormData) {
   } as Record<string, unknown>;
   if (input.pageSize) reportPreferences.pageSize = input.pageSize;
   else delete reportPreferences.pageSize;
-  if (input.redactionTerms) reportPreferences.redactionTerms = input.redactionTerms;
+  if (input.redactionTerms)
+    reportPreferences.redactionTerms = input.redactionTerms;
   else delete reportPreferences.redactionTerms;
   const retentionPolicy = {
     ...(client.retentionPolicy ?? {}),

@@ -78,7 +78,8 @@ async function loadConfig(organisationId: string) {
       ),
     )
     .limit(1);
-  if (!row?.enabled) throw new Error("GitHub issues integration is not configured");
+  if (!row?.enabled)
+    throw new Error("GitHub issues integration is not configured");
   return configSchema.parse(
     JSON.parse(decryptIntegrationSecret(row.configurationEncrypted)),
   );

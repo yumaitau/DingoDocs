@@ -32,13 +32,19 @@ import {
 import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import { LocaleSwitch } from "@/components/locale-switch";
 import {
   defaultLocale,
   getDictionary,
   readStoredLocale,
-  type Locale,
+  subscribeStoredLocale,
 } from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
@@ -54,7 +60,11 @@ const primary: NavItem[] = [
   { labelKey: "engagements", href: "/engagements", icon: ShieldCheck },
   { labelKey: "schedule", href: "/schedule", icon: CalendarDays },
   { labelKey: "programs", href: "/programs", icon: FolderKanban },
-  { labelKey: "opportunities", href: "/opportunities", icon: BriefcaseBusiness },
+  {
+    labelKey: "opportunities",
+    href: "/opportunities",
+    icon: BriefcaseBusiness,
+  },
   { labelKey: "findingsLibrary", href: "/findings-library", icon: Library },
   { labelKey: "reports", href: "/reports", icon: FileText },
   { labelKey: "tasks", href: "/tasks", icon: CheckSquare },
@@ -193,10 +203,11 @@ function Navigation({
   onNavigate: () => void;
   onSearch: () => void;
 }) {
-  const [locale, setLocale] = useState<Locale>(defaultLocale);
-  useEffect(() => {
-    setLocale(readStoredLocale());
-  }, []);
+  const locale = useSyncExternalStore(
+    subscribeStoredLocale,
+    readStoredLocale,
+    () => defaultLocale,
+  );
   const dictionary = getDictionary(locale);
 
   return (
@@ -216,7 +227,7 @@ function Navigation({
             {organisationName}
           </div>
         </div>
-        <LocaleSwitch value={locale} onChange={setLocale} />
+        <LocaleSwitch value={locale} />
         <NotificationBell />
       </div>
       <button
@@ -309,9 +320,13 @@ function NotificationBell() {
     let cancelled = false;
     fetch("/api/notifications")
       .then((response) => (response.ok ? response.json() : null))
-      .then((body: { notifications?: InboxItem[]; unreadCount?: number } | null) => {
-        if (!cancelled && body) applyPayload(body);
-      })
+      .then(
+        (
+          body: { notifications?: InboxItem[]; unreadCount?: number } | null,
+        ) => {
+          if (!cancelled && body) applyPayload(body);
+        },
+      )
       .catch(() => undefined);
     return () => {
       cancelled = true;
@@ -444,11 +459,11 @@ function CommandPalette({
   onOpenChange: (open: boolean) => void;
 }) {
   const router = useRouter();
-  const [locale, setLocale] = useState<Locale>(defaultLocale);
-  useEffect(() => {
-    setLocale(readStoredLocale());
-  }, [open]);
-  const dictionary = getDictionary(locale);
+  const locale = useSyncExternalStore(
+    subscribeStoredLocale,
+    readStoredLocale,
+    () => defaultLocale,
+  );
   const items = useMemo(
     () =>
       [...primary, ...secondary].map((item) => ({

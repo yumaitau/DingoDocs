@@ -121,7 +121,10 @@ export default async function ProgramsPage() {
         description="Group engagements by client and year, then roll up finding volume."
       />
       <div className="space-y-6 px-4 py-6 sm:px-6 lg:px-8">
-        <details className="rounded-xl border bg-paper" open={!programRows.length}>
+        <details
+          className="rounded-xl border bg-paper"
+          open={!programRows.length}
+        >
           <summary className="flex cursor-pointer list-none items-center gap-2 p-5 font-semibold">
             <Plus className="size-4" /> Create program
           </summary>

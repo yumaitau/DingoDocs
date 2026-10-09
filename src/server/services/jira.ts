@@ -3,11 +3,7 @@ import "server-only";
 import { and, eq, isNull } from "drizzle-orm";
 import { z } from "zod";
 import { db } from "@/db";
-import {
-  auditEvents,
-  findings,
-  integrationConnections,
-} from "@/db/schema";
+import { auditEvents, findings, integrationConnections } from "@/db/schema";
 import type { FindingStatus } from "@/features/findings/workflow";
 import {
   decryptIntegrationSecret,
@@ -151,7 +147,10 @@ export async function testJiraConnection(actor: IntegrationActor) {
   });
   if (!response.ok)
     throw new Error(`Jira connection test failed (HTTP ${response.status})`);
-  const body = (await response.json()) as { displayName?: string; emailAddress?: string };
+  const body = (await response.json()) as {
+    displayName?: string;
+    emailAddress?: string;
+  };
   return {
     ok: true as const,
     displayName: body.displayName,

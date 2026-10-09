@@ -17,7 +17,10 @@ export default async function ClientPage({
   const context = await requireInternalOrganisationContext();
   const client = await getClient(context, id);
   if (!client) notFound();
-  const preferences = (client.reportPreferences ?? {}) as Record<string, unknown>;
+  const preferences = (client.reportPreferences ?? {}) as Record<
+    string,
+    unknown
+  >;
   const retention = (client.retentionPolicy ?? {}) as Record<string, unknown>;
   const [contacts, engagementCount] = await Promise.all([
     db
@@ -97,21 +100,27 @@ export default async function ClientPage({
         </section>
         <section className="rounded-xl border bg-paper lg:col-span-2">
           <div className="border-b p-5">
-            <h2 className="text-base font-semibold">Report and retention defaults</h2>
+            <h2 className="text-base font-semibold">
+              Report and retention defaults
+            </h2>
             <p className="mt-1 text-xs text-slate-500">
               Page size and redaction fill empty report templates. Day counts
               set retain-until on new evidence, findings, reports, and
               engagements. Finding due dates come from SLA policies.
             </p>
           </div>
-          <form action={saveClientDefaults} className="grid gap-4 p-5 sm:grid-cols-2">
+          <form
+            action={saveClientDefaults}
+            className="grid gap-4 p-5 sm:grid-cols-2"
+          >
             <input name="clientId" type="hidden" value={client.id} />
             <label className="text-xs font-medium text-slate-500">
               Default page size
               <select
                 className="mt-1 h-10 w-full rounded-md border bg-paper px-3 text-sm"
                 defaultValue={
-                  preferences.pageSize === "A4" || preferences.pageSize === "LETTER"
+                  preferences.pageSize === "A4" ||
+                  preferences.pageSize === "LETTER"
                     ? preferences.pageSize
                     : ""
                 }
@@ -135,9 +144,21 @@ export default async function ClientPage({
                 placeholder="One phrase per line"
               />
             </label>
-            <DayField label="Evidence days" name="evidenceDays" value={retention.evidenceDays} />
-            <DayField label="Finding days" name="findingDays" value={retention.findingDays} />
-            <DayField label="Report days" name="reportDays" value={retention.reportDays} />
+            <DayField
+              label="Evidence days"
+              name="evidenceDays"
+              value={retention.evidenceDays}
+            />
+            <DayField
+              label="Finding days"
+              name="findingDays"
+              value={retention.findingDays}
+            />
+            <DayField
+              label="Report days"
+              name="reportDays"
+              value={retention.reportDays}
+            />
             <DayField
               label="Engagement days"
               name="engagementDays"

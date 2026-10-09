@@ -16,13 +16,7 @@ import { reportStatusEnum } from "./enums";
 import { organisations } from "./organisations";
 
 export type ReportFormat =
-  | "pdf"
-  | "docx"
-  | "html"
-  | "markdown"
-  | "json"
-  | "xlsx"
-  | "pptx";
+  "pdf" | "docx" | "html" | "markdown" | "json" | "xlsx" | "pptx";
 export type ReportCondition = {
   field:
     | "hasFindings"

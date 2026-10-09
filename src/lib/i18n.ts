@@ -174,8 +174,7 @@ const dictionaries: Record<Locale, Dictionary> = {
 
 export function isLocale(value: unknown): value is Locale {
   return (
-    typeof value === "string" &&
-    (locales as readonly string[]).includes(value)
+    typeof value === "string" && (locales as readonly string[]).includes(value)
   );
 }
 
@@ -193,6 +192,18 @@ export function readStoredLocale(): Locale {
   }
 }
 
+const LOCALE_CHANGE_EVENT = "dingodocs-locale";
+
+export function subscribeStoredLocale(onStoreChange: () => void) {
+  if (typeof window === "undefined") return () => {};
+  window.addEventListener(LOCALE_CHANGE_EVENT, onStoreChange);
+  window.addEventListener("storage", onStoreChange);
+  return () => {
+    window.removeEventListener(LOCALE_CHANGE_EVENT, onStoreChange);
+    window.removeEventListener("storage", onStoreChange);
+  };
+}
+
 export function writeStoredLocale(locale: Locale) {
   if (typeof window === "undefined") return;
   try {
@@ -200,4 +211,5 @@ export function writeStoredLocale(locale: Locale) {
   } catch {
     /* ignore quota / private mode */
   }
+  window.dispatchEvent(new Event(LOCALE_CHANGE_EVENT));
 }

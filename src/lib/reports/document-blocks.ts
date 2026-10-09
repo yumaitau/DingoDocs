@@ -86,7 +86,8 @@ export function blocksForSection(
   model: ReportDocumentModel,
   type: "findings" | "chart" | "risk_matrix",
 ): DocumentBlock[] {
-  if (type === "chart") return [{ kind: "chart", counts: model.severityCounts }];
+  if (type === "chart")
+    return [{ kind: "chart", counts: model.severityCounts }];
   if (type === "risk_matrix") {
     const blocks: DocumentBlock[] = [
       { kind: "chart", counts: model.severityCounts },
@@ -95,7 +96,10 @@ export function blocksForSection(
       blocks.push({ kind: "risk_matrix", matrix: model.riskMatrix });
     return blocks;
   }
-  return model.findings.map((finding) => ({ kind: "finding" as const, finding }));
+  return model.findings.map((finding) => ({
+    kind: "finding" as const,
+    finding,
+  }));
 }
 
 export function severityChartRows(counts: Record<string, number>) {
@@ -108,7 +112,10 @@ export function severityChartRows(counts: Record<string, number>) {
 export function riskMatrixTable(matrix: RiskMatrixDefinition) {
   const impacts = [...matrix.impact].sort((a, b) => a.order - b.order);
   const likelihoods = [...matrix.likelihood].sort((a, b) => a.order - b.order);
-  const headers = ["Likelihood \\ Impact", ...impacts.map((item) => item.label)];
+  const headers = [
+    "Likelihood \\ Impact",
+    ...impacts.map((item) => item.label),
+  ];
   const rows = likelihoods.map((likelihood) => [
     likelihood.label,
     ...impacts.map((impact) => {

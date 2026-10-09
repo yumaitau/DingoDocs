@@ -247,9 +247,7 @@ export async function bulkUpdateFindingsAction(
     severity: input.severity || undefined,
     assigneeId: input.assigneeId || undefined,
     clientVisible:
-      input.clientVisible === ""
-        ? undefined
-        : input.clientVisible === "true",
+      input.clientVisible === "" ? undefined : input.clientVisible === "true",
   });
   refreshEngagement(engagementId);
 }
@@ -291,7 +289,11 @@ export async function runFindingQaLintAction(
       allowLoopback: process.env.NODE_ENV !== "production",
     });
     for (const finding of rows) {
-      const text = [finding.executiveSummary, finding.technicalDetail, finding.remediation]
+      const text = [
+        finding.executiveSummary,
+        finding.technicalDetail,
+        finding.remediation,
+      ]
         .filter(Boolean)
         .join("\n\n");
       if (!text.trim()) continue;

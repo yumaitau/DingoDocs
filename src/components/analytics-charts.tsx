@@ -72,10 +72,7 @@ export function AnalyticsCharts({
             <Tooltip />
             <Bar dataKey="value" name="Findings" radius={[4, 4, 0, 0]}>
               {severityCounts.map((row) => (
-                <Cell
-                  key={row.key}
-                  fill={severityFill[row.key] ?? "#0f766e"}
-                />
+                <Cell key={row.key} fill={severityFill[row.key] ?? "#0f766e"} />
               ))}
             </Bar>
           </BarChart>
@@ -150,8 +147,7 @@ export function TimeRollupTable({
 }) {
   const table = useTable({
     features: timeFeatures,
-    columns:
-      nameHeader === "User" ? userTimeColumns : engagementTimeColumns,
+    columns: nameHeader === "User" ? userTimeColumns : engagementTimeColumns,
     data: rows.length ? rows : EMPTY_TIME_ROWS,
   });
 

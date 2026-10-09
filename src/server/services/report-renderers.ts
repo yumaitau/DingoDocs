@@ -435,7 +435,11 @@ async function renderReportPdf(model: ReportDocumentModel) {
     } else if (definition.type === "image") {
       const image = await reportImage(definition.options?.imageDataUri);
       if (image) {
-        const scale = Math.min(contentWidth / image.width, 430 / image.height, 1);
+        const scale = Math.min(
+          contentWidth / image.width,
+          430 / image.height,
+          1,
+        );
         const height = image.height * scale;
         ensurePdfSpace(document, height + 40, page);
         const y = document.y;
@@ -479,7 +483,11 @@ async function renderReportPdf(model: ReportDocumentModel) {
         .text(`${signature.label} - ${signature.role}`);
   }
   const range = document.bufferedPageRange();
-  for (let pageIndex = range.start; pageIndex < range.start + range.count; pageIndex++) {
+  for (
+    let pageIndex = range.start;
+    pageIndex < range.start + range.count;
+    pageIndex++
+  ) {
     document.switchToPage(pageIndex);
     // Footer coordinates lie outside the reserved body area. Do not let
     // PDFKit paginate these fixed-position labels onto extra blank pages.
@@ -506,11 +514,16 @@ async function renderReportPdf(model: ReportDocumentModel) {
         width: contentWidth / 2,
         lineBreak: false,
       });
-    document.text(model.theme.headerRight ?? model.classification, 72 + contentWidth / 2, 34, {
-      width: contentWidth / 2,
-      align: "right",
-      lineBreak: false,
-    });
+    document.text(
+      model.theme.headerRight ?? model.classification,
+      72 + contentWidth / 2,
+      34,
+      {
+        width: contentWidth / 2,
+        align: "right",
+        lineBreak: false,
+      },
+    );
     document.text(
       model.theme.footerLeft ?? model.engagementReference,
       72,
@@ -521,11 +534,16 @@ async function renderReportPdf(model: ReportDocumentModel) {
       },
     );
     if (model.theme.showPageNumbers)
-      document.text(`Page ${pageIndex + 1} of ${range.count}`, 72 + contentWidth / 2, footerY, {
-        width: contentWidth / 2,
-        align: "right",
-        lineBreak: false,
-      });
+      document.text(
+        `Page ${pageIndex + 1} of ${range.count}`,
+        72 + contentWidth / 2,
+        footerY,
+        {
+          width: contentWidth / 2,
+          align: "right",
+          lineBreak: false,
+        },
+      );
   }
   document.end();
   return new Uint8Array(await completed);
@@ -732,7 +750,9 @@ async function renderReportDocx(model: ReportDocumentModel) {
       {
         properties: {
           page: {
-            size: DOCX_PAGE_SIZES[model.theme.pageSize === "A4" ? "A4" : "LETTER"],
+            size: DOCX_PAGE_SIZES[
+              model.theme.pageSize === "A4" ? "A4" : "LETTER"
+            ],
             margin: {
               top: 1440,
               right: 1440,
@@ -1304,7 +1324,9 @@ function docxSeverityBars(counts: Record<string, number>, primary: string) {
                 new Paragraph({
                   children: [
                     new TextRun({
-                      text: "█".repeat(Math.max(1, Math.round((value / max) * 20))),
+                      text: "█".repeat(
+                        Math.max(1, Math.round((value / max) * 20)),
+                      ),
                       color: primary,
                     }),
                   ],
@@ -1433,20 +1455,19 @@ function renderReportPptx(model: ReportDocumentModel) {
       pptxSlide(
         index + 2,
         `${severity} findings`,
-        `${count} finding(s)\n\n${model.findings
-          .filter((finding) => finding.severity === severity)
-          .map((finding) => `${finding.identifier}: ${finding.title}`)
-          .join("\n") || "None"}`,
+        `${count} finding(s)\n\n${
+          model.findings
+            .filter((finding) => finding.severity === severity)
+            .map((finding) => `${finding.identifier}: ${finding.title}`)
+            .join("\n") || "None"
+        }`,
       ),
     ),
   ];
   const presentation = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
 <p:presentation xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
 <p:sldIdLst>${slides
-    .map(
-      (_, index) =>
-        `<p:sldId id="${256 + index}" r:id="rId${index + 1}"/>`,
-    )
+    .map((_, index) => `<p:sldId id="${256 + index}" r:id="rId${index + 1}"/>`)
     .join("")}</p:sldIdLst>
 <p:sldSz cx="9144000" cy="6858000"/>
 </p:presentation>`;
