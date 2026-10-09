@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { deleteAuditEventsForOrganisations } from "@/server/testing/delete-audit-events";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -159,14 +160,10 @@ run("scanner exchange, backup, and tenant-safe PostgreSQL search", () => {
   });
   afterAll(async () => {
     if (!modules) return;
-    await modules.db
-      .delete(modules.auditEvents)
-      .where(
-        modules.inArray(modules.auditEvents.organisationId, [
-          ids.orgA,
-          ids.orgB,
-        ]),
-      );
+    await deleteAuditEventsForOrganisations(modules.sqlClient, [
+      ids.orgA,
+      ids.orgB,
+    ]);
     await modules.db
       .delete(modules.organisations)
       .where(modules.inArray(modules.organisations.id, [ids.orgA, ids.orgB]));

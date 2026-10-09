@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { deleteAuditEventsForOrganisations } from "@/server/testing/delete-audit-events";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 const testUrl = process.env.TEST_DATABASE_URL;
@@ -47,14 +48,10 @@ run("integration automation with PostgreSQL", () => {
     delete process.env.AI_ENABLED;
     delete process.env.INTEGRATION_ENCRYPTION_KEY;
     if (!modules) return;
-    await modules.db
-      .delete(modules.auditEvents)
-      .where(
-        modules.inArray(modules.auditEvents.organisationId, [
-          ids.organisation,
-          ids.otherOrganisation,
-        ]),
-      );
+    await deleteAuditEventsForOrganisations(modules.sqlClient, [
+      ids.organisation,
+      ids.otherOrganisation,
+    ]);
     await modules.db
       .delete(modules.organisations)
       .where(

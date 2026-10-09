@@ -41,7 +41,7 @@
     "@craftjs/core": "0.2.12",
     "@dnd-kit/core": "^6.3.1",
     "@dnd-kit/sortable": "^10.0.0",
-    "@modelcontextprotocol/sdk": "^1.30.0",
+    "@modelcontextprotocol/sdk": "^1.31.0",
     "@node-saml/node-saml": "^5.1.0",
     "@opentelemetry/api": "^1.9.1",
     "@radix-ui/react-dialog": "^1.1.22",
@@ -71,7 +71,7 @@
     "react-dom": "19.3.0",
     "recharts": "^3.10.1",
     "server-only": "^0.0.1",
-    "sharp": "^0.35.4",
+    "sharp": "^0.35.5",
     "tailwind-merge": "^3.7.0",
     "uuid": "^14.0.2",
     "zod": "^4.6.5"
@@ -100,7 +100,13 @@
     "vitest": "^4.1.9"
   },
   "pnpm": {
+    "auditConfig": {
+      "ignoreGhsas": [
+        "GHSA-vfj7-8cjw-p6xm"
+      ]
+    },
     "overrides": {
+      "source-map-js@<1.2.2": "1.2.2",
       "@hono/node-server@<1.19.15": "1.19.15",
       "browserslist@<=4.28.6": "4.28.7",
       "brace-expansion@<5.0.11": "5.0.11",

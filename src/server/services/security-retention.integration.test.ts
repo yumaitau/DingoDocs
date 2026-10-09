@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
+import { deleteAuditEventsForOrganisations } from "@/server/testing/delete-audit-events";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 const testUrl = process.env.TEST_DATABASE_URL;
@@ -94,9 +95,9 @@ run("account security and retention with PostgreSQL", () => {
 
   afterAll(async () => {
     if (!modules) return;
-    await modules.db
-      .delete(modules.auditEvents)
-      .where(modules.eq(modules.auditEvents.organisationId, ids.organisation));
+    await deleteAuditEventsForOrganisations(modules.sqlClient, [
+      ids.organisation,
+    ]);
     await modules.db
       .delete(modules.organisations)
       .where(modules.eq(modules.organisations.id, ids.organisation));
