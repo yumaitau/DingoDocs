@@ -77,9 +77,12 @@ test("owner can reach every workspace and follow seeded assessment records", asy
   await expect(
     page.getByRole("heading", { name: "Client risk comparison" }),
   ).toBeVisible();
-  await page.getByLabel("Severity").selectOption("high");
-  await page.getByLabel("Workflow").selectOption("all");
-  await page.getByRole("button", { name: "Apply filters" }).click();
+  const analyticsFilters = page.getByRole("form", {
+    name: "Analytics filters",
+  });
+  await analyticsFilters.getByLabel("Severity").selectOption("high");
+  await analyticsFilters.getByLabel("Workflow").selectOption("all");
+  await analyticsFilters.getByRole("button", { name: "Apply filters" }).click();
   await expect(page).toHaveURL(/\/analytics\?.*severity=high/);
   const findingLink = page.getByRole("table").last().getByRole("link").first();
   await expect(findingLink).toBeVisible();
