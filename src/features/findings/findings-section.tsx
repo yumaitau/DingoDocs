@@ -4,22 +4,26 @@ import {
   Plus,
   ShieldCheck,
 } from "lucide-react";
+import { MarkdownField } from "@/components/markdown-field";
 import { Button } from "@/components/ui/button";
 import { StatusPill } from "@/components/ui/status-pill";
+import { FindingAssistPanel } from "@/features/findings/finding-assist-panel";
+import { lintFindings } from "@/lib/findings/qa-lint";
+import { rolesForOperation } from "@/lib/permissions/require";
 import {
   addFindingCommentAction,
+  bulkUpdateFindingsAction,
   createEngagementFindingAction,
   linkFindingEvidenceAction,
   transitionFindingAction,
   updateFindingFromTemplateAction,
   updateFindingNarrativeAction,
 } from "@/server/actions/findings";
-import { rolesForOperation } from "@/lib/permissions/require";
+import type { getEngagementWorkspace } from "@/server/services/engagement-workspace";
 import {
   listEngagementEvidence,
   scopedEvidenceActor,
 } from "@/server/services/evidence";
-import type { getEngagementWorkspace } from "@/server/services/engagement-workspace";
 import {
   compareFindingTemplate,
   getEngagementFindings,
@@ -29,6 +33,16 @@ import {
 type Workspace = NonNullable<
   Awaited<ReturnType<typeof getEngagementWorkspace>>
 >;
+
+const complianceOptions = [
+  "PCI DSS",
+  "ISO 27001",
+  "SOC 2",
+  "NIST CSF",
+  "CMMC",
+  "DORA",
+  "Essential Eight",
+] as const;
 
 export async function FindingsSection({
   engagementId,
@@ -67,9 +81,26 @@ export async function FindingsSection({
       ),
     ),
   );
+  const qaIssues = lintFindings({
+    findings: rows,
+    evidenceIds: evidence.map((item) => item.id),
+  });
 
   return (
     <div className="space-y-6">
+      {qaIssues.length ? (
+        <section className="rounded-xl border border-amber-200 bg-amber-50 p-5">
+          <h2 className="font-semibold text-amber-950">QA lint</h2>
+          <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-amber-950">
+            {qaIssues.map((issue) => (
+              <li key={`${issue.code}:${issue.findingId ?? ""}:${issue.message}`}>
+                {issue.message}
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
       <section className="rounded-xl border bg-paper p-5">
         <h2 className="font-semibold">Create engagement finding</h2>
         <p className="mt-1 text-sm text-slate-500">
@@ -138,6 +169,55 @@ export async function FindingsSection({
         ) : null}
       </section>
 
+      {rows.length ? (
+        <section className="rounded-xl border bg-paper p-5">
+          <h2 className="font-semibold">Bulk update</h2>
+          <p className="mt-1 text-sm text-slate-500">
+            Select findings below, choose an action, then submit. Status changes
+            use the same workflow rules as single transitions.
+          </p>
+          <form
+            id="bulk-findings"
+            action={bulkUpdateFindingsAction.bind(null, engagementId)}
+            className="mt-4 grid gap-3 md:grid-cols-4"
+          >
+            <Field label="Status">
+              <select className={field} name="status" defaultValue="">
+                <option value="">No change</option>
+                {statuses.map((status) => (
+                  <option key={status} value={status}>
+                    {status.replaceAll("_", " ")}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Severity">
+              <select className={field} name="severity" defaultValue="">
+                <option value="">No change</option>
+                {severities.map((item) => (
+                  <option key={item} value={item}>
+                    {item}
+                  </option>
+                ))}
+              </select>
+            </Field>
+            <Field label="Assignee user id">
+              <input className={field} name="assigneeId" placeholder="UUID" />
+            </Field>
+            <Field label="Client visible">
+              <select className={field} name="clientVisible" defaultValue="">
+                <option value="">No change</option>
+                <option value="true">Visible</option>
+                <option value="false">Hidden</option>
+              </select>
+            </Field>
+            <Button type="submit" className="md:col-span-4 md:w-fit">
+              Apply bulk update
+            </Button>
+          </form>
+        </section>
+      ) : null}
+
       <div className="space-y-4">
         {rows.map((finding) => {
           const comparison = comparisons.get(finding.id);
@@ -146,6 +226,15 @@ export async function FindingsSection({
               <header className="flex flex-wrap items-start justify-between gap-3 border-b p-5">
                 <div>
                   <div className="flex flex-wrap items-center gap-2">
+                    <label className="flex items-center gap-2 text-sm">
+                      <input
+                        form="bulk-findings"
+                        type="checkbox"
+                        name="ids"
+                        value={finding.id}
+                      />
+                      Select
+                    </label>
                     <ShieldCheck className="size-4 text-slate-400" />
                     <span className="font-mono text-xs text-slate-500">
                       {finding.identifier}
@@ -158,6 +247,9 @@ export async function FindingsSection({
                     {finding.approvedVersion
                       ? ` · approved v${finding.approvedVersion}`
                       : ""}
+                    {finding.cve ? ` · ${finding.cve}` : ""}
+                    {finding.epssScore ? ` · EPSS ${finding.epssScore}` : ""}
+                    {finding.kev ? " · KEV" : ""}
                   </p>
                 </div>
                 <div className="flex gap-2">
@@ -201,21 +293,25 @@ export async function FindingsSection({
                         ))}
                       </select>
                     </Field>
-                    <Field label="CVSS v4 score">
+                    <label className="flex items-center gap-2 text-sm sm:col-span-2">
+                      <input type="checkbox" name="severityLocked" />
+                      Lock severity (skip risk-matrix override)
+                    </label>
+                    <Field label="CVSS score">
                       <input
                         className={field}
                         name="cvssScore"
                         inputMode="decimal"
                         defaultValue={finding.cvssScore ?? ""}
-                        placeholder="0.0–10.0"
+                        placeholder="Auto from vector if empty"
                       />
                     </Field>
-                    <Field label="CVSS v4 vector" wide>
+                    <Field label="CVSS vector" wide>
                       <input
                         className={field}
                         name="cvssVector"
                         defaultValue={finding.cvssVector ?? ""}
-                        placeholder="CVSS:4.0/AV:N/AC:L/…"
+                        placeholder="CVSS:3.1/… or CVSS:4.0/…"
                       />
                     </Field>
                     <Field label="Likelihood">
@@ -232,16 +328,73 @@ export async function FindingsSection({
                         defaultValue={finding.impact ?? ""}
                       />
                     </Field>
+                    <Field label="CWE">
+                      <input
+                        className={field}
+                        name="cwe"
+                        defaultValue={finding.cwe ?? ""}
+                        placeholder="CWE-287"
+                      />
+                    </Field>
+                    <Field label="OWASP">
+                      <input
+                        className={field}
+                        name="owasp"
+                        defaultValue={finding.owasp ?? ""}
+                        placeholder="A01:2021"
+                      />
+                    </Field>
+                    <Field label="ATT&CK techniques" wide>
+                      <input
+                        className={field}
+                        name="attackTechniques"
+                        defaultValue={finding.attackTechniques.join(", ")}
+                        placeholder="T1190, T1059"
+                      />
+                    </Field>
+                    <Field label="CVE">
+                      <input
+                        className={field}
+                        name="cve"
+                        defaultValue={finding.cve ?? ""}
+                        placeholder="CVE-2024-1234"
+                      />
+                    </Field>
+                    <fieldset className="sm:col-span-2">
+                      <legend className="text-sm font-medium">
+                        Compliance tags
+                      </legend>
+                      <div className="mt-2 flex flex-wrap gap-3">
+                        {complianceOptions.map((tag) => (
+                          <label
+                            key={tag}
+                            className="flex items-center gap-2 text-sm"
+                          >
+                            <input
+                              type="checkbox"
+                              name="complianceTags"
+                              value={tag}
+                              defaultChecked={finding.complianceTags.includes(
+                                tag,
+                              )}
+                            />
+                            {tag}
+                          </label>
+                        ))}
+                      </div>
+                    </fieldset>
                     <Area
                       label="Executive summary"
                       name="executiveSummary"
                       value={finding.executiveSummary}
                     />
-                    <Area
-                      label="Technical detail"
-                      name="technicalDetail"
-                      value={finding.technicalDetail}
-                    />
+                    <div className="sm:col-span-2">
+                      <MarkdownField
+                        name="technicalDetail"
+                        label="Technical detail"
+                        defaultValue={finding.technicalDetail}
+                      />
+                    </div>
                     <Area
                       label="Reproduction steps"
                       name="reproductionSteps"
@@ -262,11 +415,13 @@ export async function FindingsSection({
                       name="technicalImpact"
                       value={finding.technicalImpact}
                     />
-                    <Area
-                      label="Remediation"
-                      name="remediation"
-                      value={finding.remediation}
-                    />
+                    <div className="sm:col-span-2">
+                      <MarkdownField
+                        name="remediation"
+                        label="Remediation"
+                        defaultValue={finding.remediation}
+                      />
+                    </div>
                     <Area
                       label="Verification guidance"
                       name="verificationGuidance"
@@ -346,6 +501,10 @@ export async function FindingsSection({
                       </form>
                     </section>
                   ) : null}
+                  <FindingAssistPanel
+                    engagementId={engagementId}
+                    findingId={finding.id}
+                  />
                   <TransitionForm
                     engagementId={engagementId}
                     findingId={finding.id}

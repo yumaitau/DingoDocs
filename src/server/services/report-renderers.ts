@@ -25,10 +25,18 @@ import {
 import PDFDocument from "pdfkit";
 import sharp from "sharp";
 import { safeReportImage } from "@/lib/reports/layout";
+import {
+  blocksForSection,
+  findingFieldBlocks,
+  riskMatrixTable,
+  severityChartRows,
+} from "@/lib/reports/document-blocks";
+import { createStoredZip } from "@/lib/reports/office-zip";
 import type {
   ReportExam,
   ReportFormat,
   ReportSectionDefinition,
+  RiskMatrixDefinition,
 } from "@/db/schema";
 import { logoBytes } from "@/lib/reports/branding";
 
@@ -39,8 +47,21 @@ export type ReportFindingModel = {
   status: string;
   executiveSummary?: string | null;
   technicalDetail?: string | null;
+  reproductionSteps?: string | null;
+  proofOfConcept?: string | null;
   businessImpact?: string | null;
+  technicalImpact?: string | null;
   remediation?: string | null;
+  references?: string[];
+  mappings?: Array<{ framework: string; reference: string; title?: string }>;
+  affectedAssets?: string[];
+  cwe?: string | null;
+  owasp?: string | null;
+  attackTechniques?: string[];
+  cve?: string | null;
+  epssScore?: string | null;
+  kev?: boolean;
+  complianceTags?: string[];
   cvssVector?: string | null;
   cvssScore?: string | null;
 };
@@ -84,12 +105,14 @@ export type ReportDocumentModel = {
     severity: string;
     remediation: string;
   }>;
+  riskMatrix?: RiskMatrixDefinition;
   theme: {
     primaryColour: string;
     accentColour: string;
     bodyFont: string;
     headingFont: string;
     bodySize: number;
+    pageSize?: "A4" | "LETTER";
     customCss?: string | null;
     headerLeft?: string;
     headerRight?: string;
@@ -125,6 +148,17 @@ export const reportMediaTypes: Record<ReportFormat, string> = {
   html: "text/html; charset=utf-8",
   markdown: "text/markdown; charset=utf-8",
   json: "application/json; charset=utf-8",
+  xlsx: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  pptx: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+};
+
+const PAGE_SIZES = {
+  LETTER: { name: "LETTER" as const, width: 612, height: 792 },
+  A4: { name: "A4" as const, width: 595.28, height: 841.89 },
+};
+const DOCX_PAGE_SIZES = {
+  LETTER: { width: 12240, height: 15840 },
+  A4: { width: 11906, height: 16838 },
 };
 
 export async function renderReport(
@@ -135,6 +169,8 @@ export async function renderReport(
   if (format === "docx") return renderReportDocx(model);
   if (format === "html") return bytes(renderReportHtml(model));
   if (format === "markdown") return bytes(renderReportMarkdown(model));
+  if (format === "xlsx") return renderReportXlsx(model);
+  if (format === "pptx") return renderReportPptx(model);
   return bytes(JSON.stringify(model, null, 2));
 }
 
@@ -150,7 +186,7 @@ export function renderReportHtml(model: ReportDocumentModel) {
   return `<!doctype html>
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>${escapeHtml(model.title)}</title><style>
-:root{--primary:${primary};--accent:${accent}}*{box-sizing:border-box}body{margin:0;color:#17202a;background:#eef2f5;font-family:${safeFont(model.theme.bodyFont)},Arial,sans-serif;font-size:${model.theme.bodySize}px;line-height:1.55}.report{width:min(900px,100%);margin:0 auto;background:white;min-height:100vh;padding:64px 72px}.cover{min-height:780px;display:flex;flex-direction:column;justify-content:center;border-top:8px solid var(--primary)}.kicker{color:var(--accent);font-weight:700;text-transform:uppercase;letter-spacing:.12em}.cover h1{font:700 44px/1.12 ${safeFont(model.theme.headingFont)},Arial,sans-serif;color:var(--primary);margin:16px 0}.meta{color:#53616d}.classification{margin-top:auto;border:1px solid #cbd5dc;padding:10px;text-align:center;font-weight:700}.logo{max-height:56px;margin-bottom:18px}.toc{padding-left:20px}.section{padding:32px 0;border-top:1px solid #dce3e8}.section.page-break{break-before:page}.section h2{font:700 26px/1.2 ${safeFont(model.theme.headingFont)},Arial,sans-serif;color:var(--primary)}.finding{margin:24px 0;padding:20px;border-left:5px solid var(--accent);background:#f7f9fa}.severity{display:inline-block;border-radius:999px;padding:3px 9px;background:#e8eef2;font-size:12px;font-weight:700;text-transform:uppercase}table{border-collapse:collapse;width:100%;margin:16px 0}th,td{border:1px solid #cbd5dc;padding:10px;text-align:left;vertical-align:top}th{background:#eef3f6;color:var(--primary)}.chart{display:flex;gap:12px;align-items:flex-end;height:180px}.bar{min-width:72px;background:var(--primary);color:white;text-align:center;padding:8px}.watermark{position:fixed;inset:45% 0 auto;transform:rotate(-28deg);text-align:center;font-size:70px;font-weight:700;color:rgba(80,90,100,.08);pointer-events:none}.signatures{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:40px;margin-top:50px}.signature{border-top:1px solid #475569;padding-top:8px}${customCss}
+:root{--primary:${primary};--accent:${accent}}*{box-sizing:border-box}body{margin:0;color:#17202a;background:#eef2f5;font-family:${safeFont(model.theme.bodyFont)},Arial,sans-serif;font-size:${model.theme.bodySize}px;line-height:1.55}.report{width:min(900px,100%);margin:0 auto;background:white;min-height:100vh;padding:64px 72px}.cover{min-height:780px;display:flex;flex-direction:column;justify-content:center;border-top:8px solid var(--primary)}.kicker{color:var(--accent);font-weight:700;text-transform:uppercase;letter-spacing:.12em}.cover h1{font:700 44px/1.12 ${safeFont(model.theme.headingFont)},Arial,sans-serif;color:var(--primary);margin:16px 0}.meta{color:#53616d}.classification{margin-top:auto;border:1px solid #cbd5dc;padding:10px;text-align:center;font-weight:700}.logo{max-height:56px;margin-bottom:18px}.toc{padding-left:20px}.section{padding:32px 0;border-top:1px solid #dce3e8}.section.page-break{break-before:page}.section h2{font:700 26px/1.2 ${safeFont(model.theme.headingFont)},Arial,sans-serif;color:var(--primary)}.finding{margin:24px 0;padding:20px;border-left:5px solid var(--accent);background:#f7f9fa}.severity{display:inline-block;border-radius:999px;padding:3px 9px;background:#e8eef2;font-size:12px;font-weight:700;text-transform:uppercase}table{border-collapse:collapse;width:100%;margin:16px 0}th,td{border:1px solid #cbd5dc;padding:10px;text-align:left;vertical-align:top}th{background:#eef3f6;color:var(--primary)}.chart{margin:16px 0}.chart svg{max-width:100%;height:auto}.watermark{position:fixed;inset:45% 0 auto;transform:rotate(-28deg);text-align:center;font-size:70px;font-weight:700;color:rgba(80,90,100,.08);pointer-events:none}.signatures{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:40px;margin-top:50px}.signature{border-top:1px solid #475569;padding-top:8px}${customCss}
 </style></head><body>${model.theme.watermark ? `<div class="watermark">${escapeHtml(model.theme.watermark)}</div>` : ""}<main class="report">${sections}${model.signatures.length ? `<section class="section"><h2>Approvals and signatures</h2><div class="signatures">${model.signatures.map((signature) => `<div class="signature">${escapeHtml(signature.label)} - ${escapeHtml(signature.role)}</div>`).join("")}</div></section>` : ""}</main></body></html>`;
 }
 
@@ -189,21 +225,19 @@ export function renderReportMarkdown(model: ReportDocumentModel) {
       if (image) output.push(`![Screenshot](${image})`, "");
     }
     if (definition.type === "findings")
-      for (const finding of model.findings)
+      for (const finding of model.findings) {
         output.push(
           `### ${finding.identifier}: ${finding.title}`,
           "",
-          `**Severity:** ${finding.severity}${finding.cvssScore ? ` | **CVSS:** ${finding.cvssScore}` : ""}`,
+          `**Severity:** ${finding.severity}${finding.cvssScore ? ` | **CVSS:** ${finding.cvssScore}` : ""}${finding.cvssVector ? ` | ${finding.cvssVector}` : ""}`,
           "",
           finding.executiveSummary ?? "",
           "",
-          "#### Technical detail",
-          finding.technicalDetail ?? "",
-          "",
-          "#### Remediation",
-          finding.remediation ?? "",
-          "",
         );
+        for (const field of findingFieldBlocks(finding)) {
+          output.push(`#### ${field.label}`, field.text || "", "");
+        }
+      }
     if (definition.type === "scope")
       output.push(
         ...markdownTable(
@@ -235,16 +269,18 @@ export function renderReportMarkdown(model: ReportDocumentModel) {
           ]),
         ),
       );
-    if (definition.type === "chart" || definition.type === "risk_matrix")
+    if (definition.type === "chart" || definition.type === "risk_matrix") {
       output.push(
         ...markdownTable(
           ["Severity", "Findings"],
-          Object.entries(model.severityCounts).map(([key, value]) => [
-            key,
-            String(value),
-          ]),
+          severityChartRows(model.severityCounts),
         ),
       );
+      if (definition.type === "risk_matrix" && model.riskMatrix) {
+        const matrix = riskMatrixTable(model.riskMatrix);
+        output.push(...markdownTable(matrix.headers, matrix.rows));
+      }
+    }
     const extra = structuredSection(model, definition.type);
     if (extra?.kind === "table")
       output.push(...markdownTable(extra.headers, extra.rows));
@@ -263,8 +299,10 @@ export function renderReportMarkdown(model: ReportDocumentModel) {
 }
 
 async function renderReportPdf(model: ReportDocumentModel) {
+  const pageKey = model.theme.pageSize === "A4" ? "A4" : "LETTER";
+  const page = PAGE_SIZES[pageKey];
   const document = new PDFDocument({
-    size: "LETTER",
+    size: page.name,
     margins: { top: 72, right: 72, bottom: 90, left: 72 },
     bufferPages: true,
     autoFirstPage: false,
@@ -274,12 +312,14 @@ async function renderReportPdf(model: ReportDocumentModel) {
       Subject: model.engagementName,
     },
   });
-  document.registerFont(
-    "ReportCode",
-    await readFile(
-      join(process.cwd(), "public/fonts/NotoSansMono-Regular.ttf"),
-    ),
+  const monoBytes = await readFile(
+    join(process.cwd(), "public/fonts/NotoSansMono-Regular.ttf"),
   );
+  document.registerFont("ReportCode", monoBytes);
+  document.registerFont("Noto Sans Mono", monoBytes);
+  const bodyFont = resolvePdfFont(model.theme.bodyFont, false);
+  const headingFont = resolvePdfFont(model.theme.headingFont, true);
+  const bodyFontRegular = resolvePdfFont(model.theme.bodyFont, false);
   const chunks: Buffer[] = [];
   document.on("data", (chunk: Buffer) => chunks.push(chunk));
   const completed = new Promise<Buffer>((resolve, reject) => {
@@ -288,7 +328,9 @@ async function renderReportPdf(model: ReportDocumentModel) {
   });
   const primary = safeColour(model.theme.primaryColour, "#174b6b");
   const accent = safeColour(model.theme.accentColour, "#d59b2d");
-  addPdfPage(document);
+  const contentWidth = page.width - 144;
+  const footerY = page.height - 82;
+  addPdfPage(document, page);
   for (const [index, section] of model.sections.entries()) {
     const { definition, content } = section;
     const previous = model.sections[index - 1]?.definition.type;
@@ -299,7 +341,7 @@ async function renderReportPdf(model: ReportDocumentModel) {
         definition.type === "page_break" ||
         definition.options?.pageBreakBefore === true)
     )
-      addPdfPage(document);
+      addPdfPage(document, page);
     if (definition.type === "cover") {
       const logo = logoBytes(model.logoDataUri);
       if (logo) {
@@ -312,26 +354,26 @@ async function renderReportPdf(model: ReportDocumentModel) {
       } else document.moveDown(7);
       document
         .fillColor(accent)
-        .font("Helvetica-Bold")
+        .font(headingFont)
         .fontSize(11)
         .text(model.organisationName.toUpperCase(), { characterSpacing: 1.5 });
       if (model.tagline)
         document
           .moveDown(0.4)
           .fillColor("#52606d")
-          .font("Helvetica")
+          .font(bodyFontRegular)
           .fontSize(11)
           .text(model.tagline);
       document
         .moveDown()
         .fillColor(primary)
-        .font("Helvetica-Bold")
+        .font(headingFont)
         .fontSize(30)
         .text(model.title);
       document
         .moveDown()
         .fillColor("#52606d")
-        .font("Helvetica")
+        .font(bodyFontRegular)
         .fontSize(14)
         .text(`${model.clientName} | ${model.engagementReference}`);
       if (model.exam)
@@ -358,29 +400,29 @@ async function renderReportPdf(model: ReportDocumentModel) {
         .moveDown(12)
         .strokeColor("#cbd5dc")
         .moveTo(72, document.y)
-        .lineTo(540, document.y)
+        .lineTo(72 + contentWidth, document.y)
         .stroke();
       document
         .moveDown()
         .fillColor("#263746")
-        .font("Helvetica-Bold")
+        .font(headingFont)
         .fontSize(10)
         .text(model.classification.toUpperCase(), { align: "center" });
       continue;
     }
     if (definition.type === "page_break") continue;
-    ensurePdfSpace(document, 90);
+    ensurePdfSpace(document, 90, page);
     document
       .moveDown()
       .fillColor(primary)
-      .font("Helvetica-Bold")
+      .font(headingFont)
       .fontSize(19)
       .text(definition.title ?? titleFor(definition.type));
     document
       .moveDown(0.5)
       .fillColor("#263746")
-      .font("Helvetica")
-      .fontSize(10.5);
+      .font(bodyFont)
+      .fontSize(model.theme.bodySize);
     if (definition.type === "code") {
       document
         .font("ReportCode")
@@ -389,13 +431,13 @@ async function renderReportPdf(model: ReportDocumentModel) {
           paragraphGap: 0,
           lineGap: 2,
         });
-      document.font("Helvetica").fontSize(model.theme.bodySize);
+      document.font(bodyFont).fontSize(model.theme.bodySize);
     } else if (definition.type === "image") {
       const image = await reportImage(definition.options?.imageDataUri);
       if (image) {
-        const scale = Math.min(468 / image.width, 430 / image.height, 1);
+        const scale = Math.min(contentWidth / image.width, 430 / image.height, 1);
         const height = image.height * scale;
-        ensurePdfSpace(document, height + 40);
+        ensurePdfSpace(document, height + 40, page);
         const y = document.y;
         document.image(image.bytes, 72, y, {
           width: image.width * scale,
@@ -405,13 +447,22 @@ async function renderReportPdf(model: ReportDocumentModel) {
       }
       if (content) document.text(content, { paragraphGap: 8 });
     } else if (content) document.text(content, { paragraphGap: 8 });
-    renderPdfDataSection(document, model, definition.type, primary, accent);
+    renderPdfDataSection(
+      document,
+      model,
+      definition.type,
+      primary,
+      accent,
+      bodyFont,
+      headingFont,
+      page,
+    );
   }
   if (model.signatures.length) {
-    addPdfPage(document);
+    addPdfPage(document, page);
     document
       .fillColor(primary)
-      .font("Helvetica-Bold")
+      .font(headingFont)
       .fontSize(19)
       .text("Approvals and signatures");
     for (const signature of model.signatures)
@@ -423,13 +474,13 @@ async function renderReportPdf(model: ReportDocumentModel) {
         .stroke()
         .moveDown(0.5)
         .fillColor("#263746")
-        .font("Helvetica")
+        .font(bodyFont)
         .fontSize(10)
         .text(`${signature.label} - ${signature.role}`);
   }
   const range = document.bufferedPageRange();
-  for (let page = range.start; page < range.start + range.count; page++) {
-    document.switchToPage(page);
+  for (let pageIndex = range.start; pageIndex < range.start + range.count; pageIndex++) {
+    document.switchToPage(pageIndex);
     // Footer coordinates lie outside the reserved body area. Do not let
     // PDFKit paginate these fixed-position labels onto extra blank pages.
     document.page.margins.bottom = 0;
@@ -438,37 +489,40 @@ async function renderReportPdf(model: ReportDocumentModel) {
         .save()
         .fillColor("#93a1ad")
         .opacity(0.08)
-        .font("Helvetica-Bold")
+        .font(headingFont)
         .fontSize(54)
-        .rotate(-28, { origin: [306, 396] })
-        .text(model.theme.watermark, 80, 365, { width: 450, align: "center" })
+        .rotate(-28, { origin: [page.width / 2, page.height / 2] })
+        .text(model.theme.watermark, 80, page.height / 2 - 30, {
+          width: page.width - 160,
+          align: "center",
+        })
         .restore();
     document
       .opacity(1)
       .fillColor("#64748b")
-      .font("Helvetica")
+      .font(bodyFont)
       .fontSize(8)
       .text(model.theme.headerLeft ?? model.organisationName, 72, 34, {
-        width: 260,
+        width: contentWidth / 2,
         lineBreak: false,
       });
-    document.text(model.theme.headerRight ?? model.classification, 280, 34, {
-      width: 260,
+    document.text(model.theme.headerRight ?? model.classification, 72 + contentWidth / 2, 34, {
+      width: contentWidth / 2,
       align: "right",
       lineBreak: false,
     });
     document.text(
       model.theme.footerLeft ?? model.engagementReference,
       72,
-      710,
+      footerY,
       {
-        width: 260,
+        width: contentWidth / 2,
         lineBreak: false,
       },
     );
     if (model.theme.showPageNumbers)
-      document.text(`Page ${page + 1} of ${range.count}`, 280, 710, {
-        width: 260,
+      document.text(`Page ${pageIndex + 1} of ${range.count}`, 72 + contentWidth / 2, footerY, {
+        width: contentWidth / 2,
         align: "right",
         lineBreak: false,
       });
@@ -678,7 +732,7 @@ async function renderReportDocx(model: ReportDocumentModel) {
       {
         properties: {
           page: {
-            size: { width: 12240, height: 15840 },
+            size: DOCX_PAGE_SIZES[model.theme.pageSize === "A4" ? "A4" : "LETTER"],
             margin: {
               top: 1440,
               right: 1440,
@@ -768,6 +822,7 @@ function renderHtmlSection(
   definition: ReportSectionDefinition,
   content?: string,
 ) {
+  const primary = safeColour(model.theme.primaryColour, "#174b6b");
   if (definition.type === "cover")
     return `<section class="cover">${model.logoDataUri ? `<img class="logo" alt="" src="${escapeHtml(model.logoDataUri)}">` : ""}<p class="kicker">${escapeHtml(model.organisationName)}</p>${model.tagline ? `<p class="meta">${escapeHtml(model.tagline)}</p>` : ""}<h1>${escapeHtml(model.title)}</h1><p class="meta">${escapeHtml(model.clientName)} | ${escapeHtml(model.engagementReference)}</p>${model.startDate || model.endDate ? `<p class="meta">Testing window: ${escapeHtml(model.startDate ?? "not recorded")} – ${escapeHtml(model.endDate ?? "not recorded")}</p>` : ""}${model.exam ? `<p>${escapeHtml(model.exam.candidateName)}<br>${escapeHtml(model.exam.candidateEmail)}<br>${escapeHtml(model.exam.osid)}</p>` : ""}<p class="classification">${escapeHtml(model.classification)}</p></section>`;
   if (definition.type === "page_break")
@@ -782,11 +837,18 @@ function renderHtmlSection(
     body = `<figure>${uri ? `<img alt="${escapeHtml(content ?? definition.title ?? "Screenshot")}" src="${uri}" style="max-width:100%;height:auto">` : ""}<figcaption>${escapeHtml(content ?? "")}</figcaption></figure>`;
   }
   if (definition.type === "findings")
-    body += model.findings
-      .map(
-        (finding) =>
-          `<article class="finding"><span class="severity">${escapeHtml(finding.severity)}</span><h3>${escapeHtml(finding.identifier)}: ${escapeHtml(finding.title)}</h3><p>${escapeHtml(finding.executiveSummary ?? "")}</p><h4>Technical detail</h4><p>${escapeHtml(finding.technicalDetail ?? "")}</p><h4>Business impact</h4><p>${escapeHtml(finding.businessImpact ?? "")}</p><h4>Remediation</h4><p>${escapeHtml(finding.remediation ?? "")}</p>${finding.cvssVector ? `<p><strong>CVSS v4:</strong> ${escapeHtml(finding.cvssScore ?? "")} ${escapeHtml(finding.cvssVector)}</p>` : ""}</article>`,
-      )
+    body += blocksForSection(model, "findings")
+      .map((block) => {
+        if (block.kind !== "finding") return "";
+        const finding = block.finding;
+        const fields = findingFieldBlocks(finding)
+          .map(
+            (field) =>
+              `<h4>${escapeHtml(field.label)}</h4><p>${escapeHtml(field.text).replaceAll("\n", "<br>")}</p>`,
+          )
+          .join("");
+        return `<article class="finding"><span class="severity">${escapeHtml(finding.severity)}</span><h3>${escapeHtml(finding.identifier)}: ${escapeHtml(finding.title)}</h3><p>${escapeHtml(finding.executiveSummary ?? "")}</p>${fields}${finding.cvssScore || finding.cvssVector ? `<p><strong>CVSS:</strong> ${escapeHtml(finding.cvssScore ?? "")} ${escapeHtml(finding.cvssVector ?? "")}</p>` : ""}</article>`;
+      })
       .join("");
   if (definition.type === "scope")
     body += htmlTable(
@@ -814,20 +876,18 @@ function renderHtmlSection(
       ]),
     );
   if (definition.type === "chart")
-    body += `<div class="chart">${Object.entries(model.severityCounts)
-      .map(
-        ([label, value]) =>
-          `<div class="bar" style="height:${Math.max(35, value * 28)}px">${value}<br>${escapeHtml(label)}</div>`,
-      )
-      .join("")}</div>`;
-  if (definition.type === "risk_matrix")
+    body += htmlSeverityChart(model.severityCounts, primary);
+  if (definition.type === "risk_matrix") {
+    body += htmlSeverityChart(model.severityCounts, primary);
     body += htmlTable(
       ["Severity", "Findings"],
-      Object.entries(model.severityCounts).map(([key, value]) => [
-        key,
-        String(value),
-      ]),
+      severityChartRows(model.severityCounts),
     );
+    if (model.riskMatrix) {
+      const matrix = riskMatrixTable(model.riskMatrix);
+      body += htmlTable(matrix.headers, matrix.rows);
+    }
+  }
   const extra = structuredSection(model, definition.type);
   if (extra?.kind === "table") body += htmlTable(extra.headers, extra.rows);
   if (extra?.kind === "list")
@@ -841,14 +901,19 @@ function renderPdfDataSection(
   type: ReportSectionDefinition["type"],
   primary: string,
   accent: string,
+  bodyFont: string,
+  headingFont: string,
+  page: (typeof PAGE_SIZES)[keyof typeof PAGE_SIZES],
 ) {
   if (type === "findings")
-    for (const finding of model.findings) {
-      ensurePdfSpace(document, 170);
+    for (const block of blocksForSection(model, "findings")) {
+      if (block.kind !== "finding") continue;
+      const finding = block.finding;
+      ensurePdfSpace(document, 170, page);
       document
         .moveDown()
         .fillColor(accent)
-        .font("Helvetica-Bold")
+        .font(headingFont)
         .fontSize(9)
         .text(finding.severity.toUpperCase());
       document
@@ -857,34 +922,39 @@ function renderPdfDataSection(
         .text(`${finding.identifier}: ${finding.title}`);
       document
         .fillColor("#263746")
-        .font("Helvetica")
+        .font(bodyFont)
         .fontSize(10)
         .text(finding.executiveSummary ?? "", { paragraphGap: 5 });
-      if (finding.technicalDetail)
+      if (finding.cvssScore || finding.cvssVector)
         document
-          .font("Helvetica-Bold")
-          .text("Technical detail")
-          .font("Helvetica")
-          .text(finding.technicalDetail);
-      if (finding.remediation)
+          .font(headingFont)
+          .text("CVSS")
+          .font(bodyFont)
+          .text(
+            [finding.cvssScore, finding.cvssVector].filter(Boolean).join(" "),
+          );
+      for (const field of findingFieldBlocks(finding)) {
         document
-          .moveDown(0.4)
-          .font("Helvetica-Bold")
-          .text("Remediation")
-          .font("Helvetica")
-          .text(finding.remediation);
+          .moveDown(0.3)
+          .font(headingFont)
+          .text(field.label)
+          .font(bodyFont)
+          .text(field.text || "");
+      }
     }
   if (type === "scope")
     pdfRows(
       document,
       ["Name", "Value", "Status"],
       model.scope.map((item) => [item.name, item.value, item.status]),
+      page,
     );
   if (type === "assets")
     pdfRows(
       document,
       ["Asset", "Type", "Identifier"],
       model.assets.map((item) => [item.name, item.type, item.identifier]),
+      page,
     );
   if (type === "evidence")
     pdfRows(
@@ -895,21 +965,27 @@ function renderPdfDataSection(
         item.mediaType,
         item.classification,
       ]),
+      page,
     );
-  if (type === "chart" || type === "risk_matrix")
+  if (type === "chart" || type === "risk_matrix") {
+    drawPdfSeverityChart(document, model.severityCounts, primary, page);
     pdfRows(
       document,
       ["Severity", "Findings"],
-      Object.entries(model.severityCounts).map(([key, value]) => [
-        key,
-        String(value),
-      ]),
+      severityChartRows(model.severityCounts),
+      page,
     );
+    if (type === "risk_matrix" && model.riskMatrix) {
+      const matrix = riskMatrixTable(model.riskMatrix);
+      pdfRows(document, matrix.headers, matrix.rows, page);
+    }
+  }
   const extra = structuredSection(model, type);
-  if (extra?.kind === "table") pdfRows(document, extra.headers, extra.rows);
+  if (extra?.kind === "table")
+    pdfRows(document, extra.headers, extra.rows, page);
   if (extra?.kind === "list")
     for (const item of extra.items)
-      document.moveDown(0.2).font("Helvetica").fontSize(10.5).text(item);
+      document.moveDown(0.2).font(bodyFont).fontSize(10.5).text(item);
 }
 
 function docxDataSection(
@@ -918,33 +994,41 @@ function docxDataSection(
   primary: string,
 ): Array<Paragraph | Table> {
   if (type === "findings")
-    return model.findings.flatMap((finding) => [
-      new Paragraph({
-        text: `${finding.identifier}: ${finding.title}`,
-        heading: HeadingLevel.HEADING_2,
-      }),
-      new Paragraph({
-        children: [
-          new TextRun({
-            text: finding.severity.toUpperCase(),
-            bold: true,
-            color: primary,
+    return blocksForSection(model, "findings").flatMap((block) => {
+      if (block.kind !== "finding") return [];
+      const finding = block.finding;
+      const nodes: Array<Paragraph | Table> = [
+        new Paragraph({
+          text: `${finding.identifier}: ${finding.title}`,
+          heading: HeadingLevel.HEADING_2,
+        }),
+        new Paragraph({
+          children: [
+            new TextRun({
+              text: finding.severity.toUpperCase(),
+              bold: true,
+              color: primary,
+            }),
+            new TextRun({
+              text: finding.cvssScore ? ` | CVSS ${finding.cvssScore}` : "",
+            }),
+            new TextRun({
+              text: finding.cvssVector ? ` ${finding.cvssVector}` : "",
+            }),
+          ],
+        }),
+        new Paragraph({ text: finding.executiveSummary ?? "" }),
+      ];
+      for (const field of findingFieldBlocks(finding)) {
+        nodes.push(
+          new Paragraph({
+            children: [new TextRun({ text: field.label, bold: true })],
           }),
-          new TextRun({
-            text: finding.cvssScore ? ` | CVSS ${finding.cvssScore}` : "",
-          }),
-        ],
-      }),
-      new Paragraph({ text: finding.executiveSummary ?? "" }),
-      new Paragraph({
-        children: [new TextRun({ text: "Technical detail", bold: true })],
-      }),
-      new Paragraph({ text: finding.technicalDetail ?? "" }),
-      new Paragraph({
-        children: [new TextRun({ text: "Remediation", bold: true })],
-      }),
-      new Paragraph({ text: finding.remediation ?? "" }),
-    ]);
+          new Paragraph({ text: field.text || "" }),
+        );
+      }
+      return nodes;
+    });
   if (type === "scope")
     return [
       docxTable(
@@ -979,17 +1063,21 @@ function docxDataSection(
         primary,
       ),
     ];
-  if (type === "chart" || type === "risk_matrix")
-    return [
+  if (type === "chart" || type === "risk_matrix") {
+    const nodes: Array<Paragraph | Table> = [
+      docxSeverityBars(model.severityCounts, primary),
       docxTable(
         ["Severity", "Findings"],
-        Object.entries(model.severityCounts).map(([key, value]) => [
-          key,
-          String(value),
-        ]),
+        severityChartRows(model.severityCounts),
         primary,
       ),
     ];
+    if (type === "risk_matrix" && model.riskMatrix) {
+      const matrix = riskMatrixTable(model.riskMatrix);
+      nodes.push(docxTable(matrix.headers, matrix.rows, primary));
+    }
+    return nodes;
+  }
   const extra = structuredSection(model, type);
   if (extra?.kind === "table")
     return [docxTable(extra.headers, extra.rows, primary)];
@@ -1063,9 +1151,10 @@ function pdfRows(
   document: PDFKit.PDFDocument,
   headers: string[],
   rows: string[][],
+  page: (typeof PAGE_SIZES)[keyof typeof PAGE_SIZES] = PAGE_SIZES.LETTER,
 ) {
   const x = 72;
-  const width = 468;
+  const width = page.width - 144;
   const columnWidth = width / headers.length;
   let y = document.y + 8;
   const drawRow = (row: string[], header = false) => {
@@ -1075,7 +1164,7 @@ function pdfRows(
       Math.ceil(longest / Math.max(12, Math.floor(columnWidth / 5.5))),
     );
     const height = Math.max(28, 14 + approximateLines * 12);
-    ensurePdfSpace(document, height + 8);
+    ensurePdfSpace(document, height + 8, page);
     if (document.y > y) y = document.y + 8;
     for (let index = 0; index < headers.length; index++) {
       document
@@ -1103,11 +1192,18 @@ function pdfRows(
   document.x = 72;
   document.y = y + 8;
 }
-function ensurePdfSpace(document: PDFKit.PDFDocument, height: number) {
-  if (document.y + height > 680) addPdfPage(document);
+function ensurePdfSpace(
+  document: PDFKit.PDFDocument,
+  height: number,
+  page: (typeof PAGE_SIZES)[keyof typeof PAGE_SIZES] = PAGE_SIZES.LETTER,
+) {
+  if (document.y + height > page.height - 112) addPdfPage(document, page);
 }
-function addPdfPage(document: PDFKit.PDFDocument) {
-  document.addPage();
+function addPdfPage(
+  document: PDFKit.PDFDocument,
+  page: (typeof PAGE_SIZES)[keyof typeof PAGE_SIZES] = PAGE_SIZES.LETTER,
+) {
+  document.addPage({ size: page.name });
   document
     .save()
     .fillColor("#ffffff")
@@ -1116,6 +1212,325 @@ function addPdfPage(document: PDFKit.PDFDocument) {
     .restore();
   document.x = 72;
   document.y = 72;
+}
+
+function resolvePdfFont(requested: string, bold: boolean) {
+  const name = requested.trim();
+  if (/^noto\s*sans\s*mono$/i.test(name) || name === "ReportCode")
+    return "Noto Sans Mono";
+  return bold ? "Helvetica-Bold" : "Helvetica";
+}
+
+function htmlSeverityChart(counts: Record<string, number>, primary: string) {
+  const entries = Object.entries(counts);
+  const max = Math.max(1, ...entries.map(([, value]) => value));
+  const width = Math.max(320, entries.length * 72);
+  const height = 180;
+  const chartHeight = 130;
+  const bars = entries
+    .map(([label, value], index) => {
+      const barHeight = Math.max(4, (value / max) * chartHeight);
+      const x = 40 + index * 72;
+      const y = 20 + chartHeight - barHeight;
+      return `<rect x="${x}" y="${y}" width="44" height="${barHeight}" fill="${escapeHtml(primary)}"/><text x="${x + 22}" y="${y - 6}" text-anchor="middle" font-size="12" fill="#17202a">${value}</text><text x="${x + 22}" y="${20 + chartHeight + 18}" text-anchor="middle" font-size="11" fill="#53616d">${escapeHtml(label)}</text>`;
+    })
+    .join("");
+  return `<div class="chart"><svg viewBox="0 0 ${width} ${height}" role="img" aria-label="Severity chart">${bars}</svg></div>`;
+}
+
+function drawPdfSeverityChart(
+  document: PDFKit.PDFDocument,
+  counts: Record<string, number>,
+  primary: string,
+  page: (typeof PAGE_SIZES)[keyof typeof PAGE_SIZES],
+) {
+  const entries = Object.entries(counts);
+  const max = Math.max(1, ...entries.map(([, value]) => value));
+  const chartHeight = 120;
+  ensurePdfSpace(document, chartHeight + 50, page);
+  const baseY = document.y + chartHeight + 10;
+  const startX = 72;
+  entries.forEach(([label, value], index) => {
+    const barHeight = Math.max(4, (value / max) * chartHeight);
+    const x = startX + index * 72;
+    const y = baseY - barHeight;
+    document
+      .save()
+      .fillColor(primary)
+      .rect(x, y, 44, barHeight)
+      .fill()
+      .restore()
+      .fillColor("#263746")
+      .fontSize(9)
+      .text(String(value), x, y - 14, { width: 44, align: "center" })
+      .fillColor("#53616d")
+      .text(label, x, baseY + 6, { width: 44, align: "center" });
+  });
+  document.y = baseY + 28;
+  document.x = 72;
+}
+
+function docxSeverityBars(counts: Record<string, number>, primary: string) {
+  const max = Math.max(1, ...Object.values(counts));
+  return new Table({
+    width: { size: 9360, type: WidthType.DXA },
+    columnWidths: [2340, 7020],
+    rows: Object.entries(counts).map(
+      ([label, value]) =>
+        new TableRow({
+          children: [
+            new TableCell({
+              width: { size: 2340, type: WidthType.DXA },
+              children: [
+                new Paragraph({
+                  children: [
+                    new TextRun({
+                      text: `${label}: ${value}`,
+                      bold: true,
+                      color: primary,
+                    }),
+                  ],
+                }),
+              ],
+            }),
+            new TableCell({
+              width: { size: 7020, type: WidthType.DXA },
+              shading: {
+                type: ShadingType.CLEAR,
+                fill: "EEF3F6",
+                color: "auto",
+              },
+              children: [
+                new Paragraph({
+                  children: [
+                    new TextRun({
+                      text: "█".repeat(Math.max(1, Math.round((value / max) * 20))),
+                      color: primary,
+                    }),
+                  ],
+                }),
+              ],
+            }),
+          ],
+        }),
+    ),
+  });
+}
+
+function renderReportXlsx(model: ReportDocumentModel) {
+  const headers = [
+    "Identifier",
+    "Title",
+    "Severity",
+    "Status",
+    "Executive summary",
+    "Technical detail",
+    "Reproduction steps",
+    "Proof of concept",
+    "Business impact",
+    "Technical impact",
+    "Remediation",
+    "References",
+    "Mappings",
+    "Affected assets",
+    "CWE",
+    "OWASP",
+    "Attack techniques",
+    "CVE",
+    "EPSS",
+    "KEV",
+    "Compliance tags",
+    "CVSS score",
+    "CVSS vector",
+  ];
+  const rows = model.findings.map((finding) => [
+    finding.identifier,
+    finding.title,
+    finding.severity,
+    finding.status,
+    finding.executiveSummary ?? "",
+    finding.technicalDetail ?? "",
+    finding.reproductionSteps ?? "",
+    finding.proofOfConcept ?? "",
+    finding.businessImpact ?? "",
+    finding.technicalImpact ?? "",
+    finding.remediation ?? "",
+    (finding.references ?? []).join("; "),
+    (finding.mappings ?? [])
+      .map((item) =>
+        [item.framework, item.reference, item.title].filter(Boolean).join(" "),
+      )
+      .join("; "),
+    (finding.affectedAssets ?? []).join("; "),
+    finding.cwe ?? "",
+    finding.owasp ?? "",
+    (finding.attackTechniques ?? []).join("; "),
+    finding.cve ?? "",
+    finding.epssScore ?? "",
+    finding.kev === true ? "Yes" : finding.kev === false ? "No" : "",
+    (finding.complianceTags ?? []).join("; "),
+    finding.cvssScore ?? "",
+    finding.cvssVector ?? "",
+  ]);
+  const sheetRows = [headers, ...rows]
+    .map(
+      (row, rowIndex) =>
+        `<row r="${rowIndex + 1}">${row
+          .map((cell, columnIndex) => {
+            const ref = `${xlsxColumn(columnIndex)}${rowIndex + 1}`;
+            return `<c r="${ref}" t="inlineStr"><is><t>${escapeXml(cell)}</t></is></c>`;
+          })
+          .join("")}</row>`,
+    )
+    .join("");
+  const sheet = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>${sheetRows}</sheetData></worksheet>`;
+  return createStoredZip([
+    {
+      path: "[Content_Types].xml",
+      data: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+<Default Extension="xml" ContentType="application/xml"/>
+<Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/>
+<Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>
+</Types>`,
+    },
+    {
+      path: "_rels/.rels",
+      data: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/>
+</Relationships>`,
+    },
+    {
+      path: "xl/workbook.xml",
+      data: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">
+<sheets><sheet name="Findings" sheetId="1" r:id="rId1"/></sheets>
+</workbook>`,
+    },
+    {
+      path: "xl/_rels/workbook.xml.rels",
+      data: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/>
+</Relationships>`,
+    },
+    { path: "xl/worksheets/sheet1.xml", data: sheet },
+  ]);
+}
+
+function renderReportPptx(model: ReportDocumentModel) {
+  const buckets = Object.entries(model.severityCounts);
+  const slides = [
+    pptxSlide(
+      1,
+      model.title,
+      `${model.clientName} · ${model.engagementReference}\n${model.classification}`,
+    ),
+    ...buckets.map(([severity, count], index) =>
+      pptxSlide(
+        index + 2,
+        `${severity} findings`,
+        `${count} finding(s)\n\n${model.findings
+          .filter((finding) => finding.severity === severity)
+          .map((finding) => `${finding.identifier}: ${finding.title}`)
+          .join("\n") || "None"}`,
+      ),
+    ),
+  ];
+  const presentation = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<p:presentation xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
+<p:sldIdLst>${slides
+    .map(
+      (_, index) =>
+        `<p:sldId id="${256 + index}" r:id="rId${index + 1}"/>`,
+    )
+    .join("")}</p:sldIdLst>
+<p:sldSz cx="9144000" cy="6858000"/>
+</p:presentation>`;
+  const presentationRels = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+${slides
+  .map(
+    (_, index) =>
+      `<Relationship Id="rId${index + 1}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/slide" Target="slides/slide${index + 1}.xml"/>`,
+  )
+  .join("")}
+</Relationships>`;
+  const contentTypes = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+<Default Extension="xml" ContentType="application/xml"/>
+<Override PartName="/ppt/presentation.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.presentation.main+xml"/>
+${slides
+  .map(
+    (_, index) =>
+      `<Override PartName="/ppt/slides/slide${index + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.presentationml.slide+xml"/>`,
+  )
+  .join("")}
+</Types>`;
+  return createStoredZip([
+    { path: "[Content_Types].xml", data: contentTypes },
+    {
+      path: "_rels/.rels",
+      data: `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="ppt/presentation.xml"/>
+</Relationships>`,
+    },
+    { path: "ppt/presentation.xml", data: presentation },
+    { path: "ppt/_rels/presentation.xml.rels", data: presentationRels },
+    ...slides.map((slide, index) => ({
+      path: `ppt/slides/slide${index + 1}.xml`,
+      data: slide,
+    })),
+  ]);
+}
+
+function pptxSlide(index: number, title: string, body: string) {
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<p:sld xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:p="http://schemas.openxmlformats.org/presentationml/2006/main">
+<p:cSld><p:spTree>
+<p:nvGrpSpPr><p:cNvPr id="1" name=""/><p:cNvGrpSpPr/><p:nvPr/></p:nvGrpSpPr><p:grpSpPr/>
+<p:sp><p:nvSpPr><p:cNvPr id="2" name="Title ${index}"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>
+<p:spPr><a:xfrm><a:off x="457200" y="274320"/><a:ext cx="8229600" cy="914400"/></a:xfrm></p:spPr>
+<p:txBody><a:bodyPr/><a:lstStyle/><a:p><a:r><a:rPr lang="en-US" sz="3200" b="1"/><a:t>${escapeXml(title)}</a:t></a:r></a:p></p:txBody></p:sp>
+<p:sp><p:nvSpPr><p:cNvPr id="3" name="Body ${index}"/><p:cNvSpPr/><p:nvPr/></p:nvSpPr>
+<p:spPr><a:xfrm><a:off x="457200" y="1371600"/><a:ext cx="8229600" cy="4572000"/></a:xfrm></p:spPr>
+<p:txBody><a:bodyPr/><a:lstStyle/>${body
+    .split("\n")
+    .map(
+      (line) =>
+        `<a:p><a:r><a:rPr lang="en-US" sz="1800"/><a:t>${escapeXml(line || " ")}</a:t></a:r></a:p>`,
+    )
+    .join("")}</p:txBody></p:sp>
+</p:spTree></p:cSld></p:sld>`;
+}
+
+function xlsxColumn(index: number) {
+  let value = index;
+  let label = "";
+  do {
+    label = String.fromCharCode(65 + (value % 26)) + label;
+    value = Math.floor(value / 26) - 1;
+  } while (value >= 0);
+  return label;
+}
+
+function escapeXml(value: string) {
+  return value.replace(
+    /[&<>"']/g,
+    (character) =>
+      ({
+        "&": "&amp;",
+        "<": "&lt;",
+        ">": "&gt;",
+        '"': "&quot;",
+        "'": "&apos;",
+      })[character]!,
+  );
 }
 function columnWidths(count: number) {
   const base = Math.floor(9360 / count);

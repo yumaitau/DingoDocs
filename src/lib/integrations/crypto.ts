@@ -7,13 +7,27 @@ import {
   randomBytes,
 } from "node:crypto";
 
-function encryptionKey() {
-  const configured = process.env.INTEGRATION_ENCRYPTION_KEY;
-  const source = configured ?? process.env.BETTER_AUTH_SECRET;
-  if (!source && process.env.NODE_ENV === "production")
+let warnedMissingIntegrationEncryptionKey = false;
+
+export function integrationEncryptionKeyMaterial(
+  env: NodeJS.ProcessEnv = process.env,
+) {
+  const configured = env.INTEGRATION_ENCRYPTION_KEY;
+  if (configured) return configured;
+  if (env.NODE_ENV === "production")
     throw new Error("INTEGRATION_ENCRYPTION_KEY is required in production");
+  if (!warnedMissingIntegrationEncryptionKey) {
+    warnedMissingIntegrationEncryptionKey = true;
+    console.warn(
+      "INTEGRATION_ENCRYPTION_KEY is missing; using a non-production fallback",
+    );
+  }
+  return env.BETTER_AUTH_SECRET || "development-integration-key";
+}
+
+function encryptionKey() {
   return createHash("sha256")
-    .update(source ?? "development-integration-key")
+    .update(integrationEncryptionKeyMaterial())
     .digest();
 }
 

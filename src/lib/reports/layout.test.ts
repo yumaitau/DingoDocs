@@ -31,7 +31,7 @@ describe("report layout safety and OSAI preparation", () => {
       "https://internal/image.png",
       "data:image/svg+xml;base64,PHN2Zz4=",
       "javascript:alert(1)",
-      "data:image/png;base64,iVBORw0KGgo" + "A".repeat(3_000_000),
+      "data:image/png;base64,iVBORw0KGgo" + "A".repeat(9_000_000),
     ])
       expect(safeReportImage(uri)).toBeUndefined();
     expect(() =>

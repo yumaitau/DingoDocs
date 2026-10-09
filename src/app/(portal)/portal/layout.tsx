@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { ClientPortalShell } from "@/components/client-portal-shell";
 import { getSession } from "@/lib/auth/session";
 import { resolveActiveOrganisation } from "@/lib/auth/active-organisation";
+import { guardOrganisationMfa } from "@/lib/permissions/require";
 
 export default async function PortalLayout({
   children,
@@ -17,6 +18,11 @@ export default async function PortalLayout({
     organisation.role !== "client_administrator"
   )
     redirect("/dashboard");
+  await guardOrganisationMfa({
+    userId: session.user.id,
+    organisationId: organisation.organisationId,
+    role: organisation.role,
+  });
   return (
     <ClientPortalShell
       organisationName={organisation.name}

@@ -121,6 +121,7 @@ export class DingoDocsApiClient {
     occurredAt?: string;
     commands?: string;
     clientVisible?: boolean;
+    attackMappings?: string;
   }) {
     const { engagementId, ...body } = input;
     return this.request<unknown>(`engagements/${engagementId}/timeline`, {
@@ -213,6 +214,128 @@ export class DingoDocsApiClient {
     return this.request<unknown>(`findings/${findingId}/evidence`, {
       method: "POST",
       body: JSON.stringify({ evidenceIds }),
+    });
+  }
+
+  listTemplates(query?: { q?: string; approvedOnly?: boolean }) {
+    const params = new URLSearchParams();
+    if (query?.q) params.set("q", query.q);
+    if (query?.approvedOnly) params.set("approvedOnly", "true");
+    const suffix = params.size ? `?${params}` : "";
+    return this.request<unknown[]>(`templates${suffix}`);
+  }
+
+  getTemplate(templateId: string) {
+    return this.request<unknown>(`templates/${templateId}`);
+  }
+
+  createFindingFromTemplate(input: {
+    engagementId: string;
+    templateId: string;
+    identifier: string;
+    assetIds?: string[];
+  }) {
+    return this.request<unknown>("findings/from-template", {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+  }
+
+  createReport(input: {
+    engagementId: string;
+    title: string;
+    templateId: string;
+    kind?: string;
+  }) {
+    return this.request<unknown>("reports", {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+  }
+
+  transitionReport(reportId: string, status: string) {
+    return this.request<unknown>(`reports/${reportId}/transition`, {
+      method: "POST",
+      body: JSON.stringify({ status }),
+    });
+  }
+
+  exportReport(reportId: string, format: string) {
+    return this.request<unknown>(`reports/${reportId}/export`, {
+      method: "POST",
+      body: JSON.stringify({ format }),
+    });
+  }
+
+  listTasks(engagementId?: string) {
+    const query = new URLSearchParams({ pageSize: "100" });
+    if (engagementId) query.set("engagementId", engagementId);
+    return this.request<unknown[]>(`tasks?${query}`);
+  }
+
+  createTask(input: {
+    engagementId: string;
+    title: string;
+    description?: string;
+    priority?: "low" | "normal" | "high" | "urgent";
+    assigneeId?: string;
+    dueAt?: string;
+    assetIds?: string[];
+  }) {
+    return this.request<unknown>("tasks", {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+  }
+
+  transitionFinding(
+    findingId: string,
+    input: { status: string; reason?: string },
+  ) {
+    return this.request<unknown>(`findings/${findingId}/transition`, {
+      method: "POST",
+      body: JSON.stringify(input),
+    });
+  }
+
+  requestRetest(findingId: string, notes?: string) {
+    return this.request<unknown>(`findings/${findingId}/retest`, {
+      method: "POST",
+      body: JSON.stringify(notes ? { notes } : {}),
+    });
+  }
+
+  completeRunbookStep(input: {
+    engagementId: string;
+    stepId: string;
+    status?: string;
+    notes?: string;
+    findingId?: string | null;
+    evidenceId?: string | null;
+    taskId?: string | null;
+  }) {
+    const { engagementId, stepId, ...body } = input;
+    return this.request<unknown>(
+      `engagements/${engagementId}/runbook-steps/${stepId}`,
+      {
+        method: "POST",
+        body: JSON.stringify(body),
+      },
+    );
+  }
+
+  logTime(input: {
+    engagementId: string;
+    category: string;
+    hours: string;
+    description?: string;
+    startedAt: string;
+    billable?: boolean;
+  }) {
+    const { engagementId, ...body } = input;
+    return this.request<unknown>(`engagements/${engagementId}/time`, {
+      method: "POST",
+      body: JSON.stringify(body),
     });
   }
 

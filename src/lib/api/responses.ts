@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { ZodError } from "zod";
+import { MfaRequiredError } from "@/lib/auth/mfa-policy";
 import { AuthenticationRequiredError } from "@/lib/auth/session";
 import { EngagementAccessError } from "@/lib/permissions/access";
 import { PermissionDeniedError } from "@/lib/permissions/require";
@@ -46,6 +47,14 @@ export function apiError(error: unknown, requestId?: string | null) {
             ? { "www-authenticate": 'Bearer realm="DingoDocs API"' }
             : undefined,
       },
+    );
+  if (error instanceof MfaRequiredError)
+    return NextResponse.json(
+      {
+        error: { code: error.code, message: error.message },
+        requestId,
+      },
+      { status: 403 },
     );
   if (error instanceof PermissionDeniedError)
     return NextResponse.json(

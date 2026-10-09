@@ -85,14 +85,24 @@ async function runJob(job: JobRow) {
       typeof reportVersionId !== "string" ||
       !Array.isArray(formats) ||
       !formats.every((format) =>
-        ["pdf", "docx", "html", "markdown", "json"].includes(String(format)),
+        [
+          "pdf",
+          "docx",
+          "html",
+          "markdown",
+          "json",
+          "xlsx",
+          "pptx",
+        ].includes(String(format)),
       )
     )
       throw new Error("Report generation job payload is invalid");
     const { generateReportJob } = await import("@/server/services/reports");
     await generateReportJob(
       reportVersionId,
-      formats as Array<"pdf" | "docx" | "html" | "markdown" | "json">,
+      formats as Array<
+        "pdf" | "docx" | "html" | "markdown" | "json" | "xlsx" | "pptx"
+      >,
     );
     return;
   }
@@ -101,10 +111,12 @@ async function runJob(job: JobRow) {
     const asOf = job.payload.asOf;
     if (typeof organisationId !== "string" || typeof asOf !== "string")
       throw new Error("Retention job payload is invalid");
-    const { purgeExpiredEvidence } =
+    const { applyRetention, purgeExpiredEvidence } =
       await import("@/server/services/retention");
+    const when = new Date(asOf);
+    await applyRetention(organisationId, when);
     await purgeExpiredEvidence(organisationId, {
-      asOf: new Date(asOf),
+      asOf: when,
       scheduled: true,
     });
     return;

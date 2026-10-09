@@ -3,9 +3,10 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/db";
 import { tasks } from "@/db/schema";
-import { apiReadContext } from "@/lib/api/authentication";
+import { apiReadContext, apiWriteContext } from "@/lib/api/authentication";
 import { apiError } from "@/lib/api/responses";
 import { engagementVisibility } from "@/lib/permissions/access";
+import { createWorkspaceTask } from "@/server/services/engagement-workspace";
 
 const querySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
@@ -61,6 +62,49 @@ export async function GET(request: Request) {
       },
       requestId,
     });
+  } catch (error) {
+    return apiError(error, requestId);
+  }
+}
+
+const createSchema = z.object({
+  engagementId: z.string().uuid(),
+  title: z.string().trim().min(2).max(200),
+  description: z.string().trim().max(10_000).optional(),
+  priority: z.enum(["low", "normal", "high", "urgent"]).default("normal"),
+  assigneeId: z.string().uuid().optional(),
+  dueAt: z.string().datetime().optional(),
+  assetIds: z.array(z.string().uuid()).max(100).optional(),
+});
+
+export async function POST(request: Request) {
+  const requestId = request.headers.get("x-request-id");
+  try {
+    const input = createSchema.parse(await request.json());
+    const principal = await apiWriteContext(
+      request,
+      "tasks:write",
+      "scope:manage",
+      { engagementId: input.engagementId },
+    );
+    if (!principal.userId)
+      throw new Error("API key does not have an attributable owner");
+    const dueAt = input.dueAt ? new Date(input.dueAt) : undefined;
+    if (dueAt && Number.isNaN(dueAt.getTime()))
+      throw new Error("dueAt is not a valid timestamp");
+    const task = await createWorkspaceTask(
+      { organisationId: principal.organisationId, userId: principal.userId },
+      {
+        engagementId: input.engagementId,
+        title: input.title,
+        description: input.description,
+        priority: input.priority,
+        assigneeId: input.assigneeId,
+        dueAt,
+        assetIds: input.assetIds,
+      },
+    );
+    return NextResponse.json({ data: task, requestId }, { status: 201 });
   } catch (error) {
     return apiError(error, requestId);
   }

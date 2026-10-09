@@ -5,6 +5,7 @@ import {
   renderReportHtml,
   type ReportDocumentModel,
 } from "@/server/services/report-renderers";
+import { presentClientReport } from "@/server/services/report-client-view";
 import {
   getPortalReportVersion,
   PortalNotFoundError,
@@ -23,18 +24,19 @@ export async function GET(
     if (actor.role !== "client_user" && actor.role !== "client_administrator")
       throw new PortalNotFoundError();
     const report = await getPortalReportVersion(actor, versionId);
-    return new Response(
-      renderReportHtml(report.content as ReportDocumentModel),
-      {
-        headers: {
-          "content-type": "text/html; charset=utf-8",
-          "cache-control": "private, no-store",
-          "content-security-policy":
-            "default-src 'none'; style-src 'unsafe-inline'; img-src data:; sandbox",
-          "x-content-type-options": "nosniff",
-        },
-      },
+    const model = await presentClientReport(
+      actor.organisationId,
+      report.content as ReportDocumentModel,
     );
+    return new Response(renderReportHtml(model), {
+      headers: {
+        "content-type": "text/html; charset=utf-8",
+        "cache-control": "private, no-store",
+        "content-security-policy":
+          "default-src 'none'; style-src 'unsafe-inline'; img-src data:; sandbox",
+        "x-content-type-options": "nosniff",
+      },
+    });
   } catch (error) {
     if (error instanceof PortalNotFoundError)
       return Response.json({ error: "Report was not found" }, { status: 404 });

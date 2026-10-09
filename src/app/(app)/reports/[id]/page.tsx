@@ -16,9 +16,11 @@ import { formatDateTime } from "@/lib/time-zone";
 import {
   createReportRevisionAction,
   queueReportGenerationAction,
+  refreshReportFindingsAction,
   transitionReportAction,
 } from "@/server/actions/reports";
 import {
+  diffReportVersions,
   getReportWorkspace,
   ReportScopeError,
   reportFormats,
@@ -50,6 +52,16 @@ export default async function ReportPage({
   }
   const { report, current, versions, transitions } = workspace;
   const model = current.content as ReportDocumentModel;
+  const previousVersion = versions.find(
+    (version) => version.version === current.version - 1,
+  );
+  const versionDiff =
+    previousVersion != null
+      ? diffReportVersions(
+          previousVersion.content as ReportDocumentModel,
+          model,
+        )
+      : null;
   const exam = model.exam;
   const examIssues = exam
     ? osaiReadiness(
@@ -78,9 +90,16 @@ export default async function ReportPage({
           <>
             {!current.immutable &&
               ["draft", "changes_requested"].includes(current.status) && (
-                <Button asChild>
-                  <Link href={`/reports/${id}/edit`}>Write report</Link>
-                </Button>
+                <>
+                  <Button asChild>
+                    <Link href={`/reports/${id}/edit`}>Write report</Link>
+                  </Button>
+                  <form action={refreshReportFindingsAction.bind(null, id)}>
+                    <Button type="submit" variant="secondary">
+                      Refresh findings
+                    </Button>
+                  </form>
+                </>
               )}
             <StatusPill
               tone={report.status === "published" ? "success" : "info"}
@@ -231,6 +250,26 @@ export default async function ReportPage({
                 </div>
               ))}
             </div>
+            {versionDiff ? (
+              <div className="mt-4 rounded-lg border bg-muted p-3 text-sm">
+                <p className="font-medium">
+                  Diff vs version {current.version - 1}
+                </p>
+                <ul className="mt-2 space-y-1 text-slate-600">
+                  <li>Added findings: {versionDiff.added.join(", ") || "none"}</li>
+                  <li>
+                    Removed findings: {versionDiff.removed.join(", ") || "none"}
+                  </li>
+                  <li>
+                    Changed findings: {versionDiff.changed.join(", ") || "none"}
+                  </li>
+                  <li>
+                    Changed sections:{" "}
+                    {versionDiff.changedSections.join(", ") || "none"}
+                  </li>
+                </ul>
+              </div>
+            ) : null}
             {current.immutable ? (
               <form
                 action={createReportRevisionAction.bind(null, report.id)}

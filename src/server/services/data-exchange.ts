@@ -1,6 +1,6 @@
 import "server-only";
 
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { and, asc, eq, inArray, isNull, notInArray } from "drizzle-orm";
 import { db } from "@/db";
 import {
@@ -32,6 +32,8 @@ import {
   retestAttempts,
   retestEvidence,
   retestNotes,
+  riskMatrices,
+  runbookTemplates,
   scopeItems,
   scopeVersions,
   tasks,
@@ -46,6 +48,8 @@ import {
 import { summariseScannerIngest } from "@/lib/imports/ingest-summary";
 import { assertActorEngagementAccess } from "@/lib/permissions/require";
 import { uploadEvidence } from "./evidence";
+import { emitDomainEvent } from "./domain-events";
+import { findingScheduleDefaults } from "./finding-schedule";
 import {
   createTimelineEntry,
   createWorkspaceNote,
@@ -181,7 +185,7 @@ export async function applyScannerImport(
   actor: ExchangeActor,
   input: { importRunId: string; selectedItemIds: string[] },
 ) {
-  return db.transaction(async (tx) => {
+  const applied = await db.transaction(async (tx) => {
     const [run] = await tx
       .select()
       .from(importRuns)
@@ -194,6 +198,20 @@ export async function applyScannerImport(
       )
       .limit(1);
     if (!run) throw new ExchangeScopeError();
+    const [engagement] = await tx
+      .select({ clientId: engagements.clientId })
+      .from(engagements)
+      .where(
+        and(
+          eq(engagements.id, run.engagementId),
+          eq(engagements.organisationId, actor.organisationId),
+        ),
+      )
+      .limit(1);
+    const scheduleBySeverity = new Map<
+      string,
+      { dueAt?: Date; retainUntil?: Date }
+    >();
     const selectedIds = [...new Set(input.selectedItemIds)];
     const rows = selectedIds.length
       ? await tx
@@ -250,6 +268,15 @@ export async function applyScannerImport(
           assetId = asset!.id;
         }
       }
+      let schedule = scheduleBySeverity.get(item.severity);
+      if (!schedule && engagement) {
+        schedule = await findingScheduleDefaults(tx, {
+          organisationId: actor.organisationId,
+          clientId: engagement.clientId,
+          severity: item.severity,
+        });
+        scheduleBySeverity.set(item.severity, schedule);
+      }
       const [finding] = await tx
         .insert(findings)
         .values({
@@ -259,6 +286,8 @@ export async function applyScannerImport(
           title: item.title,
           status: "draft",
           severity: item.severity,
+          dueAt: schedule?.dueAt,
+          retainUntil: schedule?.retainUntil,
           cvssScore: item.cvssScore?.toFixed(1),
           technicalDetail: item.description,
           remediation: item.remediation,
@@ -327,8 +356,21 @@ export async function applyScannerImport(
       targetId: run.id,
       metadata: { engagementId: run.engagementId, selected: applied.length },
     });
-    return applied;
+    return { applied, engagementId: run.engagementId };
   });
+  await emitDomainEvent({
+    organisationId: actor.organisationId,
+    actorUserId: actor.userId,
+    eventType: "import.applied",
+    title: `Scanner import applied (${applied.applied.length} findings)`,
+    actionUrl: `/engagements/${applied.engagementId}?view=findings`,
+    payload: {
+      importRunId: input.importRunId,
+      engagementId: applied.engagementId,
+      created: applied.applied.length,
+    },
+  });
+  return applied.applied;
 }
 
 export async function getImportPreview(
@@ -688,4 +730,496 @@ export async function exportOrganisation(
     },
   });
   return { payload, json, checksum };
+}
+
+type OrganisationBundle = {
+  format?: string;
+  version?: number;
+  mode?: string;
+  checksum?: string;
+  organisation?: { id?: string };
+  clients?: Array<Record<string, unknown>>;
+  engagements?: Array<Record<string, unknown>>;
+  findings?: Array<Record<string, unknown>>;
+  findingTemplates?: Array<Record<string, unknown>>;
+  templates?: Array<Record<string, unknown>>;
+  runbooks?: Array<Record<string, unknown>>;
+  runbookTemplates?: Array<Record<string, unknown>>;
+  riskMatrices?: Array<Record<string, unknown>>;
+  evidence?: unknown[];
+};
+
+function asUuid(value: unknown) {
+  return typeof value === "string" &&
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
+      value,
+    )
+    ? value
+    : null;
+}
+
+async function resolveImportId(
+  organisationId: string,
+  table:
+    | "clients"
+    | "engagements"
+    | "findings"
+    | "finding_templates"
+    | "runbook_templates"
+    | "risk_matrices",
+  candidate: unknown,
+) {
+  const id = asUuid(candidate);
+  if (!id) return randomUUID();
+  if (table === "clients") {
+    const [row] = await db
+      .select({ id: clients.id })
+      .from(clients)
+      .where(and(eq(clients.id, id), eq(clients.organisationId, organisationId)))
+      .limit(1);
+    return row ? id : randomUUID();
+  }
+  if (table === "engagements") {
+    const [row] = await db
+      .select({ id: engagements.id })
+      .from(engagements)
+      .where(
+        and(
+          eq(engagements.id, id),
+          eq(engagements.organisationId, organisationId),
+        ),
+      )
+      .limit(1);
+    return row ? id : randomUUID();
+  }
+  if (table === "findings") {
+    const [row] = await db
+      .select({ id: findings.id })
+      .from(findings)
+      .where(
+        and(eq(findings.id, id), eq(findings.organisationId, organisationId)),
+      )
+      .limit(1);
+    return row ? id : randomUUID();
+  }
+  if (table === "finding_templates") {
+    const [row] = await db
+      .select({ id: findingTemplates.id })
+      .from(findingTemplates)
+      .where(
+        and(
+          eq(findingTemplates.id, id),
+          eq(findingTemplates.organisationId, organisationId),
+        ),
+      )
+      .limit(1);
+    return row ? id : randomUUID();
+  }
+  if (table === "runbook_templates") {
+    const [row] = await db
+      .select({ id: runbookTemplates.id })
+      .from(runbookTemplates)
+      .where(
+        and(
+          eq(runbookTemplates.id, id),
+          eq(runbookTemplates.organisationId, organisationId),
+        ),
+      )
+      .limit(1);
+    return row ? id : randomUUID();
+  }
+  const [row] = await db
+    .select({ id: riskMatrices.id })
+    .from(riskMatrices)
+    .where(
+      and(
+        eq(riskMatrices.id, id),
+        eq(riskMatrices.organisationId, organisationId),
+      ),
+    )
+    .limit(1);
+  return row ? id : randomUUID();
+}
+
+/**
+ * Import an organisation export bundle. Evidence binaries are skipped.
+ * Ids that already belong to the actor org are reused (idempotent upsert);
+ * foreign ids get remapped.
+ */
+export async function importOrganisationBundle(
+  actor: ExchangeActor,
+  json: string | OrganisationBundle,
+) {
+  const bundle: OrganisationBundle =
+    typeof json === "string" ? (JSON.parse(json) as OrganisationBundle) : json;
+
+  if (bundle.checksum) {
+    const { checksum, ...rest } = bundle;
+    const recomputed = createHash("sha256")
+      .update(JSON.stringify(rest))
+      .digest("hex");
+    if (recomputed !== checksum)
+      throw new Error("Organisation bundle checksum mismatch");
+  }
+
+  const bundleOrgId = bundle.organisation?.id;
+  if (!bundleOrgId || bundleOrgId !== actor.organisationId) {
+    throw new Error(
+      "Organisation bundle organisation id does not match the active organisation",
+    );
+  }
+
+  const clientIdMap = new Map<string, string>();
+  const engagementIdMap = new Map<string, string>();
+  const counts = {
+    clients: 0,
+    engagements: 0,
+    findings: 0,
+    templates: 0,
+    runbooks: 0,
+    riskMatrices: 0,
+    evidenceSkipped: Array.isArray(bundle.evidence) ? bundle.evidence.length : 0,
+  };
+
+  await db.transaction(async (tx) => {
+    for (const row of bundle.clients ?? []) {
+      const sourceId = asUuid(row.id) ?? randomUUID();
+      const targetId = await resolveImportId(
+        actor.organisationId,
+        "clients",
+        sourceId,
+      );
+      clientIdMap.set(sourceId, targetId);
+      const values = {
+        id: targetId,
+        organisationId: actor.organisationId,
+        name: String(row.name ?? "Imported client"),
+        legalName: (row.legalName as string | null | undefined) ?? null,
+        tradingName: (row.tradingName as string | null | undefined) ?? null,
+        industry: (row.industry as string | null | undefined) ?? null,
+        address: (row.address as string | null | undefined) ?? null,
+        notes: (row.notes as string | null | undefined) ?? null,
+        securityClassification: String(
+          row.securityClassification ?? "Confidential",
+        ),
+        branding: (row.branding as Record<string, unknown> | undefined) ?? {},
+        reportPreferences:
+          (row.reportPreferences as Record<string, unknown> | undefined) ?? {},
+        retentionPolicy:
+          (row.retentionPolicy as Record<string, unknown> | undefined) ?? {},
+        updatedAt: new Date(),
+        deletedAt: null,
+      };
+      await tx
+        .insert(clients)
+        .values(values)
+        .onConflictDoUpdate({
+          target: clients.id,
+          set: {
+            name: values.name,
+            legalName: values.legalName,
+            tradingName: values.tradingName,
+            industry: values.industry,
+            address: values.address,
+            notes: values.notes,
+            securityClassification: values.securityClassification,
+            branding: values.branding,
+            reportPreferences: values.reportPreferences,
+            retentionPolicy: values.retentionPolicy,
+            updatedAt: values.updatedAt,
+            deletedAt: null,
+          },
+        });
+      counts.clients += 1;
+    }
+
+    for (const row of bundle.engagements ?? []) {
+      const sourceId = asUuid(row.id) ?? randomUUID();
+      const sourceClientId = asUuid(row.clientId);
+      const clientId = sourceClientId
+        ? clientIdMap.get(sourceClientId)
+        : undefined;
+      if (!clientId) continue;
+      const targetId = await resolveImportId(
+        actor.organisationId,
+        "engagements",
+        sourceId,
+      );
+      engagementIdMap.set(sourceId, targetId);
+      const values = {
+        id: targetId,
+        organisationId: actor.organisationId,
+        clientId,
+        name: String(row.name ?? "Imported engagement"),
+        reference: String(row.reference ?? `IMP-${targetId.slice(0, 8)}`),
+        type: String(row.type ?? "assessment"),
+        status: (row.status as typeof engagements.$inferInsert.status) ?? "proposed",
+        objectives: (row.objectives as string | null | undefined) ?? null,
+        assumptions: (row.assumptions as string | null | undefined) ?? null,
+        constraints: (row.constraints as string | null | undefined) ?? null,
+        dependencies: (row.dependencies as string | null | undefined) ?? null,
+        securityClassification: String(
+          row.securityClassification ?? "Confidential",
+        ),
+        health: String(row.health ?? "on_track"),
+        progress: Number(row.progress ?? 0),
+        tags: Array.isArray(row.tags) ? (row.tags as string[]) : [],
+        retainUntil: row.retainUntil ? new Date(String(row.retainUntil)) : null,
+        updatedAt: new Date(),
+        deletedAt: null,
+      };
+      await tx
+        .insert(engagements)
+        .values(values)
+        .onConflictDoUpdate({
+          target: engagements.id,
+          set: {
+            clientId: values.clientId,
+            name: values.name,
+            reference: values.reference,
+            type: values.type,
+            status: values.status,
+            objectives: values.objectives,
+            assumptions: values.assumptions,
+            constraints: values.constraints,
+            dependencies: values.dependencies,
+            securityClassification: values.securityClassification,
+            health: values.health,
+            progress: values.progress,
+            tags: values.tags,
+            retainUntil: values.retainUntil,
+            updatedAt: values.updatedAt,
+            deletedAt: null,
+          },
+        });
+      counts.engagements += 1;
+    }
+
+    const templateRows = [
+      ...(bundle.findingTemplates ?? []),
+      ...(bundle.templates ?? []),
+    ];
+    for (const row of templateRows) {
+      const sourceId = asUuid(row.id) ?? randomUUID();
+      const targetId = await resolveImportId(
+        actor.organisationId,
+        "finding_templates",
+        sourceId,
+      );
+      const values = {
+        id: targetId,
+        organisationId: actor.organisationId,
+        stableKey: String(row.stableKey ?? `import-${targetId}`),
+        version: Number(row.version ?? 1),
+        title: String(row.title ?? "Imported template"),
+        summary: String(row.summary ?? ""),
+        executiveDescription:
+          (row.executiveDescription as string | null | undefined) ?? null,
+        technicalDescription: String(row.technicalDescription ?? ""),
+        businessImpact: (row.businessImpact as string | null | undefined) ?? null,
+        technicalImpact:
+          (row.technicalImpact as string | null | undefined) ?? null,
+        likelihood: (row.likelihood as string | null | undefined) ?? null,
+        severity:
+          (row.severity as typeof findingTemplates.$inferInsert.severity) ??
+          "informational",
+        riskRationale: (row.riskRationale as string | null | undefined) ?? null,
+        remediation: String(row.remediation ?? ""),
+        verificationSteps:
+          (row.verificationSteps as string | null | undefined) ?? null,
+        references: Array.isArray(row.references)
+          ? (row.references as string[])
+          : [],
+        tags: Array.isArray(row.tags) ? (row.tags as string[]) : [],
+        assessmentTypes: Array.isArray(row.assessmentTypes)
+          ? (row.assessmentTypes as string[])
+          : [],
+        mappings: Array.isArray(row.mappings) ? row.mappings : [],
+      };
+      await tx
+        .insert(findingTemplates)
+        .values(values as typeof findingTemplates.$inferInsert)
+        .onConflictDoUpdate({
+          target: findingTemplates.id,
+          set: {
+            title: values.title,
+            summary: values.summary,
+            technicalDescription: values.technicalDescription,
+            remediation: values.remediation,
+            severity: values.severity,
+          },
+        });
+      counts.templates += 1;
+    }
+
+    for (const row of bundle.findings ?? []) {
+      const sourceId = asUuid(row.id) ?? randomUUID();
+      const sourceEngagementId = asUuid(row.engagementId);
+      const engagementId = sourceEngagementId
+        ? engagementIdMap.get(sourceEngagementId)
+        : undefined;
+      if (!engagementId) continue;
+      const targetId = await resolveImportId(
+        actor.organisationId,
+        "findings",
+        sourceId,
+      );
+      const values = {
+        id: targetId,
+        organisationId: actor.organisationId,
+        engagementId,
+        identifier: String(row.identifier ?? `F-${targetId.slice(0, 8)}`),
+        title: String(row.title ?? "Imported finding"),
+        status: (row.status as typeof findings.$inferInsert.status) ?? "draft",
+        severity:
+          (row.severity as typeof findings.$inferInsert.severity) ?? "informational",
+        executiveSummary:
+          (row.executiveSummary as string | null | undefined) ?? null,
+        technicalDetail:
+          (row.technicalDetail as string | null | undefined) ?? null,
+        remediation: (row.remediation as string | null | undefined) ?? null,
+        references: Array.isArray(row.references)
+          ? (row.references as string[])
+          : [],
+        mappings: Array.isArray(row.mappings) ? row.mappings : [],
+        sourceProvenance:
+          (row.sourceProvenance as Record<string, unknown> | undefined) ?? {},
+        retainUntil: row.retainUntil ? new Date(String(row.retainUntil)) : null,
+        updatedAt: new Date(),
+        deletedAt: null,
+      };
+      await tx
+        .insert(findings)
+        .values(values as typeof findings.$inferInsert)
+        .onConflictDoUpdate({
+          target: findings.id,
+          set: {
+            engagementId: values.engagementId,
+            identifier: values.identifier,
+            title: values.title,
+            status: values.status,
+            severity: values.severity,
+            executiveSummary: values.executiveSummary,
+            technicalDetail: values.technicalDetail,
+            remediation: values.remediation,
+            sourceProvenance: values.sourceProvenance,
+            retainUntil: values.retainUntil,
+            updatedAt: values.updatedAt,
+            deletedAt: null,
+          },
+        });
+      counts.findings += 1;
+    }
+
+    const runbookRows = [
+      ...(bundle.runbookTemplates ?? []),
+      ...(bundle.runbooks ?? []),
+    ];
+    for (const row of runbookRows) {
+      const sourceId = asUuid(row.id) ?? randomUUID();
+      const targetId = await resolveImportId(
+        actor.organisationId,
+        "runbook_templates",
+        sourceId,
+      );
+      const values = {
+        id: targetId,
+        organisationId: actor.organisationId,
+        name: String(row.name ?? "Imported runbook"),
+        description: (row.description as string | null | undefined) ?? null,
+        assessmentTypes: Array.isArray(row.assessmentTypes)
+          ? (row.assessmentTypes as string[])
+          : [],
+        tags: Array.isArray(row.tags) ? (row.tags as string[]) : [],
+        version: Number(row.version ?? 1),
+        status: String(row.status ?? "draft"),
+        createdBy: actor.userId,
+        updatedAt: new Date(),
+      };
+      await tx
+        .insert(runbookTemplates)
+        .values(values)
+        .onConflictDoUpdate({
+          target: runbookTemplates.id,
+          set: {
+            name: values.name,
+            description: values.description,
+            assessmentTypes: values.assessmentTypes,
+            tags: values.tags,
+            status: values.status,
+            updatedAt: values.updatedAt,
+          },
+        });
+      counts.runbooks += 1;
+    }
+
+    for (const row of bundle.riskMatrices ?? []) {
+      const sourceId = asUuid(row.id) ?? randomUUID();
+      const targetId = await resolveImportId(
+        actor.organisationId,
+        "risk_matrices",
+        sourceId,
+      );
+      const values = {
+        id: targetId,
+        organisationId: actor.organisationId,
+        clientId: (() => {
+          const sourceClientId = asUuid(row.clientId);
+          if (!sourceClientId) return null;
+          return clientIdMap.get(sourceClientId) ?? null;
+        })(),
+        name: String(row.name ?? "Imported matrix"),
+        definition: (row.definition as {
+          likelihood: Array<{ key: string; label: string; order: number }>;
+          impact: Array<{ key: string; label: string; order: number }>;
+          ratings: Array<{
+            likelihood: string;
+            impact: string;
+            severity:
+              | "informational"
+              | "low"
+              | "medium"
+              | "high"
+              | "critical";
+            label: string;
+            colour: string;
+          }>;
+        }) ?? { likelihood: [], impact: [], ratings: [] },
+        isDefault: Boolean(row.isDefault),
+        version: Number(row.version ?? 1),
+        createdBy: actor.userId,
+      };
+      await tx
+        .insert(riskMatrices)
+        .values(values as typeof riskMatrices.$inferInsert)
+        .onConflictDoUpdate({
+          target: riskMatrices.id,
+          set: {
+            name: values.name,
+            definition: values.definition,
+            isDefault: values.isDefault,
+            version: values.version,
+          },
+        });
+      counts.riskMatrices += 1;
+    }
+  });
+
+  await db.insert(auditEvents).values({
+    organisationId: actor.organisationId,
+    actorId: actor.userId,
+    action: "organisation.imported",
+    targetType: "organisation",
+    targetId: actor.organisationId,
+    metadata: counts,
+  });
+  await emitDomainEvent({
+    organisationId: actor.organisationId,
+    actorUserId: actor.userId,
+    eventType: "import.applied",
+    title: `Organisation bundle imported (${counts.findings} findings)`,
+    actionUrl: "/imports",
+    payload: counts,
+  });
+  return counts;
 }

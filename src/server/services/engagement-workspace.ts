@@ -27,6 +27,7 @@ import {
   requireActorPermission,
 } from "@/lib/permissions/require";
 import { visibleToAuthor } from "@/lib/permissions/visibility";
+import { refreshEngagementHealth } from "@/server/services/engagement-health";
 
 export type WorkspaceActor = {
   organisationId: string;
@@ -646,6 +647,21 @@ export async function createWorkspaceNote(
   });
 }
 
+const attackId = /^T\d{4}(\.\d{3})?$/;
+
+export function parseAttackMappings(value: string | undefined) {
+  if (!value) return [];
+  const mappings: string[] = [];
+  const seen = new Set<string>();
+  for (const token of value.split(/[\s,]+/)) {
+    if (!attackId.test(token) || seen.has(token)) continue;
+    seen.add(token);
+    mappings.push(token);
+    if (mappings.length === 20) break;
+  }
+  return mappings;
+}
+
 export async function createTimelineEntry(
   actor: WorkspaceActor,
   input: {
@@ -655,6 +671,7 @@ export async function createTimelineEntry(
     description: string;
     commands?: string;
     clientVisible?: boolean;
+    attackMappings?: string;
   },
 ) {
   return db.transaction(async (tx) => {
@@ -674,6 +691,7 @@ export async function createTimelineEntry(
         commands: input.commands,
         consultantId: actor.userId,
         clientVisible: input.clientVisible ?? false,
+        attackMappings: parseAttackMappings(input.attackMappings),
       })
       .returning();
     await tx.insert(auditEvents).values({
@@ -700,7 +718,7 @@ export async function createWorkspaceTask(
     assetIds?: string[];
   },
 ) {
-  return db.transaction(async (tx) => {
+  const task = await db.transaction(async (tx) => {
     await requireEngagement(tx, actor, input.engagementId);
     if (input.assigneeId) {
       const [assignee] = await tx
@@ -757,6 +775,8 @@ export async function createWorkspaceTask(
     });
     return task;
   });
+  await refreshEngagementHealth(actor.organisationId, input.engagementId);
+  return task;
 }
 
 export async function logWorkspaceTime(
@@ -814,7 +834,7 @@ export async function transitionEngagement(
   actor: WorkspaceActor,
   input: { engagementId: string; toStatus: EngagementStatus; reason?: string },
 ) {
-  return db.transaction(async (tx) => {
+  const updated = await db.transaction(async (tx) => {
     const engagement = await requireEngagement(tx, actor, input.engagementId);
     if (!transitionGraph[engagement.status].includes(input.toStatus)) {
       throw new WorkspaceTransitionError(
@@ -862,6 +882,8 @@ export async function transitionEngagement(
     });
     return updated;
   });
+  await refreshEngagementHealth(actor.organisationId, input.engagementId);
+  return updated;
 }
 
 export async function getEngagementWorkspace(

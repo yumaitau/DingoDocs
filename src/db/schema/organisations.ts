@@ -13,6 +13,16 @@ import { organisationRoleEnum } from "./enums";
 export type SecurityPolicy = {
   mfaMode?: "optional" | "admin_required" | "all_users_required";
   mfaGracePeriodDays?: number;
+  scimGroupRoles?: Record<string, string>;
+  sso?: {
+    protocol: "oidc" | "saml";
+    issuer: string;
+    clientId: string;
+    clientSecretEncrypted?: string;
+    entryPoint?: string;
+    certificate?: string;
+    groupRoles?: Record<string, string>;
+  };
 };
 
 export const organisations = pgTable(

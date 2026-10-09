@@ -115,6 +115,20 @@ export const findings = pgTable(
       .$type<FrameworkMapping[]>()
       .notNull()
       .default([]),
+    cwe: text("cwe"),
+    owasp: text("owasp"),
+    attackTechniques: text("attack_techniques")
+      .array()
+      .notNull()
+      .default(sql`ARRAY[]::text[]`),
+    cve: text("cve"),
+    epssScore: text("epss_score"),
+    kev: boolean("kev").notNull().default(false),
+    complianceTags: text("compliance_tags")
+      .array()
+      .notNull()
+      .default(sql`ARRAY[]::text[]`),
+    retainUntil: timestamp("retain_until", { withTimezone: true }),
     authorId: uuid("author_id").references(() => users.id, {
       onDelete: "set null",
     }),

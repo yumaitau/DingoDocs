@@ -21,6 +21,8 @@ import {
   users,
 } from "@/db/schema";
 import { professionalPentestTemplate } from "@/lib/reports/professional-template";
+import { seedFindingLibrary } from "./finding-library";
+import { seedRunbookLibrary } from "./runbook-library";
 
 const ids = {
   user: "0197f30f-122c-7000-8000-000000000001",
@@ -39,6 +41,8 @@ const ids = {
 } as const;
 
 async function main() {
+  if (process.env.NODE_ENV === "production")
+    throw new Error("Refusing to seed demo data in production");
   const password = await hashPassword("DingoDocs-Demo-2026!");
   await db.transaction(async (tx) => {
     await tx
@@ -180,6 +184,8 @@ async function main() {
         authorId: ids.user,
       })
       .onConflictDoNothing();
+    await seedFindingLibrary(tx, ids.organisation);
+    await seedRunbookLibrary(tx, ids.organisation, ids.user);
     await tx
       .insert(findings)
       .values({

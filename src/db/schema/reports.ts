@@ -15,9 +15,22 @@ import { engagements } from "./engagements";
 import { reportStatusEnum } from "./enums";
 import { organisations } from "./organisations";
 
-export type ReportFormat = "pdf" | "docx" | "html" | "markdown" | "json";
+export type ReportFormat =
+  | "pdf"
+  | "docx"
+  | "html"
+  | "markdown"
+  | "json"
+  | "xlsx"
+  | "pptx";
 export type ReportCondition = {
-  field: "hasFindings" | "hasEvidence" | "hasScope" | "status";
+  field:
+    | "hasFindings"
+    | "hasEvidence"
+    | "hasScope"
+    | "status"
+    | "hasCritical"
+    | "hasHigh";
   operator: "equals" | "not_equals" | "truthy";
   value?: string | boolean;
 };
@@ -81,6 +94,7 @@ export type ReportTemplateDefinition = {
     bodyFont: string;
     headingFont: string;
     bodySize: number;
+    pageSize?: "A4" | "LETTER";
   };
   header: { left?: string; right?: string; showRule?: boolean };
   footer: { left?: string; showPageNumbers?: boolean };
@@ -143,7 +157,9 @@ export const reports = pgTable(
     }),
     templateVersion: integer("template_version"),
     title: text("title").notNull(),
+    kind: text("kind").notNull().default("assessment"),
     status: reportStatusEnum("status").notNull().default("draft"),
+    retainUntil: timestamp("retain_until", { withTimezone: true }),
     currentVersion: integer("current_version").notNull().default(1),
     createdBy: uuid("created_by").references(() => users.id, {
       onDelete: "set null",

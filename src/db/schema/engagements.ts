@@ -54,6 +54,9 @@ export const engagements = pgTable(
       .array()
       .notNull()
       .default(sql`ARRAY[]::text[]`),
+    programId: uuid("program_id"),
+    recurrence: text("recurrence"),
+    retainUntil: timestamp("retain_until", { withTimezone: true }),
     version: integer("version").notNull().default(1),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()

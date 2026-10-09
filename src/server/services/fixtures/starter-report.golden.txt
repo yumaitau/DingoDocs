@@ -34,15 +34,57 @@ One high-severity finding requires remediation.
 
 ### WEB-001: Missing object authorisation
 
-**Severity:** high | **CVSS:** 8.7
+**Severity:** high | **CVSS:** 8.7 | CVSS:4.0/AV:N/AC:L/AT:N/PR:L/UI:N/VC:H
 
 Users can access another account's invoice.
 
 #### Technical detail
 The invoice lookup is not tenant scoped.
 
+#### Reproduction steps
+
+
+#### Proof of concept
+
+
+#### Business impact
+Invoice data can be disclosed.
+
+#### Technical impact
+
+
 #### Remediation
 Scope every lookup to the active account.
+
+#### References
+
+
+#### Mappings
+
+
+#### Affected assets
+
+
+#### CWE
+
+
+#### OWASP
+
+
+#### Attack techniques
+
+
+#### CVE
+
+
+#### EPSS score
+
+
+#### KEV
+
+
+#### Compliance tags
+
 
 ## Evidence register
 

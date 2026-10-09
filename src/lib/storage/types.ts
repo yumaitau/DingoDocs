@@ -3,6 +3,7 @@ export type StoredObject = {
   size: number;
   sha256: string;
   mediaType: string;
+  encryptionMetadata?: Record<string, string>;
 };
 
 export type PutObjectInput = {

@@ -25,8 +25,8 @@ export const sectionTypes = [
   "glossary",
   "contacts",
 ] as const;
-export const MAX_LAYOUT_LENGTH = 12_000_000;
-export const MAX_IMAGE_LENGTH = 2_800_000;
+export const MAX_LAYOUT_LENGTH = 40_000_000;
+export const MAX_IMAGE_LENGTH = 8_000_000;
 
 export function safeReportImage(value: unknown): string | undefined {
   if (typeof value !== "string" || value.length > MAX_IMAGE_LENGTH)
@@ -54,7 +54,14 @@ const sectionSchema = z
     reusableKey: z.string().max(100).optional(),
     condition: z
       .object({
-        field: z.enum(["hasFindings", "hasEvidence", "hasScope", "status"]),
+        field: z.enum([
+          "hasFindings",
+          "hasEvidence",
+          "hasScope",
+          "status",
+          "hasCritical",
+          "hasHigh",
+        ]),
         operator: z.enum(["equals", "not_equals", "truthy"]),
         value: z.union([z.string(), z.boolean()]).optional(),
       })
@@ -71,13 +78,13 @@ const sectionSchema = z
     if (uri && !safeReportImage(uri))
       ctx.addIssue({
         code: "custom",
-        message: "Screenshots must be PNG or JPEG images under 2 MB",
+        message: "Screenshots must be PNG or JPEG images under 8 MB",
         path: ["options", "imageDataUri"],
       });
   });
 
 export function parseReportSections(value: unknown): ReportSectionDefinition[] {
-  const sections = z.array(sectionSchema).min(1).max(250).parse(value);
+  const sections = z.array(sectionSchema).min(1).max(400).parse(value);
   if (new Set(sections.map((s) => s.id)).size !== sections.length)
     throw new Error("Report block identifiers must be unique");
   return sections;

@@ -34,11 +34,30 @@ import {
   assertFindingTransition,
   type FindingStatus,
 } from "@/features/findings/workflow";
+import { scoreCvss } from "@/lib/findings/cvss";
+import { severityFromMatrix } from "@/lib/findings/risk-matrix";
+import {
+  cveInKev,
+  epssUrl,
+  exploitDbUrl,
+  kevUrl,
+  normaliseCve,
+  parseEpssScore,
+  type EpssResponse,
+  type KevFeed,
+} from "@/lib/intel/exploit";
+import {
+  assertPublicHttpUrl,
+  outboundFetchInit,
+} from "@/lib/security/outbound-url";
+import { emitDomainEvent } from "./domain-events";
+import { findingScheduleDefaults } from "./finding-schedule";
 
 export type FindingActor = { organisationId: string; userId: string };
 export type FindingNarrativeInput = {
   title: string;
   severity: "informational" | "low" | "medium" | "high" | "critical";
+  severityLocked?: boolean;
   likelihood?: string;
   impact?: string;
   cvssVector?: string;
@@ -53,6 +72,11 @@ export type FindingNarrativeInput = {
   verificationGuidance?: string;
   references?: string[];
   mappings?: FrameworkMapping[];
+  cwe?: string;
+  owasp?: string;
+  attackTechniques?: string[];
+  cve?: string;
+  complianceTags?: string[];
   clientOwner?: string;
   dueAt?: Date;
 };
@@ -293,7 +317,11 @@ export async function createFindingFromTemplate(
   },
 ) {
   return db.transaction(async (tx) => {
-    await requireEngagement(tx, actor.organisationId, input.engagementId);
+    const engagement = await requireEngagement(
+      tx,
+      actor.organisationId,
+      input.engagementId,
+    );
     const template = await requireTemplate(
       tx,
       actor.organisationId,
@@ -302,6 +330,11 @@ export async function createFindingFromTemplate(
     if (template.reviewStatus !== "approved")
       throw new Error("Only approved templates can create findings");
     const snapshot = templateSnapshot(template);
+    const schedule = await findingScheduleDefaults(tx, {
+      organisationId: actor.organisationId,
+      clientId: engagement.clientId,
+      severity: template.severity,
+    });
     const [finding] = await tx
       .insert(findings)
       .values({
@@ -313,6 +346,8 @@ export async function createFindingFromTemplate(
         identifier: input.identifier,
         title: template.title,
         severity: template.severity,
+        dueAt: schedule.dueAt,
+        retainUntil: schedule.retainUntil,
         likelihood: template.likelihood,
         executiveSummary: template.executiveDescription ?? template.summary,
         technicalDetail: template.technicalDescription,
@@ -376,7 +411,23 @@ export async function createFindingDraft(
 ) {
   const cvssScore = validateFindingNarrative(input);
   return db.transaction(async (tx) => {
-    await requireEngagement(tx, actor.organisationId, input.engagementId);
+    const engagement = await requireEngagement(
+      tx,
+      actor.organisationId,
+      input.engagementId,
+    );
+    const severity = await resolveNarrativeSeverity(
+      tx,
+      actor.organisationId,
+      engagement.clientId,
+      input,
+    );
+    const schedule = await findingScheduleDefaults(tx, {
+      organisationId: actor.organisationId,
+      clientId: engagement.clientId,
+      severity,
+      dueAt: input.dueAt,
+    });
     const [finding] = await tx
       .insert(findings)
       .values({
@@ -384,7 +435,7 @@ export async function createFindingDraft(
         engagementId: input.engagementId,
         identifier: input.identifier.trim(),
         title: input.title.trim(),
-        severity: input.severity,
+        severity,
         likelihood: input.likelihood?.trim(),
         impact: input.impact?.trim(),
         cvssVector: input.cvssVector?.trim(),
@@ -399,8 +450,14 @@ export async function createFindingDraft(
         verificationGuidance: input.verificationGuidance?.trim(),
         references: input.references ?? [],
         mappings: input.mappings ?? [],
+        cwe: input.cwe?.trim(),
+        owasp: input.owasp?.trim(),
+        attackTechniques: input.attackTechniques ?? [],
+        cve: input.cve?.trim(),
+        complianceTags: input.complianceTags ?? [],
         clientOwner: input.clientOwner?.trim(),
-        dueAt: input.dueAt,
+        dueAt: schedule.dueAt,
+        retainUntil: schedule.retainUntil,
         authorId: actor.userId,
         sourceProvenance: input.sourceProvenance ?? {},
       })
@@ -559,12 +616,23 @@ export async function updateFindingNarrative(
       throw new Error(
         "Finding content can only change during authoring or requested changes",
       );
+    const engagement = await requireEngagement(
+      tx,
+      actor.organisationId,
+      finding.engagementId,
+    );
+    const severity = await resolveNarrativeSeverity(
+      tx,
+      actor.organisationId,
+      engagement.clientId,
+      input,
+    );
     await snapshotCurrentFinding(tx, actor, finding, input.changeSummary);
     const [updated] = await tx
       .update(findings)
       .set({
         title: input.title,
-        severity: input.severity,
+        severity,
         likelihood: input.likelihood,
         impact: input.impact,
         cvssVector: input.cvssVector,
@@ -579,6 +647,11 @@ export async function updateFindingNarrative(
         verificationGuidance: input.verificationGuidance,
         references: input.references ?? [],
         mappings: input.mappings ?? [],
+        cwe: input.cwe,
+        owasp: input.owasp,
+        attackTechniques: input.attackTechniques ?? [],
+        cve: input.cve,
+        complianceTags: input.complianceTags ?? [],
         clientOwner: input.clientOwner,
         dueAt: input.dueAt,
         version: finding.version + 1,
@@ -625,6 +698,7 @@ export async function patchFindingNarrative(
     findingId: input.findingId,
     title: input.title ?? current.title,
     severity: input.severity ?? current.severity,
+    severityLocked: input.severityLocked,
     likelihood: input.likelihood ?? current.likelihood ?? undefined,
     impact: input.impact ?? current.impact ?? undefined,
     cvssVector: input.cvssVector ?? current.cvssVector ?? undefined,
@@ -644,10 +718,161 @@ export async function patchFindingNarrative(
       input.verificationGuidance ?? current.verificationGuidance ?? undefined,
     references: input.references ?? current.references,
     mappings: input.mappings ?? current.mappings,
+    cwe: input.cwe ?? current.cwe ?? undefined,
+    owasp: input.owasp ?? current.owasp ?? undefined,
+    attackTechniques: input.attackTechniques ?? current.attackTechniques,
+    cve: input.cve ?? current.cve ?? undefined,
+    complianceTags: input.complianceTags ?? current.complianceTags,
     clientOwner: input.clientOwner ?? current.clientOwner ?? undefined,
     dueAt: input.dueAt ?? current.dueAt ?? undefined,
     changeSummary: input.changeSummary,
   });
+}
+
+export async function bulkUpdateFindings(
+  actor: FindingActor,
+  input: {
+    ids: string[];
+    status?: FindingStatus;
+    severity?: FindingNarrativeInput["severity"];
+    assigneeId?: string;
+    clientVisible?: boolean;
+  },
+) {
+  if (!input.ids.length) return [];
+  if (input.ids.length > 100) throw new Error("Bulk update is capped at 100 findings");
+  const uniqueIds = [...new Set(input.ids)];
+  const rows = await db
+    .select()
+    .from(findings)
+    .where(
+      and(
+        eq(findings.organisationId, actor.organisationId),
+        inArray(findings.id, uniqueIds),
+        isNull(findings.deletedAt),
+      ),
+    );
+  if (rows.length !== uniqueIds.length) throw new FindingScopeError();
+  const updated = [];
+  for (const finding of rows) {
+    if (input.status && input.status !== finding.status) {
+      updated.push(
+        await transitionFinding(actor, {
+          findingId: finding.id,
+          toStatus: input.status,
+        }),
+      );
+    }
+    const patch: Partial<typeof findings.$inferInsert> = {
+      updatedAt: new Date(),
+    };
+    let needsPatch = false;
+    if (input.severity) {
+      patch.severity = input.severity;
+      needsPatch = true;
+    }
+    if (input.assigneeId !== undefined) {
+      patch.authorId = input.assigneeId || null;
+      needsPatch = true;
+    }
+    if (input.clientVisible !== undefined) {
+      patch.clientVisible = input.clientVisible;
+      needsPatch = true;
+    }
+    if (!needsPatch) continue;
+    const [row] = await db
+      .update(findings)
+      .set(patch)
+      .where(
+        and(
+          eq(findings.id, finding.id),
+          eq(findings.organisationId, actor.organisationId),
+          isNull(findings.deletedAt),
+        ),
+      )
+      .returning();
+    if (row) {
+      await db.insert(auditEvents).values({
+        organisationId: actor.organisationId,
+        actorId: actor.userId,
+        action: "finding.bulk_updated",
+        targetType: "finding",
+        targetId: finding.id,
+        metadata: {
+          status: input.status ?? null,
+          severity: input.severity ?? null,
+          assigneeId: input.assigneeId ?? null,
+          clientVisible: input.clientVisible ?? null,
+        },
+      });
+      updated.push(row);
+    }
+  }
+  return updated;
+}
+
+export async function enrichFindingIntel(
+  actor: FindingActor,
+  findingId: string,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  try {
+    const finding = await requireFinding(db, actor.organisationId, findingId);
+    const cve = normaliseCve(finding.cve);
+    if (!cve) return { ok: false, error: "Finding CVE must match CVE-YYYY-NNNN" };
+
+    const [epssEndpoint, kevEndpoint] = await Promise.all([
+      assertPublicHttpUrl(epssUrl(cve)),
+      assertPublicHttpUrl(kevUrl),
+    ]);
+    const signal = AbortSignal.timeout(8_000);
+    const [epssResponse, kevResponse] = await Promise.all([
+      fetch(epssEndpoint, { signal, ...outboundFetchInit }),
+      fetch(kevEndpoint, { signal, ...outboundFetchInit }),
+    ]);
+    if (!epssResponse.ok || !kevResponse.ok)
+      return {
+        ok: false,
+        error: `Intel providers returned HTTP ${!epssResponse.ok ? epssResponse.status : kevResponse.status}`,
+      };
+
+    const epssPayload = (await epssResponse.json()) as EpssResponse;
+    const kevPayload = (await kevResponse.json()) as KevFeed;
+    const epssScore = parseEpssScore(epssPayload, cve) ?? finding.epssScore;
+    const kev = cveInKev(kevPayload, cve);
+    const exploitLink = exploitDbUrl(cve);
+    const references = finding.references.includes(exploitLink)
+      ? finding.references
+      : [...finding.references, exploitLink];
+
+    await db
+      .update(findings)
+      .set({
+        epssScore,
+        kev,
+        references,
+        updatedAt: new Date(),
+      })
+      .where(
+        and(
+          eq(findings.id, finding.id),
+          eq(findings.organisationId, actor.organisationId),
+        ),
+      );
+    await db.insert(auditEvents).values({
+      organisationId: actor.organisationId,
+      actorId: actor.userId,
+      action: "finding.intel_enriched",
+      targetType: "finding",
+      targetId: finding.id,
+      metadata: { cve, epssScore, kev },
+    });
+    return { ok: true };
+  } catch (error) {
+    return {
+      ok: false,
+      error: error instanceof Error ? error.message : "Intel enrichment failed",
+    };
+  }
 }
 
 export async function transitionFinding(
@@ -660,7 +885,7 @@ export async function transitionFinding(
     overrideReason?: string;
   },
 ) {
-  return db.transaction(async (tx) => {
+  const updated = await db.transaction(async (tx) => {
     const finding = await requireFinding(
       tx,
       actor.organisationId,
@@ -744,6 +969,20 @@ export async function transitionFinding(
     });
     return updated;
   });
+  await emitDomainEvent({
+    organisationId: actor.organisationId,
+    actorUserId: actor.userId,
+    eventType: "finding.transitioned",
+    title: `Finding ${updated.identifier} transitioned to ${updated.status}`,
+    actionUrl: `/engagements/${updated.engagementId}?view=findings`,
+    payload: {
+      findingId: updated.id,
+      identifier: updated.identifier,
+      status: updated.status,
+      engagementId: updated.engagementId,
+    },
+  });
+  return updated;
 }
 
 export async function addFindingComment(
@@ -770,6 +1009,21 @@ export async function addFindingComment(
       authorId: actor.userId,
     })
     .returning();
+  if (comment && input.visibility !== "private") {
+    await emitDomainEvent({
+      organisationId: actor.organisationId,
+      actorUserId: actor.userId,
+      eventType: "comment.created",
+      title: `Comment on ${finding.identifier}`,
+      actionUrl: `/engagements/${finding.engagementId}?view=findings`,
+      payload: {
+        commentId: comment.id,
+        targetType: "finding",
+        targetId: finding.id,
+        visibility: input.visibility,
+      },
+    });
+  }
   return comment;
 }
 
@@ -978,7 +1232,7 @@ async function requireEngagement(
   engagementId: string,
 ) {
   const [engagement] = await query
-    .select({ id: engagements.id })
+    .select({ id: engagements.id, clientId: engagements.clientId })
     .from(engagements)
     .where(
       and(
@@ -990,6 +1244,62 @@ async function requireEngagement(
     .limit(1);
   if (!engagement) throw new FindingScopeError();
   return engagement;
+}
+
+async function loadDefaultRiskMatrix(
+  query: Queryable,
+  organisationId: string,
+  clientId: string | null,
+) {
+  if (clientId) {
+    const [clientDefault] = await query
+      .select()
+      .from(riskMatrices)
+      .where(
+        and(
+          eq(riskMatrices.organisationId, organisationId),
+          eq(riskMatrices.clientId, clientId),
+          eq(riskMatrices.isDefault, true),
+          isNull(riskMatrices.supersededAt),
+        ),
+      )
+      .orderBy(desc(riskMatrices.version))
+      .limit(1);
+    if (clientDefault) return clientDefault;
+  }
+  const [orgDefault] = await query
+    .select()
+    .from(riskMatrices)
+    .where(
+      and(
+        eq(riskMatrices.organisationId, organisationId),
+        isNull(riskMatrices.clientId),
+        eq(riskMatrices.isDefault, true),
+        isNull(riskMatrices.supersededAt),
+      ),
+    )
+    .orderBy(desc(riskMatrices.version))
+    .limit(1);
+  return orgDefault ?? null;
+}
+
+async function resolveNarrativeSeverity(
+  query: Queryable,
+  organisationId: string,
+  clientId: string | null,
+  input: Pick<
+    FindingNarrativeInput,
+    "severity" | "severityLocked" | "likelihood" | "impact"
+  >,
+) {
+  if (input.severityLocked) return input.severity;
+  if (!input.likelihood?.trim() || !input.impact?.trim()) return input.severity;
+  const matrix = await loadDefaultRiskMatrix(query, organisationId, clientId);
+  if (!matrix) return input.severity;
+  return (
+    severityFromMatrix(matrix.definition, input.likelihood, input.impact) ??
+    input.severity
+  );
 }
 
 async function requireAssets(
@@ -1058,9 +1368,15 @@ function validateFindingNarrative(input: {
   cvssVector?: string;
   cvssScore?: string;
 }) {
-  if (input.cvssVector && !input.cvssVector.startsWith("CVSS:4.0/"))
-    throw new Error("CVSS vector must use CVSS v4.0");
-  const cvssScore = input.cvssScore ? Number(input.cvssScore) : undefined;
+  const vector = input.cvssVector?.trim();
+  let cvssScore = input.cvssScore?.trim()
+    ? Number(input.cvssScore)
+    : undefined;
+  if (vector) {
+    const scored = scoreCvss(vector);
+    if (cvssScore === undefined || !Number.isFinite(cvssScore))
+      cvssScore = scored.score;
+  }
   if (
     cvssScore !== undefined &&
     (!Number.isFinite(cvssScore) || cvssScore < 0 || cvssScore > 10)

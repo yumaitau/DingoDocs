@@ -5,15 +5,19 @@ import { Command } from "cmdk";
 import {
   Activity,
   ArrowLeftRight,
+  Bell,
   BookOpen,
+  BriefcaseBusiness,
   Building2,
   Cable,
+  CalendarDays,
   ChartNoAxesCombined,
   CheckSquare,
   ClipboardList,
   ChevronRight,
   Clock3,
   FileText,
+  FolderKanban,
   Gauge,
   History,
   Library,
@@ -29,27 +33,41 @@ import Image from "next/image";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { LocaleSwitch } from "@/components/locale-switch";
+import {
+  defaultLocale,
+  getDictionary,
+  readStoredLocale,
+  type Locale,
+} from "@/lib/i18n";
 import { cn } from "@/lib/utils";
 
-type NavItem = { label: string; href: string; icon: LucideIcon };
+type NavItem = {
+  labelKey: keyof ReturnType<typeof getDictionary>["nav"];
+  href: string;
+  icon: LucideIcon;
+};
 const primary: NavItem[] = [
-  { label: "Dashboard", href: "/dashboard", icon: Gauge },
-  { label: "Analytics", href: "/analytics", icon: ChartNoAxesCombined },
-  { label: "Clients", href: "/clients", icon: Building2 },
-  { label: "Engagements", href: "/engagements", icon: ShieldCheck },
-  { label: "Findings Library", href: "/findings-library", icon: Library },
-  { label: "Reports", href: "/reports", icon: FileText },
-  { label: "Tasks", href: "/tasks", icon: CheckSquare },
-  { label: "Runbooks", href: "/runbooks", icon: ClipboardList },
-  { label: "Templates", href: "/templates", icon: BookOpen },
-  { label: "Imports & Exports", href: "/imports", icon: ArrowLeftRight },
+  { labelKey: "dashboard", href: "/dashboard", icon: Gauge },
+  { labelKey: "analytics", href: "/analytics", icon: ChartNoAxesCombined },
+  { labelKey: "clients", href: "/clients", icon: Building2 },
+  { labelKey: "engagements", href: "/engagements", icon: ShieldCheck },
+  { labelKey: "schedule", href: "/schedule", icon: CalendarDays },
+  { labelKey: "programs", href: "/programs", icon: FolderKanban },
+  { labelKey: "opportunities", href: "/opportunities", icon: BriefcaseBusiness },
+  { labelKey: "findingsLibrary", href: "/findings-library", icon: Library },
+  { labelKey: "reports", href: "/reports", icon: FileText },
+  { labelKey: "tasks", href: "/tasks", icon: CheckSquare },
+  { labelKey: "runbooks", href: "/runbooks", icon: ClipboardList },
+  { labelKey: "templates", href: "/templates", icon: BookOpen },
+  { labelKey: "importsExports", href: "/imports", icon: ArrowLeftRight },
 ];
 const secondary: NavItem[] = [
-  { label: "Preferences", href: "/account/preferences", icon: Clock3 },
-  { label: "Team", href: "/team", icon: Users },
-  { label: "Audit Log", href: "/audit", icon: History },
-  { label: "Integrations", href: "/integrations", icon: Cable },
-  { label: "Settings", href: "/settings", icon: Settings },
+  { labelKey: "preferences", href: "/account/preferences", icon: Clock3 },
+  { labelKey: "team", href: "/team", icon: Users },
+  { labelKey: "auditLog", href: "/audit", icon: History },
+  { labelKey: "integrations", href: "/integrations", icon: Cable },
+  { labelKey: "settings", href: "/settings", icon: Settings },
 ];
 
 export function AppShell({
@@ -126,14 +144,17 @@ export function AppShell({
             />
             <span className="text-sm font-semibold">DingoDocs</span>
           </div>
-          <button
-            type="button"
-            aria-label="Open command palette"
-            className="rounded-md p-2 hover:bg-muted"
-            onClick={() => setPaletteOpen(true)}
-          >
-            <Search className="size-5" />
-          </button>
+          <div className="flex items-center">
+            <NotificationBell />
+            <button
+              type="button"
+              aria-label="Open command palette"
+              className="rounded-md p-2 hover:bg-muted"
+              onClick={() => setPaletteOpen(true)}
+            >
+              <Search className="size-5" />
+            </button>
+          </div>
         </header>
         <main className="min-w-0">{children}</main>
       </div>
@@ -172,6 +193,12 @@ function Navigation({
   onNavigate: () => void;
   onSearch: () => void;
 }) {
+  const [locale, setLocale] = useState<Locale>(defaultLocale);
+  useEffect(() => {
+    setLocale(readStoredLocale());
+  }, []);
+  const dictionary = getDictionary(locale);
+
   return (
     <div className="flex h-full flex-col px-3 py-3">
       <div className="flex h-10 items-center gap-2 px-2">
@@ -183,12 +210,14 @@ function Navigation({
           className="size-7 object-contain"
           priority
         />
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <div className="text-sm font-semibold leading-tight">DingoDocs</div>
           <div className="truncate text-[11px] text-slate-500">
             {organisationName}
           </div>
         </div>
+        <LocaleSwitch value={locale} onChange={setLocale} />
+        <NotificationBell />
       </div>
       <button
         type="button"
@@ -205,7 +234,11 @@ function Navigation({
         {primary.map((item) => (
           <NavLink
             key={item.href}
-            item={item}
+            item={{
+              href: item.href,
+              icon: item.icon,
+              label: dictionary.nav[item.labelKey],
+            }}
             active={
               pathname === item.href || pathname.startsWith(`${item.href}/`)
             }
@@ -218,7 +251,11 @@ function Navigation({
         {secondary.map((item) => (
           <NavLink
             key={item.href}
-            item={item}
+            item={{
+              href: item.href,
+              icon: item.icon,
+              label: dictionary.nav[item.labelKey],
+            }}
             active={
               pathname === item.href || pathname.startsWith(`${item.href}/`)
             }
@@ -244,12 +281,139 @@ function Navigation({
   );
 }
 
+type InboxItem = {
+  id: string;
+  title: string;
+  eventType: string;
+  actionUrl: string | null;
+  readAt: string | null;
+  createdAt: string;
+};
+
+function NotificationBell() {
+  const router = useRouter();
+  const rootRef = useRef<HTMLDivElement>(null);
+  const [open, setOpen] = useState(false);
+  const [items, setItems] = useState<InboxItem[]>([]);
+  const [unread, setUnread] = useState(0);
+
+  function applyPayload(body: {
+    notifications?: InboxItem[];
+    unreadCount?: number;
+  }) {
+    setItems(body.notifications ?? []);
+    setUnread(body.unreadCount ?? 0);
+  }
+
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/api/notifications")
+      .then((response) => (response.ok ? response.json() : null))
+      .then((body: { notifications?: InboxItem[]; unreadCount?: number } | null) => {
+        if (!cancelled && body) applyPayload(body);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!open) return;
+    const onPointer = (event: PointerEvent) => {
+      if (!rootRef.current?.contains(event.target as Node)) setOpen(false);
+    };
+    window.addEventListener("pointerdown", onPointer);
+    return () => window.removeEventListener("pointerdown", onPointer);
+  }, [open]);
+
+  async function mark(body: { id?: string; all?: true }) {
+    const response = await fetch("/api/notifications", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    if (!response.ok) return;
+    applyPayload(
+      (await response.json()) as {
+        notifications?: InboxItem[];
+        unreadCount?: number;
+      },
+    );
+  }
+
+  return (
+    <div ref={rootRef} className="relative">
+      <button
+        type="button"
+        aria-expanded={open}
+        aria-label={
+          unread > 0 ? `Notifications, ${unread} unread` : "Notifications"
+        }
+        className="relative rounded-md p-2 text-slate-600 hover:bg-muted hover:text-slate-950"
+        onClick={() => setOpen((current) => !current)}
+      >
+        <Bell className="size-4" aria-hidden="true" />
+        {unread > 0 ? (
+          <span className="absolute right-0.5 top-0.5 grid min-w-4 place-items-center rounded-full bg-[var(--harbour-700)] px-1 text-[10px] font-semibold leading-4 text-white">
+            {unread > 9 ? "9+" : unread}
+          </span>
+        ) : null}
+      </button>
+      {open ? (
+        <div className="absolute right-0 top-full z-50 mt-1 w-72 overflow-hidden rounded-lg border bg-paper shadow-[0_16px_40px_rgba(28,45,65,0.16)]">
+          <div className="flex items-center justify-between border-b px-3 py-2">
+            <span className="text-sm font-semibold">Notifications</span>
+            <button
+              type="button"
+              className="text-xs font-medium text-[var(--harbour-700)] hover:underline"
+              onClick={() => void mark({ all: true })}
+            >
+              Mark all read
+            </button>
+          </div>
+          <ul className="scrollbar-subtle max-h-80 overflow-y-auto">
+            {items.length === 0 ? (
+              <li className="px-3 py-6 text-center text-sm text-slate-500">
+                No notifications
+              </li>
+            ) : (
+              items.map((item) => (
+                <li key={item.id} className="border-b last:border-b-0">
+                  <button
+                    type="button"
+                    className={cn(
+                      "flex w-full px-3 py-2 text-left text-sm text-slate-700 hover:bg-[var(--harbour-50)]",
+                      item.readAt ? "font-normal" : "font-medium",
+                    )}
+                    onClick={() => {
+                      void mark({ id: item.id });
+                      setOpen(false);
+                      if (
+                        item.actionUrl?.startsWith("/") &&
+                        !item.actionUrl.startsWith("//")
+                      )
+                        router.push(item.actionUrl);
+                    }}
+                  >
+                    <span className="line-clamp-2">{item.title}</span>
+                  </button>
+                </li>
+              ))
+            )}
+          </ul>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function NavLink({
   item,
   active,
   onClick,
 }: {
-  item: NavItem;
+  item: { label: string; href: string; icon: LucideIcon };
   active: boolean;
   onClick: () => void;
 }) {
@@ -280,7 +444,20 @@ function CommandPalette({
   onOpenChange: (open: boolean) => void;
 }) {
   const router = useRouter();
-  const items = useMemo(() => [...primary, ...secondary], []);
+  const [locale, setLocale] = useState<Locale>(defaultLocale);
+  useEffect(() => {
+    setLocale(readStoredLocale());
+  }, [open]);
+  const dictionary = getDictionary(locale);
+  const items = useMemo(
+    () =>
+      [...primary, ...secondary].map((item) => ({
+        href: item.href,
+        icon: item.icon,
+        label: getDictionary(locale).nav[item.labelKey],
+      })),
+    [locale],
+  );
   const [results, setResults] = useState<
     Array<{
       type: string;

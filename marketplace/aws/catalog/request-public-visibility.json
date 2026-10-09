@@ -1,0 +1,12 @@
+[
+  {
+    "ChangeType": "UpdateVisibility",
+    "Entity": {
+      "Type": "ContainerProduct@1.0",
+      "Identifier": "prod-b2j55een26yp2"
+    },
+    "DetailsDocument": {
+      "TargetVisibility": "Public"
+    }
+  }
+]

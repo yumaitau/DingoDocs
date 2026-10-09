@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import {
   boolean,
   index,
@@ -60,6 +61,11 @@ export const comments = pgTable(
     targetId: uuid("target_id").notNull(),
     body: text("body").notNull(),
     visibility: text("visibility").notNull().default("team"),
+    parentId: uuid("parent_id"),
+    mentions: text("mentions")
+      .array()
+      .notNull()
+      .default(sql`ARRAY[]::text[]`),
     authorId: uuid("author_id").references(() => users.id, {
       onDelete: "set null",
     }),
@@ -141,7 +147,7 @@ export const timelineEvents = pgTable(
       onDelete: "set null",
     }),
     attackMappings: jsonb("attack_mappings")
-      .$type<Array<{ id: string; name?: string }>>()
+      .$type<string[]>()
       .notNull()
       .default([]),
     clientVisible: boolean("client_visible").notNull().default(false),

@@ -1,7 +1,7 @@
 import "server-only";
 
 import { randomUUID } from "node:crypto";
-import { and, asc, desc, eq, isNull } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull } from "drizzle-orm";
 import { db } from "@/db";
 import {
   assets,
@@ -10,6 +10,7 @@ import {
   clients,
   engagements,
   evidence,
+  findingAssets,
   findings,
   organisations,
   reportReviews,
@@ -17,11 +18,13 @@ import {
   reportTransitions,
   reportVersions,
   reports,
+  riskMatrices,
   scopeItems,
   scopeVersions,
   type ReportFormat,
   type ReportSectionDefinition,
   type ReportTemplateDefinition,
+  type RiskMatrixDefinition,
 } from "@/db/schema";
 import { storage } from "@/lib/storage";
 import type { StorageProvider } from "@/lib/storage/types";
@@ -32,16 +35,35 @@ import {
 } from "@/lib/reports/layout";
 import { safeLogoDataUri } from "@/lib/reports/branding";
 import {
+  parseRedactionTerms,
+  redactReportText,
+} from "@/lib/reports/redact";
+import { applyClientReportPreferences, positiveDays, retainUntilFromDays } from "@/lib/clients/policy";
+import { readClientReportDefaults } from "./client-defaults";
+import { emitDomainEvent } from "./domain-events";
+import {
   DEFAULT_CONFIDENTIALITY_NOTICE,
   DEFAULT_METHODOLOGY,
   DEFAULT_PENTEST_GLOSSARY,
   DEFAULT_SEVERITY_RATINGS,
+  professionalPentestTemplate,
 } from "@/lib/reports/professional-template";
 import {
   renderReport,
   reportMediaTypes,
   type ReportDocumentModel,
+  type ReportFindingModel,
 } from "./report-renderers";
+import { diffReportVersions } from "./report-diff";
+
+export { diffReportVersions };
+
+export type ReportKind =
+  | "assessment"
+  | "attestation"
+  | "remediation_letter"
+  | "retest"
+  | "zero_finding";
 
 export type ReportActor = { organisationId: string; userId: string };
 export type ReportStatus = typeof reports.$inferSelect.status;
@@ -67,7 +89,7 @@ export class ReportScopeError extends Error {
 
 export function validateReportTemplate(definition: ReportTemplateDefinition) {
   if (JSON.stringify(definition).length > MAX_LAYOUT_LENGTH)
-    throw new Error("Report layout exceeds the 12 MB limit");
+    throw new Error("Report layout exceeds the 40 MB limit");
   definition.sections = parseReportSections(definition.sections);
   if (definition.exam) definition.exam = examSchema.parse(definition.exam);
   if (!definition.sections.length)
@@ -197,7 +219,12 @@ export async function reviseReportTemplate(
 
 export async function createReport(
   actor: ReportActor,
-  input: { engagementId: string; templateId: string; title: string },
+  input: {
+    engagementId: string;
+    templateId: string;
+    title: string;
+    kind?: ReportKind;
+  },
 ) {
   const template = await requireTemplate(
     db,
@@ -210,6 +237,10 @@ export async function createReport(
   );
   if (template.clientId && template.clientId !== engagement.clientId)
     throw new ReportScopeError("Template belongs to another client");
+  const defaults = await readClientReportDefaults(engagement.clientId).catch(
+    () => null,
+  );
+  const kind = input.kind ?? "assessment";
   const reportId = randomUUID();
   const versionId = randomUUID();
   const model = await buildReportModel({
@@ -219,8 +250,15 @@ export async function createReport(
     version: 1,
     title: input.title,
     engagement,
-    template,
+    template: applyClientReportPreferences(
+      withKindSections(template, kind),
+      defaults?.reportPreferences,
+    ),
+    kind,
   });
+  const retainUntil = retainUntilFromDays(
+    positiveDays(defaults?.retentionPolicy.reportDays),
+  );
   return db.transaction(async (tx) => {
     const [report] = await tx
       .insert(reports)
@@ -232,6 +270,8 @@ export async function createReport(
         templateId: template.id,
         templateVersion: template.version,
         title: input.title.trim(),
+        kind,
+        retainUntil,
         createdBy: actor.userId,
       })
       .returning();
@@ -390,7 +430,8 @@ export async function createReportRevision(
       version,
       title: report.title,
       engagement,
-      template,
+      template: withKindSections(template, report.kind as ReportKind),
+      kind: report.kind as ReportKind,
     });
     const previousContent = current.content as ReportDocumentModel;
     if (previousContent.editRevision) {
@@ -437,7 +478,7 @@ export async function transitionReport(
   actor: ReportActor,
   input: { reportId: string; toStatus: ReportStatus; comment?: string },
 ) {
-  return db.transaction(async (tx) => {
+  const updated = await db.transaction(async (tx) => {
     const report = await requireReport(
       tx,
       actor.organisationId,
@@ -514,12 +555,36 @@ export async function transitionReport(
     });
     return updated;
   });
+  const published = updated.status === "published";
+  await emitDomainEvent({
+    organisationId: actor.organisationId,
+    actorUserId: actor.userId,
+    eventType: published ? "report.published" : "report.transitioned",
+    title: published
+      ? `Report published: ${updated.title}`
+      : `Report transitioned to ${updated.status}: ${updated.title}`,
+    actionUrl: `/reports/${updated.id}`,
+    payload: {
+      reportId: updated.id,
+      status: updated.status,
+      engagementId: updated.engagementId,
+    },
+  });
+  return updated;
 }
 
 export async function queueReportGeneration(
   actor: ReportActor,
   reportId: string,
-  formats: ReportFormat[] = ["pdf", "docx", "html", "markdown", "json"],
+  formats: ReportFormat[] = [
+    "pdf",
+    "docx",
+    "html",
+    "markdown",
+    "json",
+    "xlsx",
+    "pptx",
+  ],
 ) {
   const selected = [...new Set(formats)];
   return db.transaction(async (tx) => {
@@ -703,8 +768,297 @@ export async function getReportExport(
   return { version, key, mediaType: reportMediaTypes[input.format] };
 }
 
+export async function refreshReportFindings(
+  actor: ReportActor,
+  reportId: string,
+) {
+  return db.transaction(async (tx) => {
+    const report = await requireReport(tx, actor.organisationId, reportId);
+    const [version] = await tx
+      .select()
+      .from(reportVersions)
+      .where(
+        and(
+          eq(reportVersions.reportId, report.id),
+          eq(reportVersions.version, report.currentVersion),
+          eq(reportVersions.organisationId, actor.organisationId),
+        ),
+      )
+      .for("update");
+    if (!version)
+      throw new ReportScopeError("Current report version is unavailable");
+    if (
+      version.immutable ||
+      !["draft", "changes_requested"].includes(version.status)
+    )
+      throw new Error("Only draft reports or requested changes can be edited");
+    if (["queued", "running"].includes(version.renderStatus))
+      throw new Error("Wait for report generation to finish before editing");
+    if (!report.templateId)
+      throw new Error("A report template is required to refresh findings");
+    const template = await requireTemplate(
+      tx,
+      actor.organisationId,
+      report.templateId,
+    );
+    const engagement = await requireEngagement(
+      actor.organisationId,
+      report.engagementId,
+    );
+    const fresh = await buildReportModel({
+      organisationId: actor.organisationId,
+      reportId: report.id,
+      reportVersionId: version.id,
+      version: version.version,
+      title: report.title,
+      engagement,
+      template: withKindSections(template, report.kind as ReportKind),
+      kind: report.kind as ReportKind,
+    });
+    const current = version.content as ReportDocumentModel;
+    const content: ReportDocumentModel = {
+      ...current,
+      editRevision: randomUUID(),
+      findings: fresh.findings,
+      severityCounts: fresh.severityCounts,
+      recommendations: fresh.recommendations,
+      riskMatrix: fresh.riskMatrix,
+      assets: fresh.assets,
+      evidence: fresh.evidence,
+      scope: fresh.scope,
+      sections: current.sections.map((section) => {
+        if (
+          section.definition.type === "executive_summary" &&
+          !section.content?.trim()
+        ) {
+          const freshSection = fresh.sections.find(
+            (item) => item.definition.id === section.definition.id,
+          );
+          return freshSection ?? section;
+        }
+        return section;
+      }),
+    };
+    await tx
+      .update(reportVersions)
+      .set({
+        content,
+        renderStatus: "not_requested",
+        renderError: null,
+        renderedAt: null,
+        exportKeys: {},
+        exportChecksums: {},
+        storageKeyPdf: null,
+        storageKeyDocx: null,
+        checksum: null,
+      })
+      .where(eq(reportVersions.id, version.id));
+    await tx
+      .update(reports)
+      .set({ updatedAt: new Date() })
+      .where(eq(reports.id, report.id));
+    await tx.insert(auditEvents).values({
+      organisationId: actor.organisationId,
+      actorId: actor.userId,
+      action: "report.findings_refreshed",
+      targetType: "report",
+      targetId: report.id,
+      metadata: {
+        version: version.version,
+        findings: content.findings.length,
+      },
+    });
+    return content;
+  });
+}
+
 type EngagementRow = typeof engagements.$inferSelect;
 type TemplateRow = typeof reportTemplates.$inferSelect;
+
+function withKindSections(template: TemplateRow, kind: ReportKind): TemplateRow {
+  const sections = sectionsForKind(kind);
+  if (!sections) return template;
+  return {
+    ...template,
+    definition: {
+      ...template.definition,
+      sections,
+    },
+  };
+}
+
+function sectionsForKind(kind: ReportKind): ReportSectionDefinition[] | null {
+  const base = professionalPentestTemplate();
+  if (kind === "assessment") return null;
+  if (kind === "attestation")
+    return [
+      { id: "cover", type: "cover" },
+      {
+        id: "confidentiality",
+        type: "confidentiality",
+        title: "Confidentiality and distribution",
+        content: DEFAULT_CONFIDENTIALITY_NOTICE,
+      },
+      {
+        id: "executive-summary",
+        type: "executive_summary",
+        title: "Letter of attestation",
+        content:
+          "This letter attests that {{organisation.name}} performed {{engagement.name}} ({{engagement.reference}}) for {{client.name}} between {{engagement.startDate}} and {{engagement.endDate}}.",
+      },
+      {
+        id: "methodology",
+        type: "methodology",
+        title: "Assessment methodology",
+        reusableKey: "methodology",
+      },
+      {
+        id: "scope",
+        type: "scope",
+        title: "Project scope",
+      },
+      {
+        id: "contacts",
+        type: "contacts",
+        title: "Contacts",
+      },
+    ];
+  if (kind === "remediation_letter")
+    return [
+      { id: "cover", type: "cover" },
+      {
+        id: "executive-summary",
+        type: "executive_summary",
+        title: "Remediation summary",
+        content:
+          "This letter summarises remediation priorities from {{engagement.name}} for {{client.name}}.",
+      },
+      {
+        id: "chart",
+        type: "chart",
+        title: "Finding severity overview",
+        condition: { field: "hasFindings", operator: "truthy" },
+      },
+      {
+        id: "recommendations",
+        type: "recommendations",
+        title: "Prioritised recommendations",
+      },
+      {
+        id: "findings",
+        type: "findings",
+        title: "Open findings",
+      },
+    ];
+  if (kind === "retest")
+    return [
+      { id: "cover", type: "cover" },
+      {
+        id: "executive-summary",
+        type: "executive_summary",
+        title: "Retest summary",
+        content:
+          "This retest report covers verification of previously reported findings for {{engagement.name}}.",
+      },
+      {
+        id: "chart",
+        type: "chart",
+        title: "Finding severity overview",
+        condition: { field: "hasFindings", operator: "truthy" },
+      },
+      {
+        id: "findings",
+        type: "findings",
+        title: "Retested findings",
+      },
+      {
+        id: "recommendations",
+        type: "recommendations",
+        title: "Remaining recommendations",
+      },
+    ];
+  if (kind === "zero_finding")
+    return [
+      { id: "cover", type: "cover" },
+      {
+        id: "confidentiality",
+        type: "confidentiality",
+        title: "Confidentiality and distribution",
+        content: DEFAULT_CONFIDENTIALITY_NOTICE,
+      },
+      {
+        id: "executive-summary",
+        type: "executive_summary",
+        title: "Executive summary",
+        content:
+          "No confirmed findings were identified during {{engagement.name}} for {{client.name}} within the approved scope and testing window.",
+      },
+      {
+        id: "scope",
+        type: "scope",
+        title: "Project scope",
+      },
+      {
+        id: "methodology",
+        type: "methodology",
+        title: "Assessment methodology",
+        reusableKey: "methodology",
+      },
+      {
+        id: "findings",
+        type: "findings",
+        title: "Technical findings",
+      },
+      {
+        id: "appendix",
+        type: "appendix",
+        title: "Report controls",
+        content:
+          "A zero-finding outcome does not guarantee the absence of vulnerabilities outside the tested scope, methods, or window.",
+      },
+    ];
+  return base.sections;
+}
+
+function defaultExecutiveSummary(
+  severityCounts: Record<string, number>,
+  findings: ReportFindingModel[],
+) {
+  const total = findings.length;
+  if (total === 0)
+    return "No confirmed findings were identified within the approved scope and testing window.";
+  const parts = ["critical", "high", "medium", "low", "informational"]
+    .filter((severity) => (severityCounts[severity] ?? 0) > 0)
+    .map((severity) => `${severityCounts[severity]} ${severity}`);
+  const top = findings
+    .slice(0, 5)
+    .map(
+      (finding) =>
+        `${finding.identifier} (${finding.severity}): ${finding.title}`,
+    )
+    .join("; ");
+  return `This assessment identified ${total} finding${total === 1 ? "" : "s"} (${parts.join(", ")}). Highest priority items: ${top}.`;
+}
+
+function redactFinding(
+  finding: ReportFindingModel,
+  terms: string[],
+): ReportFindingModel {
+  if (!terms.length) return finding;
+  const redact = (value?: string | null) =>
+    value == null ? value : redactReportText(value, terms);
+  return {
+    ...finding,
+    executiveSummary: redact(finding.executiveSummary),
+    technicalDetail: redact(finding.technicalDetail),
+    reproductionSteps: redact(finding.reproductionSteps),
+    proofOfConcept: redact(finding.proofOfConcept),
+    businessImpact: redact(finding.businessImpact),
+    technicalImpact: redact(finding.technicalImpact),
+    remediation: redact(finding.remediation),
+  };
+}
+
 async function buildReportModel(input: {
   organisationId: string;
   reportId: string;
@@ -713,6 +1067,7 @@ async function buildReportModel(input: {
   title: string;
   engagement: EngagementRow;
   template: TemplateRow;
+  kind?: ReportKind;
 }): Promise<ReportDocumentModel> {
   const [
     organisationRows,
@@ -721,6 +1076,8 @@ async function buildReportModel(input: {
     assetRows,
     findingRows,
     evidenceRows,
+    clientMatrixRows,
+    orgMatrixRows,
   ] = await Promise.all([
     db
       .select({
@@ -735,6 +1092,7 @@ async function buildReportModel(input: {
         name: clients.name,
         branding: clients.branding,
         address: clients.address,
+        industry: clients.industry,
       })
       .from(clients)
       .where(
@@ -789,6 +1147,32 @@ async function buildReportModel(input: {
         ),
       )
       .orderBy(asc(evidence.originalFilename)),
+    db
+      .select()
+      .from(riskMatrices)
+      .where(
+        and(
+          eq(riskMatrices.organisationId, input.organisationId),
+          eq(riskMatrices.clientId, input.engagement.clientId),
+          eq(riskMatrices.isDefault, true),
+          isNull(riskMatrices.supersededAt),
+        ),
+      )
+      .orderBy(desc(riskMatrices.version))
+      .limit(1),
+    db
+      .select()
+      .from(riskMatrices)
+      .where(
+        and(
+          eq(riskMatrices.organisationId, input.organisationId),
+          isNull(riskMatrices.clientId),
+          eq(riskMatrices.isDefault, true),
+          isNull(riskMatrices.supersededAt),
+        ),
+      )
+      .orderBy(desc(riskMatrices.version))
+      .limit(1),
   ]);
   const scopeRows = scopeVersionRows[0]
     ? await db
@@ -802,6 +1186,31 @@ async function buildReportModel(input: {
         )
         .orderBy(asc(scopeItems.name))
     : [];
+  const findingIds = findingRows.map((finding) => finding.id);
+  const assetLinks =
+    findingIds.length === 0
+      ? []
+      : await db
+          .select({
+            findingId: findingAssets.findingId,
+            name: assets.name,
+          })
+          .from(findingAssets)
+          .innerJoin(assets, eq(assets.id, findingAssets.assetId))
+          .where(
+            and(
+              eq(findingAssets.organisationId, input.organisationId),
+              inArray(findingAssets.findingId, findingIds),
+            ),
+          );
+  const assetsByFinding = new Map<string, string[]>();
+  for (const link of assetLinks) {
+    const list = assetsByFinding.get(link.findingId) ?? [];
+    list.push(link.name);
+    assetsByFinding.set(link.findingId, list);
+  }
+  const riskMatrix: RiskMatrixDefinition | undefined =
+    clientMatrixRows[0]?.definition ?? orgMatrixRows[0]?.definition;
   const definition = input.template.definition;
   const organisationBranding = organisationRows[0]?.branding ?? {};
   const branding = {
@@ -814,16 +1223,63 @@ async function buildReportModel(input: {
   const whiteLabel = branding.whiteLabel === true;
   const startDate = input.engagement.startDate ?? "";
   const endDate = input.engagement.endDate ?? "";
+  const severityCounts = Object.fromEntries(
+    ["critical", "high", "medium", "low", "informational"].map((severity) => [
+      severity,
+      findingRows.filter((finding) => finding.severity === severity).length,
+    ]),
+  );
+  const redactionTerms = parseRedactionTerms(
+    definition.variables?.redactionTerms,
+  );
+  const mappedFindings = findingRows.map((finding) =>
+    redactFinding(
+      {
+        identifier: finding.identifier,
+        title: finding.title,
+        severity: finding.severity,
+        status: finding.status,
+        executiveSummary: finding.executiveSummary,
+        technicalDetail: finding.technicalDetail,
+        reproductionSteps: finding.reproductionSteps,
+        proofOfConcept: finding.proofOfConcept,
+        businessImpact: finding.businessImpact,
+        technicalImpact: finding.technicalImpact,
+        remediation: finding.remediation,
+        references: finding.references ?? [],
+        mappings: finding.mappings ?? [],
+        affectedAssets: assetsByFinding.get(finding.id) ?? [],
+        cwe: finding.cwe,
+        owasp: finding.owasp,
+        attackTechniques: finding.attackTechniques ?? [],
+        cve: finding.cve,
+        epssScore: finding.epssScore,
+        kev: finding.kev,
+        complianceTags: finding.complianceTags ?? [],
+        cvssVector: finding.cvssVector,
+        cvssScore: finding.cvssScore,
+      },
+      redactionTerms,
+    ),
+  );
   const variables: Record<string, string> = {
     "organisation.name": organisationName,
     "organisation.tagline": branding.tagline ?? "",
     "client.name": clientName,
+    "client.industry": clientRows[0]?.industry ?? "",
     "engagement.name": input.engagement.name,
     "engagement.reference": input.engagement.reference,
+    "engagement.type": input.engagement.type ?? "",
+    "engagement.status": input.engagement.status ?? "",
     "engagement.startDate": startDate,
     "engagement.endDate": endDate,
     "engagement.objectives": input.engagement.objectives ?? "",
     "engagement.constraints": input.engagement.constraints ?? "",
+    "finding.critical": String(severityCounts.critical ?? 0),
+    "finding.high": String(severityCounts.high ?? 0),
+    "finding.medium": String(severityCounts.medium ?? 0),
+    "finding.low": String(severityCounts.low ?? 0),
+    "finding.informational": String(severityCounts.informational ?? 0),
     "report.title": input.title,
     "report.version": String(input.version),
     "report.classification": definition.classification,
@@ -835,32 +1291,33 @@ async function buildReportModel(input: {
       /\{\{\s*([\w.]+)\s*\}\}/g,
       (_match, key: string) => variables[key] ?? "",
     ) ?? "";
-  const severityCounts = Object.fromEntries(
-    ["critical", "high", "medium", "low", "informational"].map((severity) => [
-      severity,
-      findingRows.filter((finding) => finding.severity === severity).length,
-    ]),
-  );
   const context = {
     hasFindings: findingRows.length > 0,
     hasEvidence: evidenceRows.length > 0,
     hasScope: scopeRows.length > 0,
     status: input.engagement.status,
+    hasCritical: (severityCounts.critical ?? 0) > 0,
+    hasHigh: (severityCounts.high ?? 0) > 0,
   };
   const sections = definition.sections
     .filter((section) => conditionMatches(section.condition, context))
-    .map((section) => ({
-      definition: {
-        ...section,
-        title: interpolate(section.title),
-        content: undefined,
-      },
-      content:
+    .map((section) => {
+      let content =
         section.type === "code"
           ? resolveSectionContent(section, definition)
-          : interpolate(resolveSectionContent(section, definition)),
-    }));
-  const recommendations = findingRows
+          : interpolate(resolveSectionContent(section, definition));
+      if (section.type === "executive_summary" && !content?.trim())
+        content = defaultExecutiveSummary(severityCounts, mappedFindings);
+      return {
+        definition: {
+          ...section,
+          title: interpolate(section.title),
+          content: undefined,
+        },
+        content,
+      };
+    });
+  const recommendations = mappedFindings
     .filter((finding) => finding.remediation)
     .map((finding) => ({
       identifier: finding.identifier,
@@ -933,6 +1390,7 @@ async function buildReportModel(input: {
         : []),
     ],
     recommendations,
+    riskMatrix,
     theme: {
       primaryColour:
         branding.primaryColour ?? definition.branding.primaryColour,
@@ -940,6 +1398,7 @@ async function buildReportModel(input: {
       bodyFont: definition.typography.bodyFont,
       headingFont: definition.typography.headingFont,
       bodySize: definition.typography.bodySize,
+      pageSize: definition.typography.pageSize === "A4" ? "A4" : "LETTER",
       customCss: input.template.customCss,
       headerLeft: interpolate(definition.header.left),
       headerRight: interpolate(definition.header.right),
@@ -948,18 +1407,7 @@ async function buildReportModel(input: {
       watermark: interpolate(definition.watermark),
     },
     sections,
-    findings: findingRows.map((finding) => ({
-      identifier: finding.identifier,
-      title: finding.title,
-      severity: finding.severity,
-      status: finding.status,
-      executiveSummary: finding.executiveSummary,
-      technicalDetail: finding.technicalDetail,
-      businessImpact: finding.businessImpact,
-      remediation: finding.remediation,
-      cvssVector: finding.cvssVector,
-      cvssScore: finding.cvssScore,
-    })),
+    findings: mappedFindings,
     scope: scopeRows.map((item) => ({
       name: item.name,
       value: item.value,
@@ -1101,5 +1549,7 @@ export const reportFormats: readonly ReportFormat[] = [
   "html",
   "markdown",
   "json",
+  "xlsx",
+  "pptx",
 ];
 export const reportStatuses = Object.keys(reportWorkflow) as ReportStatus[];

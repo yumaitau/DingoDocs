@@ -1,6 +1,13 @@
 import { and, eq, isNull } from "drizzle-orm";
+import { headers } from "next/headers";
+import { redirect } from "next/navigation";
 import { db } from "@/db";
 import { engagementMembers, organisationMembers } from "@/db/schema";
+import {
+  loadMfaEnforcement,
+  mfaAccessDecision,
+  MfaRequiredError,
+} from "@/lib/auth/mfa-policy";
 import { requireSession } from "@/lib/auth/session";
 import { resolveActiveOrganisation } from "@/lib/auth/active-organisation";
 import { EngagementAccessError } from "./access";
@@ -24,6 +31,28 @@ export class PermissionDeniedError extends Error {
   }
 }
 
+export async function guardOrganisationMfa(input: {
+  userId: string;
+  organisationId: string;
+  role: string;
+}) {
+  const decision = await loadMfaEnforcement(
+    input.userId,
+    input.organisationId,
+    input.role,
+  );
+  if (!decision.blocked) return decision;
+  const headerList = await headers();
+  const effect = mfaAccessDecision({
+    blocked: true,
+    pathname: headerList.get("x-pathname"),
+    serverAction: headerList.has("next-action"),
+  });
+  if (effect === "redirect") redirect("/account/security");
+  if (effect === "deny") throw new MfaRequiredError();
+  return decision;
+}
+
 export async function requireOrganisationContext() {
   const session = await requireSession();
   const organisation = await resolveActiveOrganisation(session.user.id);
@@ -32,6 +61,11 @@ export async function requireOrganisationContext() {
       "data:export",
       "no active organisation membership",
     );
+  await guardOrganisationMfa({
+    userId: session.user.id,
+    organisationId: organisation.organisationId,
+    role: organisation.role,
+  });
   return { userId: session.user.id, ...organisation };
 }
 

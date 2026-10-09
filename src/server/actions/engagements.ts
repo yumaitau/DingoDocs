@@ -11,7 +11,9 @@ import {
   engagements,
 } from "@/db/schema";
 import { and, eq } from "drizzle-orm";
+import { positiveDays, retainUntilFromDays } from "@/lib/clients/policy";
 import { requirePermission } from "@/lib/permissions/require";
+import { readClientReportDefaults } from "@/server/services/client-defaults";
 
 const createSchema = z
   .object({
@@ -44,6 +46,10 @@ export async function createEngagement(formData: FormData) {
 
   const id = uuidv7();
   const reference = `ENG-${new Date().getFullYear()}-${id.slice(0, 6).toUpperCase()}`;
+  const defaults = await readClientReportDefaults(input.clientId);
+  const retainUntil = retainUntilFromDays(
+    positiveDays(defaults.retentionPolicy.engagementDays),
+  );
   await db.transaction(async (tx) => {
     await tx.insert(engagements).values({
       id,
@@ -55,6 +61,7 @@ export async function createEngagement(formData: FormData) {
       status: "scoping",
       startDate: input.startDate,
       endDate: input.endDate,
+      retainUntil,
     });
     await tx.insert(engagementMembers).values({
       organisationId: context.organisationId,

@@ -16,11 +16,14 @@ export class S3StorageProvider implements StorageProvider {
   private readonly bucket: string;
   private readonly client: S3Client;
 
-  constructor(name: "s3" | "minio" | "r2" = "s3") {
+  constructor(
+    name: "s3" | "minio" | "r2" = "s3",
+    options: { region?: string } = {},
+  ) {
     this.name = name;
     this.bucket = required("S3_BUCKET");
     this.client = new S3Client({
-      region: process.env.S3_REGION ?? "us-east-1",
+      region: options.region ?? process.env.S3_REGION ?? "us-east-1",
       endpoint: process.env.S3_ENDPOINT || undefined,
       forcePathStyle:
         name === "minio" || Boolean(process.env.S3_FORCE_PATH_STYLE),
@@ -55,6 +58,7 @@ export class S3StorageProvider implements StorageProvider {
         Body: body,
         ContentType: input.mediaType,
         ContentLength: input.expectedSize,
+        ServerSideEncryption: "AES256",
       }),
     );
     if (input.expectedSize !== undefined && size !== input.expectedSize) {
@@ -66,6 +70,7 @@ export class S3StorageProvider implements StorageProvider {
       size,
       sha256: hash.digest("hex"),
       mediaType: input.mediaType,
+      encryptionMetadata: { sse: "AES256" },
     };
   }
 

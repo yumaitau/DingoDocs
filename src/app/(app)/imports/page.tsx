@@ -8,6 +8,7 @@ import { importAdapterNames } from "@/lib/imports/adapters";
 import { engagementVisibility } from "@/lib/permissions/access";
 import { requireInternalOrganisationContext } from "@/lib/permissions/require";
 import { previewScannerImportAction } from "@/server/actions/data-exchange";
+import { OrganisationImportForm } from "./organisation-import-form";
 
 export default async function ImportsPage() {
   const context = await requireInternalOrganisationContext();
@@ -106,6 +107,19 @@ export default async function ImportsPage() {
             </div>
           )}
         </section>
+        {hasPermission(context.role as Role, "organisation:export") && (
+          <section className="rounded-xl border bg-paper p-5 lg:col-span-2">
+            <h2 className="font-semibold">Organisation import</h2>
+            <p className="mt-1 text-sm text-slate-500">
+              Bundle organisation id must match the active organisation.
+              Evidence binaries are skipped. Existing ids owned by this org are
+              upserted.
+            </p>
+            <div className="mt-5">
+              <OrganisationImportForm />
+            </div>
+          </section>
+        )}
       </div>
     </>
   );

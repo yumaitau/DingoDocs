@@ -10,5 +10,6 @@ export * from "./evidence";
 export * from "./findings";
 export * from "./integrations";
 export * from "./organisations";
+export * from "./platform";
 export * from "./reports";
 export * from "./runbooks";

@@ -15,10 +15,12 @@ import {
   createReportTemplate,
   getReportWorkspace,
   queueReportGeneration,
+  refreshReportFindings,
   reportFormats,
   reportStatuses,
   reviseReportTemplate,
   transitionReport,
+  type ReportKind,
 } from "@/server/services/reports";
 
 const id = z.string().uuid();
@@ -69,13 +71,40 @@ export async function createReportAction(formData: FormData) {
       engagementId: id,
       templateId: id,
       title: z.string().trim().min(2).max(240),
+      kind: z
+        .enum([
+          "assessment",
+          "attestation",
+          "remediation_letter",
+          "retest",
+          "zero_finding",
+        ])
+        .optional(),
     })
     .parse(Object.fromEntries(formData));
   const context = await requirePermission("finding:create", {
     engagementId: input.engagementId,
   });
-  await createReport(context, input);
+  await createReport(context, {
+    ...input,
+    kind: input.kind as ReportKind | undefined,
+  });
   revalidatePath("/reports");
+}
+
+export async function refreshReportFindingsAction(reportId: string) {
+  id.parse(reportId);
+  const organisation = await requireInternalOrganisationContext();
+  const workspace = await getReportWorkspace(
+    organisation.organisationId,
+    reportId,
+  );
+  const context = await requirePermission("finding:create", {
+    engagementId: workspace.report.engagementId,
+  });
+  await refreshReportFindings(context, reportId);
+  revalidatePath(`/reports/${reportId}`);
+  revalidatePath(`/reports/${reportId}/edit`);
 }
 
 export async function transitionReportAction(

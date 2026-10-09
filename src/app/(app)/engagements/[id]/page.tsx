@@ -280,8 +280,8 @@ function Overview({
             />
           </div>
           <p className="mt-4 text-xs leading-5 text-slate-500">
-            Progress is based on completed delivery stages, finding review, and
-            report approval.
+            Progress averages finished tasks, applied runbook steps, and
+            findings at or past publication.
           </p>
         </section>
       </div>

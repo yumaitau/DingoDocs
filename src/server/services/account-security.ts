@@ -10,6 +10,7 @@ import {
 } from "@/db/schema";
 import { sendAuthenticationEmail } from "@/lib/email/send";
 import { canGrantRole, type Role } from "@/lib/permissions/matrix";
+import { emitDomainEvent } from "./domain-events";
 
 export type SecurityActor = { organisationId: string; userId: string };
 
@@ -149,6 +150,14 @@ export async function createSecureInvitation(
     to: email,
     url: `${baseURL}/invite/${token}`,
     purpose: "invitation",
+  });
+  await emitDomainEvent({
+    organisationId: actor.organisationId,
+    actorUserId: actor.userId,
+    eventType: "invitation.sent",
+    title: "Invitation sent",
+    actionUrl: "/team",
+    payload: { invitationId: invitation.id, role: input.role },
   });
   return invitation;
 }

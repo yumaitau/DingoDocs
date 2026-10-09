@@ -33,6 +33,8 @@ import {
   PermissionDeniedError,
   requireActorPermission,
 } from "@/lib/permissions/require";
+import { CommentError, createComment, replyComment } from "./comments";
+import { emitDomainEvent, withClientAudience } from "./domain-events";
 import { createReportRevision } from "./reports";
 
 export type PortalActor = { organisationId: string; userId: string };
@@ -207,8 +209,11 @@ export async function getPortalEngagement(
             targetType: comments.targetType,
             targetId: comments.targetId,
             body: comments.body,
+            parentId: comments.parentId,
+            mentions: comments.mentions,
             authorId: comments.authorId,
             createdAt: comments.createdAt,
+            editedAt: comments.editedAt,
           })
           .from(comments)
           .where(
@@ -272,6 +277,65 @@ export async function getPortalEngagement(
     remediationUpdates: updates,
     retestAttempts: attempts,
     retestNotes: clientRetestNotes,
+    analytics: buildPortalAnalytics(visibleFindings, updates, attempts),
+  };
+}
+
+export function buildPortalAnalytics(
+  findings: Array<{
+    id: string;
+    severity: string;
+    status: string;
+    dueAt: Date | null;
+  }>,
+  remediationUpdates: Array<{
+    findingId: string;
+    status: string;
+    createdAt: Date;
+  }>,
+  retestAttempts: Array<{
+    findingId: string;
+    outcome: string | null;
+    completedAt?: Date | null;
+  }>,
+) {
+  const closed = new Set(["resolved", "closed", "risk_accepted"]);
+  const openFindings = findings.filter((finding) => !closed.has(finding.status));
+  const openBySeverity: Record<string, number> = {};
+  for (const finding of openFindings) {
+    openBySeverity[finding.severity] = (openBySeverity[finding.severity] ?? 0) + 1;
+  }
+  const latestRemediation = new Map<string, string>();
+  const sortedUpdates = [...remediationUpdates].sort(
+    (a, b) => a.createdAt.getTime() - b.createdAt.getTime(),
+  );
+  for (const update of sortedUpdates) {
+    latestRemediation.set(update.findingId, update.status);
+  }
+  const remediationStatusCounts: Record<string, number> = {};
+  for (const finding of findings) {
+    const status = latestRemediation.get(finding.id) ?? "open";
+    remediationStatusCounts[status] = (remediationStatusCounts[status] ?? 0) + 1;
+  }
+  const retestOutcomeCounts: Record<string, number> = {};
+  for (const attempt of retestAttempts) {
+    if (!attempt.outcome) continue;
+    retestOutcomeCounts[attempt.outcome] =
+      (retestOutcomeCounts[attempt.outcome] ?? 0) + 1;
+  }
+  const now = Date.now();
+  const overdueCount = findings.filter(
+    (finding) =>
+      finding.dueAt != null &&
+      finding.dueAt.getTime() < now &&
+      !closed.has(finding.status),
+  ).length;
+  return {
+    openBySeverity,
+    remediationStatusCounts,
+    retestOutcomeCounts,
+    overdueCount,
+    openCount: openFindings.length,
   };
 }
 
@@ -297,10 +361,19 @@ async function requireVisibleFinding(actor: PortalActor, findingId: string) {
 
 export async function addPortalComment(
   actor: PortalActor,
-  input: { targetType: "finding" | "report"; targetId: string; body: string },
+  input: {
+    targetType: "finding" | "report";
+    targetId: string;
+    body: string;
+    parentId?: string;
+  },
 ) {
+  let title = "Comment added";
+  let actionUrl: string | undefined;
   if (input.targetType === "finding") {
-    await requireVisibleFinding(actor, input.targetId);
+    const finding = await requireVisibleFinding(actor, input.targetId);
+    title = `Comment on ${finding.identifier}`;
+    actionUrl = `/engagements/${finding.engagementId}?view=findings`;
   } else {
     const row = await db
       .select({ engagementId: reports.engagementId })
@@ -327,19 +400,33 @@ export async function addPortalComment(
       .limit(1);
     if (!row[0]) throw new PortalNotFoundError();
     await requirePortalEngagement(actor, row[0].engagementId, true);
+    title = "Comment on report";
+    actionUrl = `/reports/${input.targetId}`;
   }
-  const [comment] = await db
-    .insert(comments)
-    .values({
-      organisationId: actor.organisationId,
+  try {
+    if (input.parentId) {
+      return await replyComment(actor, {
+        parentId: input.parentId,
+        body: input.body,
+        targetType: input.targetType,
+        targetId: input.targetId,
+        visibility: "client",
+        title,
+        actionUrl,
+      });
+    }
+    return await createComment(actor, {
       targetType: input.targetType,
       targetId: input.targetId,
-      body: input.body.trim(),
+      body: input.body,
       visibility: "client",
-      authorId: actor.userId,
-    })
-    .returning();
-  return comment;
+      title,
+      actionUrl,
+    });
+  } catch (error) {
+    if (error instanceof CommentError) throw new PortalNotFoundError();
+    throw error;
+  }
 }
 
 export async function submitRemediationUpdate(
@@ -360,7 +447,7 @@ export async function submitRemediationUpdate(
         : input.status === "open"
           ? finding.status
           : "remediation_in_progress";
-  return db.transaction(async (tx) => {
+  const update = await db.transaction(async (tx) => {
     const [update] = await tx
       .insert(remediationUpdates)
       .values({
@@ -419,6 +506,20 @@ export async function submitRemediationUpdate(
     });
     return update;
   });
+  await emitDomainEvent({
+    organisationId: actor.organisationId,
+    actorUserId: actor.userId,
+    eventType: "remediation.submitted",
+    title: `Remediation submitted for ${finding.identifier}`,
+    actionUrl: `/engagements/${finding.engagementId}?view=findings`,
+    payload: {
+      updateId: update.id,
+      findingId: finding.id,
+      identifier: finding.identifier,
+      status: input.status,
+    },
+  });
+  return update;
 }
 
 export async function requestRetest(
@@ -458,6 +559,18 @@ export async function requestRetest(
     targetType: "retest_attempt",
     targetId: attempt!.id,
     metadata: { findingId, findingVersion: finding.version },
+  });
+  await emitDomainEvent({
+    organisationId: actor.organisationId,
+    actorUserId: actor.userId,
+    eventType: "retest.requested",
+    title: `Retest requested for ${finding.identifier}`,
+    actionUrl: `/engagements/${finding.engagementId}?view=findings`,
+    payload: {
+      attemptId: attempt!.id,
+      findingId: finding.id,
+      identifier: finding.identifier,
+    },
   });
   return attempt;
 }
@@ -563,7 +676,7 @@ export async function scheduleRetest(
   actor: PortalActor,
   input: { attemptId: string; assignedTo: string; scheduledFor: Date },
 ) {
-  await requireInternalRetest(actor, input.attemptId);
+  const { finding } = await requireInternalRetest(actor, input.attemptId);
   const [attempt] = await db
     .update(retestAttempts)
     .set({
@@ -578,6 +691,20 @@ export async function scheduleRetest(
       ),
     )
     .returning();
+  if (attempt) {
+    await emitDomainEvent({
+      organisationId: actor.organisationId,
+      actorUserId: actor.userId,
+      eventType: "retest.scheduled",
+      title: `Retest scheduled for ${finding.identifier}`,
+      actionUrl: `/engagements/${finding.engagementId}?view=findings`,
+      payload: {
+        attemptId: attempt.id,
+        findingId: finding.id,
+        identifier: finding.identifier,
+      },
+    });
+  }
   return attempt;
 }
 
@@ -699,6 +826,21 @@ export async function completeRetest(
       },
     });
   });
+  await emitDomainEvent(
+    withClientAudience({
+      organisationId: actor.organisationId,
+      actorUserId: actor.userId,
+      eventType: "retest.completed",
+      title: `Retest completed for ${current.finding.identifier}`,
+      actionUrl: `/engagements/${current.finding.engagementId}?view=findings`,
+      payload: {
+        attemptId: input.attemptId,
+        findingId: current.finding.id,
+        identifier: current.finding.identifier,
+        outcome: input.outcome,
+      },
+    }),
+  );
 
   const published = await db
     .select({ id: reports.id })

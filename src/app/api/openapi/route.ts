@@ -119,6 +119,50 @@ export function GET() {
           },
           { name: "status", in: "query", schema: { type: "string" } },
         ]),
+        post: {
+          summary: "Create a draft report",
+          security: [{ bearerAuth: ["findings:write"] }, { cookieAuth: [] }],
+          responses: {
+            "201": { description: "Report created" },
+            ...standardResponses,
+          },
+        },
+      },
+      "/reports/{id}/transition": {
+        post: {
+          summary: "Transition a report workflow status",
+          security: [{ bearerAuth: ["findings:write"] }, { cookieAuth: [] }],
+          parameters: [
+            {
+              name: "id",
+              in: "path",
+              required: true,
+              schema: { type: "string", format: "uuid" },
+            },
+          ],
+          responses: {
+            "200": { description: "Report transitioned" },
+            ...standardResponses,
+          },
+        },
+      },
+      "/reports/{id}/export": {
+        post: {
+          summary: "Return report export metadata or queue generation",
+          security: [{ bearerAuth: ["reports:read"] }, { cookieAuth: [] }],
+          parameters: [
+            {
+              name: "id",
+              in: "path",
+              required: true,
+              schema: { type: "string", format: "uuid" },
+            },
+          ],
+          responses: {
+            "200": { description: "Export metadata" },
+            ...standardResponses,
+          },
+        },
       },
       "/tasks": {
         get: paginated("tasks", "tasks:read", [
@@ -134,6 +178,147 @@ export function GET() {
             schema: { enum: ["createdAt", "dueAt", "priority"] },
           },
         ]),
+        post: {
+          summary: "Create an engagement task",
+          security: [{ bearerAuth: ["tasks:write"] }, { cookieAuth: [] }],
+          responses: {
+            "201": { description: "Task created" },
+            ...standardResponses,
+          },
+        },
+      },
+      "/templates": {
+        get: {
+          summary: "List finding templates",
+          security: [{ bearerAuth: ["findings:read"] }, { cookieAuth: [] }],
+          parameters: [
+            { name: "q", in: "query", schema: { type: "string" } },
+            {
+              name: "approvedOnly",
+              in: "query",
+              schema: { enum: ["true", "false"] },
+            },
+          ],
+          responses: {
+            "200": { description: "Finding templates" },
+            ...standardResponses,
+          },
+        },
+        post: {
+          summary: "Create a finding template",
+          security: [{ bearerAuth: ["findings:write"] }, { cookieAuth: [] }],
+          responses: {
+            "201": { description: "Template created" },
+            ...standardResponses,
+          },
+        },
+      },
+      "/templates/{id}": {
+        get: {
+          summary: "Get a finding template",
+          security: [{ bearerAuth: ["findings:read"] }, { cookieAuth: [] }],
+          parameters: [
+            {
+              name: "id",
+              in: "path",
+              required: true,
+              schema: { type: "string", format: "uuid" },
+            },
+          ],
+          responses: {
+            "200": { description: "Finding template" },
+            "404": { description: "Template not found" },
+            ...standardResponses,
+          },
+        },
+      },
+      "/findings/{id}/transition": {
+        post: {
+          summary: "Transition a finding workflow status",
+          security: [{ bearerAuth: ["findings:write"] }, { cookieAuth: [] }],
+          parameters: [
+            {
+              name: "id",
+              in: "path",
+              required: true,
+              schema: { type: "string", format: "uuid" },
+            },
+          ],
+          responses: {
+            "200": { description: "Finding transitioned" },
+            ...standardResponses,
+          },
+        },
+      },
+      "/findings/{id}/retest": {
+        post: {
+          summary: "Request a retest for a finding",
+          security: [{ bearerAuth: ["findings:write"] }, { cookieAuth: [] }],
+          parameters: [
+            {
+              name: "id",
+              in: "path",
+              required: true,
+              schema: { type: "string", format: "uuid" },
+            },
+          ],
+          responses: {
+            "201": { description: "Retest requested" },
+            ...standardResponses,
+          },
+        },
+      },
+      "/findings/from-template": {
+        post: {
+          summary: "Create a draft finding from an approved template",
+          security: [{ bearerAuth: ["findings:write"] }, { cookieAuth: [] }],
+          responses: {
+            "201": { description: "Finding created from template" },
+            ...standardResponses,
+          },
+        },
+      },
+      "/engagements/{id}/time": {
+        post: {
+          summary: "Log time against an engagement",
+          security: [{ bearerAuth: ["engagements:write"] }, { cookieAuth: [] }],
+          parameters: [
+            {
+              name: "id",
+              in: "path",
+              required: true,
+              schema: { type: "string", format: "uuid" },
+            },
+          ],
+          responses: {
+            "201": { description: "Time entry created" },
+            ...standardResponses,
+          },
+        },
+      },
+      "/engagements/{id}/runbook-steps/{stepId}": {
+        post: {
+          summary: "Update an engagement runbook step",
+          security: [{ bearerAuth: ["engagements:write"] }, { cookieAuth: [] }],
+          parameters: [
+            {
+              name: "id",
+              in: "path",
+              required: true,
+              schema: { type: "string", format: "uuid" },
+            },
+            {
+              name: "stepId",
+              in: "path",
+              required: true,
+              schema: { type: "string", format: "uuid" },
+            },
+          ],
+          responses: {
+            "200": { description: "Runbook step updated" },
+            ...standardResponses,
+          },
+        },
       },
       "/engagements/{id}": {
         get: {

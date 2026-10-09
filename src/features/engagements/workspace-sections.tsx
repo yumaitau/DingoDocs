@@ -7,6 +7,12 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { StatusPill } from "@/components/ui/status-pill";
+import { AttackChain } from "@/features/engagements/attack-chain";
+import {
+  EngagementAuditSection,
+  EngagementQaSection,
+  EngagementReportsSection,
+} from "@/features/engagements/engagement-panels";
 import { EvidenceSection } from "@/features/evidence/evidence-section";
 import { FindingsSection } from "@/features/findings/findings-section";
 import { formatDateTime } from "@/lib/time-zone";
@@ -68,6 +74,9 @@ const managedSections = new Set([
   "Evidence",
   "Retesting",
   "Client Portal",
+  "Reports",
+  "QA",
+  "Audit History",
 ]);
 
 const field =
@@ -139,6 +148,29 @@ export async function EngagementWorkspaceSection({
         <ClientPortalAdministrationSection
           {...props}
           organisationId={organisationId}
+        />
+      );
+    case "Reports":
+      return (
+        <EngagementReportsSection
+          organisationId={organisationId}
+          engagementId={engagementId}
+          timeZone={timeZone}
+        />
+      );
+    case "QA":
+      return (
+        <EngagementQaSection
+          organisationId={organisationId}
+          engagementId={engagementId}
+        />
+      );
+    case "Audit History":
+      return (
+        <EngagementAuditSection
+          organisationId={organisationId}
+          engagementId={engagementId}
+          timeZone={timeZone}
         />
       );
     default:
@@ -1342,6 +1374,7 @@ function TimelineSection({ workspace, engagementId, timeZone }: SectionProps) {
         description="Timestamped testing activity preserves commands and client visibility state."
         state={`${workspace.timeline.length} events`}
       />
+      <AttackChain timeline={workspace.timeline} />
       <ActionDetails label="Add timeline event" open>
         <form
           action={createTimelineEntryAction.bind(null, engagementId)}
@@ -1364,6 +1397,13 @@ function TimelineSection({ workspace, engagementId, timeZone }: SectionProps) {
           <Field label="Commands" wide>
             <textarea className={area} name="commands" rows={3} />
           </Field>
+          <Field label="ATT&CK IDs" wide>
+            <input
+              className={field}
+              name="attackMappings"
+              placeholder="T1566, T1566.001"
+            />
+          </Field>
           <label className="flex items-center gap-2 text-sm">
             <input type="checkbox" name="clientVisible" />
             Client visible
@@ -1381,6 +1421,15 @@ function TimelineSection({ workspace, engagementId, timeZone }: SectionProps) {
               </time>
             </div>
             <p className="mt-2 text-sm text-slate-600">{entry.description}</p>
+            {entry.attackMappings.length ? (
+              <div className="mt-2 flex flex-wrap gap-2">
+                {entry.attackMappings.map((mapping) => (
+                  <StatusPill key={mapping} tone="neutral">
+                    {mapping}
+                  </StatusPill>
+                ))}
+              </div>
+            ) : null}
             {entry.commands ? (
               <pre className="mt-2 overflow-x-auto rounded-md bg-slate-950 p-3 text-xs text-white">
                 {entry.commands}

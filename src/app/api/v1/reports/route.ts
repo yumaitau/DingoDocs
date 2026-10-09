@@ -3,9 +3,11 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/db";
 import { reports } from "@/db/schema";
-import { apiReadContext } from "@/lib/api/authentication";
+import { apiReadContext, apiWriteContext } from "@/lib/api/authentication";
 import { apiError } from "@/lib/api/responses";
 import { engagementVisibility } from "@/lib/permissions/access";
+import { assertActorEngagementAccess } from "@/lib/permissions/require";
+import { createReport } from "@/server/services/reports";
 
 const querySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
@@ -63,6 +65,59 @@ export async function GET(request: Request) {
       },
       requestId,
     });
+  } catch (error) {
+    return apiError(error, requestId);
+  }
+}
+
+const createSchema = z.object({
+  engagementId: z.string().uuid(),
+  title: z.string().trim().min(2).max(240),
+  templateId: z.string().uuid(),
+  kind: z.string().trim().min(1).max(80).optional(),
+});
+
+export async function POST(request: Request) {
+  const requestId = request.headers.get("x-request-id");
+  try {
+    const input = createSchema.parse(await request.json());
+    const principal = await apiWriteContext(
+      request,
+      "findings:write",
+      "finding:create",
+      { engagementId: input.engagementId },
+    );
+    if (!principal.userId)
+      throw new Error("API key does not have an attributable owner");
+    await assertActorEngagementAccess(principal, input.engagementId);
+    const created = await createReport(
+      { organisationId: principal.organisationId, userId: principal.userId },
+      {
+        engagementId: input.engagementId,
+        templateId: input.templateId,
+        title: input.title,
+      },
+    );
+    if (input.kind && created.report) {
+      const [updated] = await db
+        .update(reports)
+        .set({ kind: input.kind, updatedAt: new Date() })
+        .where(
+          and(
+            eq(reports.id, created.report.id),
+            eq(reports.organisationId, principal.organisationId),
+          ),
+        )
+        .returning();
+      return NextResponse.json(
+        {
+          data: { ...created, report: updated ?? created.report },
+          requestId,
+        },
+        { status: 201 },
+      );
+    }
+    return NextResponse.json({ data: created, requestId }, { status: 201 });
   } catch (error) {
     return apiError(error, requestId);
   }

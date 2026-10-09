@@ -15,6 +15,7 @@ import { formatDateTime } from "@/lib/time-zone";
 import {
   addPortalCommentAction,
   approvePortalReportAction,
+  pushFindingToJiraAction,
   requestRetestAction,
   submitRemediationAction,
   uploadRemediationEvidenceAction,
@@ -112,13 +113,104 @@ export default async function PortalEngagementPage({
         )}
       </section>
 
+      <section className="rounded-xl border bg-paper">
+        <SectionHeading
+          icon={ShieldCheck}
+          title="Engagement analytics"
+          description="Open findings, remediation progress, retest outcomes, and overdue items from shared portal data."
+        />
+        <div className="grid gap-4 border-t p-5 sm:grid-cols-2 lg:grid-cols-4">
+          <AnalyticsStat
+            label="Open findings"
+            value={String(portal.analytics.openCount)}
+          />
+          <AnalyticsStat
+            label="Overdue"
+            value={String(portal.analytics.overdueCount)}
+          />
+          <div>
+            <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
+              Open by severity
+            </p>
+            <ul className="mt-2 space-y-1 text-sm text-slate-700">
+              {Object.keys(portal.analytics.openBySeverity).length ? (
+                Object.entries(portal.analytics.openBySeverity).map(
+                  ([severity, count]) => (
+                    <li key={severity} className="flex justify-between gap-3">
+                      <span className="capitalize">{severity}</span>
+                      <span className="font-medium">{count}</span>
+                    </li>
+                  ),
+                )
+              ) : (
+                <li className="text-slate-500">None open</li>
+              )}
+            </ul>
+          </div>
+          <div>
+            <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
+              Remediation status
+            </p>
+            <ul className="mt-2 space-y-1 text-sm text-slate-700">
+              {Object.entries(portal.analytics.remediationStatusCounts).map(
+                ([status, count]) => (
+                  <li key={status} className="flex justify-between gap-3">
+                    <span className="capitalize">
+                      {status.replaceAll("_", " ")}
+                    </span>
+                    <span className="font-medium">{count}</span>
+                  </li>
+                ),
+              )}
+            </ul>
+          </div>
+        </div>
+        {Object.keys(portal.analytics.retestOutcomeCounts).length > 0 && (
+          <div className="border-t p-5">
+            <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
+              Retest outcomes
+            </p>
+            <ul className="mt-2 flex flex-wrap gap-3 text-sm text-slate-700">
+              {Object.entries(portal.analytics.retestOutcomeCounts).map(
+                ([outcome, count]) => (
+                  <li
+                    key={outcome}
+                    className="rounded-full bg-muted px-3 py-1 capitalize"
+                  >
+                    {outcome.replaceAll("_", " ")} · {count}
+                  </li>
+                ),
+              )}
+            </ul>
+          </div>
+        )}
+      </section>
+
       <section className="space-y-4">
-        <div>
-          <h2 className="text-xl font-semibold">Published findings</h2>
-          <p className="mt-1 text-sm text-slate-600">
-            Track ownership, submit remediation evidence, and request
-            verification.
-          </p>
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <h2 className="text-xl font-semibold">Published findings</h2>
+            <p className="mt-1 text-sm text-slate-600">
+              Track ownership, submit remediation evidence, and request
+              verification.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button asChild size="sm" variant="secondary">
+              <a
+                href={`/api/portal/engagements/${id}/findings/export?format=csv`}
+              >
+                Download CSV
+              </a>
+            </Button>
+            <Button asChild size="sm" variant="secondary">
+              <a
+                href={`/api/portal/engagements/${id}/findings/export?format=xlsx`}
+              >
+                Download XLSX
+              </a>
+            </Button>
+          </div>
         </div>
         {portal.findings.length ? (
           portal.findings.map((finding) => {
@@ -238,12 +330,14 @@ export default async function PortalEngagementPage({
                         </ul>
                       </div>
                     )}
-                    {comments.length > 0 && (
-                      <CommentList
-                        comments={comments}
-                        timeZone={actor.timeZone}
-                      />
-                    )}
+                    <CommentList
+                      comments={comments}
+                      timeZone={actor.timeZone}
+                      engagementId={id}
+                      targetType="finding"
+                      targetId={finding.id}
+                      canWrite={canWrite}
+                    />
                   </div>
                   <div className="space-y-4">
                     {canWrite && (
@@ -372,6 +466,31 @@ export default async function PortalEngagementPage({
                         </Button>
                       </form>
                     )}
+                    {canWrite && (
+                      <form
+                        action={
+                          pushFindingToJiraAction.bind(
+                            null,
+                            id,
+                            finding.id,
+                          ) as (formData: FormData) => Promise<void>
+                        }
+                        className="rounded-lg border p-4"
+                      >
+                        <h4 className="text-sm font-semibold">Jira</h4>
+                        <p className="mt-1 text-xs text-slate-500">
+                          Push this finding to the connected Jira project when
+                          available.
+                        </p>
+                        <Button
+                          type="submit"
+                          variant="secondary"
+                          className="mt-3"
+                        >
+                          Push to Jira
+                        </Button>
+                      </form>
+                    )}
                   </div>
                 </div>
               </article>
@@ -424,24 +543,44 @@ export default async function PortalEngagementPage({
                           <Button type="submit">Approve report</Button>
                         </form>
                       )}
-                    <Button asChild variant="secondary">
-                      <a
-                        href={`/api/portal/reports/${report.versionId}/preview`}
-                        target="_blank"
-                        rel="noreferrer"
-                      >
-                        View report
-                      </a>
-                    </Button>
-                  </div>
-                  {reportComments.length > 0 && (
-                    <div className="mt-4">
-                      <CommentList
-                        comments={reportComments}
-                        timeZone={actor.timeZone}
-                      />
+                    <div className="flex flex-wrap gap-2">
+                      <Button asChild variant="secondary">
+                        <a
+                          href={`/api/portal/reports/${report.versionId}/preview`}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          View report
+                        </a>
+                      </Button>
+                      <Button asChild variant="secondary">
+                        <a
+                          href={`/api/portal/reports/${report.versionId}/export?format=pdf`}
+                        >
+                          PDF
+                        </a>
+                      </Button>
+                      <Button asChild variant="secondary">
+                        <a
+                          href={`/api/portal/reports/${report.versionId}/export?format=docx`}
+                        >
+                          DOCX
+                        </a>
+                      </Button>
                     </div>
-                  )}
+                  </div>
+                  <div className="mt-4">
+                    <CommentList
+                      comments={reportComments}
+                      timeZone={actor.timeZone}
+                      engagementId={id}
+                      targetType="report"
+                      targetId={report.id}
+                      canWrite={
+                        canWrite && report.versionStatus === "client_review"
+                      }
+                    />
+                  </div>
                   {canWrite && report.versionStatus === "client_review" && (
                     <form
                       action={addPortalCommentAction.bind(
@@ -556,26 +695,99 @@ function TextBlock({ title, body }: { title: string; body: string }) {
 function CommentList({
   comments,
   timeZone,
+  engagementId,
+  targetType,
+  targetId,
+  canWrite,
 }: {
-  comments: Array<{ id: string; body: string; createdAt: Date }>;
+  comments: Array<{
+    id: string;
+    body: string;
+    createdAt: Date;
+    parentId?: string | null;
+    editedAt?: Date | null;
+  }>;
   timeZone: string;
+  engagementId: string;
+  targetType: "finding" | "report";
+  targetId: string;
+  canWrite: boolean;
 }) {
+  const roots = comments.filter((comment) => !comment.parentId);
+  const repliesFor = (parentId: string) =>
+    comments.filter((comment) => comment.parentId === parentId);
+  if (!roots.length && !canWrite) return null;
   return (
     <div>
       <h4 className="text-sm font-semibold">Client discussion</h4>
-      <ul className="mt-2 space-y-2">
-        {comments.map((comment) => (
-          <li
-            key={comment.id}
-            className="rounded-lg bg-muted p-3 text-sm text-slate-700"
-          >
-            {comment.body}
-            <p className="mt-1 text-[11px] text-slate-400">
-              {formatDateTime(comment.createdAt, timeZone)}
-            </p>
-          </li>
-        ))}
-      </ul>
+      {roots.length ? (
+        <ul className="mt-2 space-y-2">
+          {roots.map((comment) => (
+            <li
+              key={comment.id}
+              className="rounded-lg bg-muted p-3 text-sm text-slate-700"
+            >
+              {comment.body}
+              <p className="mt-1 text-[11px] text-slate-400">
+                {formatDateTime(comment.createdAt, timeZone)}
+                {comment.editedAt ? " · edited" : ""}
+              </p>
+              {repliesFor(comment.id).length > 0 && (
+                <ul className="mt-2 space-y-2 border-l pl-3">
+                  {repliesFor(comment.id).map((reply) => (
+                    <li
+                      key={reply.id}
+                      className="rounded-md bg-paper p-2 text-sm text-slate-700"
+                    >
+                      {reply.body}
+                      <p className="mt-1 text-[11px] text-slate-400">
+                        {formatDateTime(reply.createdAt, timeZone)}
+                        {reply.editedAt ? " · edited" : ""}
+                      </p>
+                    </li>
+                  ))}
+                </ul>
+              )}
+              {canWrite && (
+                <form
+                  action={addPortalCommentAction.bind(
+                    null,
+                    engagementId,
+                    targetType,
+                    targetId,
+                  )}
+                  className="mt-3 flex gap-2"
+                >
+                  <input type="hidden" name="parentId" value={comment.id} />
+                  <input
+                    name="body"
+                    required
+                    maxLength={5000}
+                    placeholder="Reply"
+                    className="min-h-9 min-w-0 flex-1 rounded-md border bg-paper px-3 text-sm"
+                  />
+                  <Button type="submit" size="sm" variant="secondary">
+                    Reply
+                  </Button>
+                </form>
+              )}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="mt-2 text-xs text-slate-500">No comments yet.</p>
+      )}
+    </div>
+  );
+}
+
+function AnalyticsStat({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <p className="text-xs font-medium uppercase tracking-wide text-slate-500">
+        {label}
+      </p>
+      <p className="mt-2 text-2xl font-semibold tracking-tight">{value}</p>
     </div>
   );
 }

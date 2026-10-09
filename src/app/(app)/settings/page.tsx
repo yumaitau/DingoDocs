@@ -3,7 +3,12 @@ import Link from "next/link";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { db } from "@/db";
-import { evidence, evidenceLegalHolds } from "@/db/schema";
+import {
+  evidence,
+  evidenceLegalHolds,
+  organisations,
+  type SecurityPolicy,
+} from "@/db/schema";
 import { grantableRoles } from "@/lib/permissions/matrix";
 import { requirePermission } from "@/lib/permissions/require";
 import { formatDateTime } from "@/lib/time-zone";
@@ -14,6 +19,7 @@ import {
   releaseLegalHoldAction,
   revokeInvitationAction,
   revokeUserSessionsAction,
+  updateDataRegionAction,
   updateMemberRoleAction,
 } from "@/server/actions/security";
 import {
@@ -21,12 +27,17 @@ import {
   listPendingInvitations,
 } from "@/server/services/account-security";
 import { previewRetention } from "@/server/services/retention";
+import {
+  JiraConnectionForm,
+  ScimTokenForm,
+  SsoPolicyForm,
+} from "./settings-forms";
 
 const field = "h-10 rounded-md border bg-paper px-3 text-sm";
 
 export default async function SettingsPage() {
   const context = await requirePermission("user:manage");
-  const [members, pendingInvitations, retentionPreview, activeHolds] =
+  const [members, pendingInvitations, retentionPreview, activeHolds, org] =
     await Promise.all([
       listOrganisationUsers(context.organisationId),
       listPendingInvitations(context.organisationId),
@@ -46,8 +57,18 @@ export default async function SettingsPage() {
             isNull(evidenceLegalHolds.releasedAt),
           ),
         ),
+      db
+        .select({
+          dataRegion: organisations.dataRegion,
+          securityPolicy: organisations.securityPolicy,
+        })
+        .from(organisations)
+        .where(eq(organisations.id, context.organisationId))
+        .limit(1)
+        .then((rows) => rows[0]),
     ]);
   const bytes = retentionPreview.reduce((sum, item) => sum + item.sizeBytes, 0);
+  const securityPolicy = (org?.securityPolicy ?? {}) as SecurityPolicy;
 
   return (
     <>
@@ -247,8 +268,88 @@ export default async function SettingsPage() {
           </form>
           <p className="mt-3 text-xs text-slate-500">
             Scheduled processing runs daily at 02:15 in the configured cron
-            timezone.
+            timezone. applyRetention soft-deletes expired findings/engagements
+            and archives expired reports in the same job.
           </p>
+        </section>
+
+        <section className="rounded-xl border bg-paper p-5">
+          <h2 className="font-semibold">Data region</h2>
+          <p className="mt-1 text-sm text-slate-500">
+            Label for residency. Optional S3 client region uses this when a
+            caller supplies it; buckets are not moved.
+          </p>
+          <form action={updateDataRegionAction} className="mt-4 flex gap-2">
+            <input
+              className={`${field} min-w-0 flex-1`}
+              name="dataRegion"
+              defaultValue={org?.dataRegion ?? "ap-southeast-2"}
+              required
+            />
+            <Button>Save region</Button>
+          </form>
+        </section>
+
+        <section className="rounded-xl border bg-paper p-5">
+          <h2 className="font-semibold">Jira (one-way)</h2>
+          <p className="mt-1 text-sm text-slate-500">
+            Push findings to Jira issues. Status pull maps known names onto
+            finding workflow transitions.
+          </p>
+          <div className="mt-4">
+            <JiraConnectionForm />
+          </div>
+        </section>
+
+        <section className="rounded-xl border bg-paper p-5">
+          <h2 className="font-semibold">Slack and Teams</h2>
+          <p className="mt-1 text-sm text-slate-500">
+            Engagement events already deliver through notification channels on
+            the Integrations page. Configure Slack/Teams there — not rebuilt
+            here.
+          </p>
+          <Button asChild variant="secondary" className="mt-4">
+            <Link href="/integrations">Open notification channels</Link>
+          </Button>
+        </section>
+
+        <section className="rounded-xl border bg-paper p-5">
+          <h2 className="font-semibold">SCIM 2.0</h2>
+          <p className="mt-1 text-sm text-slate-500">
+            Bearer token is hashed at rest (SHA-256) and shown once. Endpoints
+            live under /api/scim/v2/Users and /api/scim/v2/Groups.
+          </p>
+          <div className="mt-4">
+            <ScimTokenForm />
+          </div>
+        </section>
+
+        <section className="rounded-xl border bg-paper xl:col-span-2 p-5">
+          <h2 className="font-semibold">Per-organisation SSO</h2>
+          <p className="mt-1 text-sm text-slate-500">
+            Deployment-wide env providers (better-auth) still exist. Per-org
+            OIDC is stored for ACS/login redirect wiring. SAML assertions POST
+            to /api/auth/saml/acs with RelayState set to the organisation id.
+          </p>
+          <div className="mt-4">
+            <SsoPolicyForm
+              protocol={securityPolicy.sso?.protocol}
+              issuer={securityPolicy.sso?.issuer}
+              clientId={securityPolicy.sso?.clientId}
+              entryPoint={securityPolicy.sso?.entryPoint}
+              hasCertificate={Boolean(securityPolicy.sso?.certificate)}
+              scimGroupRolesJson={
+                securityPolicy.scimGroupRoles
+                  ? JSON.stringify(securityPolicy.scimGroupRoles, null, 2)
+                  : undefined
+              }
+              groupRolesJson={
+                securityPolicy.sso?.groupRoles
+                  ? JSON.stringify(securityPolicy.sso.groupRoles, null, 2)
+                  : undefined
+              }
+            />
+          </div>
         </section>
       </div>
     </>

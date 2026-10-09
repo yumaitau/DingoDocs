@@ -7,6 +7,7 @@ import {
   engagementVisibility,
   type AccessActor,
 } from "@/lib/permissions/access";
+import { refreshEngagementHealth } from "@/server/services/engagement-health";
 
 export type TenantScope = Readonly<{ organisationId: string }>;
 export type EngagementAccessScope = TenantScope &
@@ -84,5 +85,14 @@ export async function getEngagement(scope: EngagementAccessScope, id: string) {
       ),
     )
     .limit(1);
-  return rows[0] ?? null;
+  const row = rows[0];
+  if (!row) return null;
+  const scored = await refreshEngagementHealth(scope.organisationId, row.id);
+  if (!scored) return row;
+  return {
+    ...row,
+    health: scored.health,
+    progress: scored.progress,
+    updatedAt: scored.updatedAt,
+  };
 }

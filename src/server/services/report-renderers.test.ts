@@ -33,6 +33,12 @@ describe("report renderers", () => {
     expect(Buffer.from(docx.subarray(0, 2)).toString()).toBe("PK");
     expect(pdf.byteLength).toBeGreaterThan(2_000);
     expect(docx.byteLength).toBeGreaterThan(2_000);
+    const xlsx = await renderReport(report, "xlsx");
+    expect(Buffer.from(xlsx.subarray(0, 2)).toString()).toBe("PK");
+    expect(new TextDecoder().decode(xlsx)).toContain("Findings");
+    const pptx = await renderReport(report, "pptx");
+    expect(Buffer.from(pptx.subarray(0, 2)).toString()).toBe("PK");
+    expect(new TextDecoder().decode(pptx)).toContain("high findings");
   });
 
   it("keeps commands literal and embeds screenshots in exam exports", async () => {

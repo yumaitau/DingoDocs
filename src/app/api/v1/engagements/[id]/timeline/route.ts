@@ -14,6 +14,7 @@ const createSchema = z.object({
   occurredAt: z.string().datetime().optional(),
   commands: z.string().trim().min(1).max(20_000).optional(),
   clientVisible: z.boolean().optional(),
+  attackMappings: z.string().trim().max(2_000).optional(),
 });
 
 export async function GET(
@@ -70,6 +71,7 @@ export async function POST(
         description: input.description,
         commands: input.commands,
         clientVisible: input.clientVisible ?? false,
+        attackMappings: input.attackMappings,
         occurredAt: input.occurredAt ? new Date(input.occurredAt) : new Date(),
       },
     );

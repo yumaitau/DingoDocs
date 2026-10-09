@@ -38,7 +38,7 @@ curl -H "Authorization: Bearer $DINGODOCS_API_KEY" \
   https://dingodocs.example/api/mcp
 ```
 
-From the terminal, the server exposes `list_engagements`, `get_engagement`, `list_findings`, `get_finding`, `add_testing_note`, `add_timeline_entry`, `list_notes`, `list_assets`, `create_asset`, `list_scope`, `ingest_scanner_results`, `preview_scanner_import`, `capture_evidence`, `create_finding_write_up`, `update_finding_write_up`, and `attach_evidence_to_finding`. Nuclei, Nmap, Nessus, OpenVAS, ZAP, Burp, CSV, and JSON outputs can land as draft findings plus a testing-journal note while the test is still running.
+From the terminal, the server exposes `list_engagements`, `get_engagement`, `list_findings`, `get_finding`, `add_testing_note`, `add_timeline_entry`, `list_timeline`, `list_notes`, `list_assets`, `create_asset`, `list_scope`, `ingest_scanner_results`, `preview_scanner_import`, `capture_evidence`, `create_finding_write_up`, `update_finding_write_up`, and `attach_evidence_to_finding`. Nuclei, Nmap, Nessus, OpenVAS, ZAP, Burp, CSV, and JSON outputs can land as draft findings plus a testing-journal note while the test is still running.
 
 ## White-label penetration test reports
 
@@ -93,6 +93,10 @@ docker compose up -d
 
 The Compose migration service applies PostgreSQL migrations before the application starts. MinIO is optional and starts with `docker compose --profile s3 up -d`.
 
+## Agent workflow
+
+Agents and scanners create draft findings only; humans review and publish. See [Agent workflows](docs/agent-workflows.md) for the scanner → draft → review → publish path, MCP tool catalogue (including `list_timeline`), and CI severity gates via `pnpm dingodocs gate --file findings.yaml --max-severity high`.
+
 ## Commands
 
 ```text
@@ -104,6 +108,7 @@ pnpm test            Run unit and configured integration tests
 pnpm test:e2e        Run Chromium desktop and mobile Playwright tests
 pnpm test:e2e:lightpanda Run the Lightpanda-compatible Playwright suite
 pnpm mcp             Start the DingoDocs MCP server over stdio
+pnpm dingodocs       Findings YAML export/import and severity gate CLI
 pnpm db:generate     Generate a Drizzle migration
 pnpm db:migrate      Apply migrations
 pnpm db:seed         Load local demonstration data

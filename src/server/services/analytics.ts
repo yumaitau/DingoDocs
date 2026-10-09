@@ -5,7 +5,9 @@ import {
   eq,
   gte,
   inArray,
+  isNotNull,
   isNull,
+  sql,
   type SQL,
 } from "drizzle-orm";
 import { z } from "zod";
@@ -15,7 +17,12 @@ import {
   engagements,
   findings,
   findingStatusEnum,
+  findingTransitions,
+  retestAttempts,
   severityEnum,
+  slaPolicies,
+  timeEntries,
+  users,
 } from "@/db/schema";
 import {
   engagementVisibility,
@@ -25,6 +32,9 @@ import {
 const periods = ["30", "90", "180", "365", "all"] as const;
 const statusGroups = ["open", "remediated", "risk_accepted", "all"] as const;
 const terminalStatuses = new Set(["resolved", "closed"]);
+const openStatuses = findingStatusEnum.enumValues.filter(
+  (value) => !["resolved", "risk_accepted", "closed"].includes(value),
+);
 
 export type RiskAnalyticsFilters = {
   period: (typeof periods)[number];
@@ -100,7 +110,20 @@ export async function getRiskAnalytics(
   const statusCondition = analyticsStatusCondition(filters.status);
   if (statusCondition) conditions.push(statusCondition);
 
-  const [rows, clientOptions] = await Promise.all([
+  const sixMonthsAgo = new Date(now);
+  sixMonthsAgo.setUTCMonth(sixMonthsAgo.getUTCMonth() - 5);
+  sixMonthsAgo.setUTCDate(1);
+  sixMonthsAgo.setUTCHours(0, 0, 0, 0);
+
+  const [
+    rows,
+    clientOptions,
+    transitionRows,
+    retestRows,
+    slaRows,
+    timeRows,
+    monthlyRaw,
+  ] = await Promise.all([
     db
       .select({
         id: findings.id,
@@ -109,6 +132,8 @@ export async function getRiskAnalytics(
         severity: findings.severity,
         status: findings.status,
         dueAt: findings.dueAt,
+        cwe: findings.cwe,
+        publishedAt: findings.publishedAt,
         createdAt: findings.createdAt,
         updatedAt: findings.updatedAt,
         engagementId: engagements.id,
@@ -143,6 +168,92 @@ export async function getRiskAnalytics(
         ),
       )
       .orderBy(asc(clients.name)),
+    db
+      .select({
+        findingId: findingTransitions.findingId,
+        toStatus: findingTransitions.toStatus,
+        createdAt: findingTransitions.createdAt,
+      })
+      .from(findingTransitions)
+      .where(
+        and(
+          eq(findingTransitions.organisationId, organisationId),
+          inArray(findingTransitions.toStatus, ["resolved", "closed"]),
+        ),
+      ),
+    db
+      .select({
+        outcome: retestAttempts.outcome,
+      })
+      .from(retestAttempts)
+      .where(
+        and(
+          eq(retestAttempts.organisationId, organisationId),
+          isNotNull(retestAttempts.outcome),
+        ),
+      ),
+    db
+      .select({
+        severity: slaPolicies.severity,
+        days: slaPolicies.days,
+        clientId: slaPolicies.clientId,
+      })
+      .from(slaPolicies)
+      .where(
+        and(
+          eq(slaPolicies.organisationId, organisationId),
+          isNull(slaPolicies.clientId),
+        ),
+      ),
+    db
+      .select({
+        userId: timeEntries.userId,
+        userName: users.name,
+        engagementId: timeEntries.engagementId,
+        engagementName: engagements.name,
+        hours: timeEntries.hours,
+        billable: timeEntries.billable,
+      })
+      .from(timeEntries)
+      .innerJoin(users, eq(users.id, timeEntries.userId))
+      .innerJoin(
+        engagements,
+        and(
+          eq(engagements.id, timeEntries.engagementId),
+          eq(engagements.organisationId, organisationId),
+        ),
+      )
+      .where(
+        and(
+          eq(timeEntries.organisationId, organisationId),
+          isNull(engagements.deletedAt),
+          engagementVisibility(actor, timeEntries.engagementId),
+        ),
+      ),
+    db
+      .select({
+        month: sql<string>`to_char(date_trunc('month', ${findings.createdAt}), 'YYYY-MM')`,
+        count: sql<number>`count(*)::int`,
+      })
+      .from(findings)
+      .innerJoin(
+        engagements,
+        and(
+          eq(engagements.id, findings.engagementId),
+          eq(engagements.organisationId, organisationId),
+        ),
+      )
+      .where(
+        and(
+          eq(findings.organisationId, organisationId),
+          isNull(findings.deletedAt),
+          isNull(engagements.deletedAt),
+          gte(findings.createdAt, sixMonthsAgo),
+          engagementVisibility(actor, findings.engagementId),
+        ),
+      )
+      .groupBy(sql`date_trunc('month', ${findings.createdAt})`)
+      .orderBy(sql`date_trunc('month', ${findings.createdAt})`),
   ]);
 
   const severityCounts = severityEnum.enumValues.map((severity) => ({
@@ -187,6 +298,14 @@ export async function getRiskAnalytics(
     value: rows.filter((row) => statuses.includes(row.status)).length,
   }));
 
+  const statusCounts = findingStatusEnum.enumValues
+    .map((status) => ({
+      key: status,
+      label: titleCase(status),
+      value: rows.filter((row) => row.status === status).length,
+    }))
+    .filter((row) => row.value > 0);
+
   const ageBands = [
     { key: "under_30", label: "Under 30 days", minimum: 0, maximum: 30 },
     { key: "30_89", label: "30–89 days", minimum: 30, maximum: 90 },
@@ -229,6 +348,122 @@ export async function getRiskAnalytics(
     clientMap.set(row.clientId, value);
   }
 
+  const resolvedAtByFinding = new Map<string, Date>();
+  for (const row of transitionRows) {
+    const existing = resolvedAtByFinding.get(row.findingId);
+    if (!existing || row.createdAt < existing)
+      resolvedAtByFinding.set(row.findingId, row.createdAt);
+  }
+  const remediationDurations: number[] = [];
+  for (const row of rows) {
+    if (!row.publishedAt) continue;
+    if (!terminalStatuses.has(row.status)) continue;
+    const resolvedAt = resolvedAtByFinding.get(row.id);
+    if (!resolvedAt) continue;
+    const days =
+      (resolvedAt.getTime() - row.publishedAt.getTime()) / 86_400_000;
+    if (days >= 0) remediationDurations.push(days);
+  }
+  const meanRemediationDays =
+    remediationDurations.length > 0
+      ? Math.round(
+          (remediationDurations.reduce((sum, value) => sum + value, 0) /
+            remediationDurations.length) *
+            10,
+        ) / 10
+      : null;
+
+  const retestTotal = retestRows.length;
+  const retestPassed = retestRows.filter(
+    (row) => row.outcome === "fixed",
+  ).length;
+  const retestPassRate =
+    retestTotal > 0
+      ? Math.round((retestPassed / retestTotal) * 1000) / 10
+      : null;
+
+  const slaBySeverity = new Map(
+    slaRows.map((row) => [row.severity, row.days] as const),
+  );
+  let slaOverdue = 0;
+  for (const row of rows) {
+    if (!openStatuses.includes(row.status)) continue;
+    const days = slaBySeverity.get(row.severity);
+    if (days === undefined) continue;
+    const anchor = row.publishedAt ?? row.createdAt;
+    const deadline = new Date(anchor.getTime() + days * 86_400_000);
+    if (deadline < now) slaOverdue += 1;
+  }
+
+  const cweCounts = new Map<string, number>();
+  for (const row of rows) {
+    if (!row.cwe) continue;
+    cweCounts.set(row.cwe, (cweCounts.get(row.cwe) ?? 0) + 1);
+  }
+  const topCwes = [...cweCounts.entries()]
+    .map(([cwe, count]) => ({ cwe, count }))
+    .sort((left, right) => right.count - left.count || left.cwe.localeCompare(right.cwe))
+    .slice(0, 10);
+
+  const monthKeys: string[] = [];
+  for (let i = 5; i >= 0; i -= 1) {
+    const cursor = new Date(
+      Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - i, 1),
+    );
+    monthKeys.push(
+      `${cursor.getUTCFullYear()}-${String(cursor.getUTCMonth() + 1).padStart(2, "0")}`,
+    );
+  }
+  const monthlyMap = new Map(
+    monthlyRaw.map((row) => [row.month, Number(row.count)] as const),
+  );
+  const monthlyCounts = monthKeys.map((month) => ({
+    month,
+    label: monthLabel(month),
+    value: monthlyMap.get(month) ?? 0,
+  }));
+
+  const timeByUser = new Map<
+    string,
+    { userId: string; userName: string; hours: number; billable: number; nonBillable: number }
+  >();
+  const timeByEngagement = new Map<
+    string,
+    {
+      engagementId: string;
+      engagementName: string;
+      hours: number;
+      billable: number;
+      nonBillable: number;
+    }
+  >();
+  for (const row of timeRows) {
+    const hours = Number(row.hours);
+    const user = timeByUser.get(row.userId) ?? {
+      userId: row.userId,
+      userName: row.userName,
+      hours: 0,
+      billable: 0,
+      nonBillable: 0,
+    };
+    user.hours += hours;
+    if (row.billable) user.billable += hours;
+    else user.nonBillable += hours;
+    timeByUser.set(row.userId, user);
+
+    const engagement = timeByEngagement.get(row.engagementId) ?? {
+      engagementId: row.engagementId,
+      engagementName: row.engagementName,
+      hours: 0,
+      billable: 0,
+      nonBillable: 0,
+    };
+    engagement.hours += hours;
+    if (row.billable) engagement.billable += hours;
+    else engagement.nonBillable += hours;
+    timeByEngagement.set(row.engagementId, engagement);
+  }
+
   return {
     filters,
     clientOptions,
@@ -241,8 +476,33 @@ export async function getRiskAnalytics(
       remediated: rows.filter((row) => terminalStatuses.has(row.status)).length,
     },
     severityCounts,
+    statusCounts,
     workflowCounts,
     ageBands,
+    monthlyCounts,
+    metrics: {
+      meanRemediationDays,
+      retestPassRate,
+      retestTotal,
+      slaOverdue,
+      topCwes,
+    },
+    timeByUser: [...timeByUser.values()]
+      .map((row) => ({
+        ...row,
+        hours: roundHours(row.hours),
+        billable: roundHours(row.billable),
+        nonBillable: roundHours(row.nonBillable),
+      }))
+      .sort((left, right) => right.hours - left.hours),
+    timeByEngagement: [...timeByEngagement.values()]
+      .map((row) => ({
+        ...row,
+        hours: roundHours(row.hours),
+        billable: roundHours(row.billable),
+        nonBillable: roundHours(row.nonBillable),
+      }))
+      .sort((left, right) => right.hours - left.hours),
     clients: [...clientMap.values()].sort(
       (left, right) =>
         right.highRisk - left.highRisk ||
@@ -274,8 +534,24 @@ function sqlIn(
 function isPastDue(row: { dueAt: Date | null; status: string }, now: Date) {
   return Boolean(
     row.dueAt &&
-    row.dueAt < now &&
-    !terminalStatuses.has(row.status) &&
-    row.status !== "risk_accepted",
+      row.dueAt < now &&
+      !terminalStatuses.has(row.status) &&
+      row.status !== "risk_accepted",
   );
+}
+
+function titleCase(value: string) {
+  return value
+    .replaceAll("_", " ")
+    .replace(/\b\w/g, (letter) => letter.toUpperCase());
+}
+
+function monthLabel(month: string) {
+  const [year, monthNumber] = month.split("-");
+  const date = new Date(Date.UTC(Number(year), Number(monthNumber) - 1, 1));
+  return date.toLocaleString("en-AU", { month: "short", year: "2-digit", timeZone: "UTC" });
+}
+
+function roundHours(value: number) {
+  return Math.round(value * 100) / 100;
 }

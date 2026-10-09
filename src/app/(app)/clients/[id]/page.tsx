@@ -5,6 +5,7 @@ import { clientContacts, engagements } from "@/db/schema";
 import { PageHeader } from "@/components/page-header";
 import { StatusPill } from "@/components/ui/status-pill";
 import { requireInternalOrganisationContext } from "@/lib/permissions/require";
+import { saveClientDefaults } from "@/server/actions/clients";
 import { getClient } from "@/server/repositories/tenant";
 
 export default async function ClientPage({
@@ -16,6 +17,8 @@ export default async function ClientPage({
   const context = await requireInternalOrganisationContext();
   const client = await getClient(context, id);
   if (!client) notFound();
+  const preferences = (client.reportPreferences ?? {}) as Record<string, unknown>;
+  const retention = (client.retentionPolicy ?? {}) as Record<string, unknown>;
   const [contacts, engagementCount] = await Promise.all([
     db
       .select()
@@ -92,8 +95,88 @@ export default async function ClientPage({
             </p>
           )}
         </section>
+        <section className="rounded-xl border bg-paper lg:col-span-2">
+          <div className="border-b p-5">
+            <h2 className="text-base font-semibold">Report and retention defaults</h2>
+            <p className="mt-1 text-xs text-slate-500">
+              Page size and redaction fill empty report templates. Day counts
+              set retain-until on new evidence, findings, reports, and
+              engagements. Finding due dates come from SLA policies.
+            </p>
+          </div>
+          <form action={saveClientDefaults} className="grid gap-4 p-5 sm:grid-cols-2">
+            <input name="clientId" type="hidden" value={client.id} />
+            <label className="text-xs font-medium text-slate-500">
+              Default page size
+              <select
+                className="mt-1 h-10 w-full rounded-md border bg-paper px-3 text-sm"
+                defaultValue={
+                  preferences.pageSize === "A4" || preferences.pageSize === "LETTER"
+                    ? preferences.pageSize
+                    : ""
+                }
+                name="pageSize"
+              >
+                <option value="">Template default</option>
+                <option value="A4">A4</option>
+                <option value="LETTER">Letter</option>
+              </select>
+            </label>
+            <label className="text-xs font-medium text-slate-500 sm:col-span-2">
+              Redaction terms
+              <textarea
+                className="mt-1 min-h-20 w-full rounded-md border bg-paper px-3 py-2 text-sm"
+                defaultValue={
+                  typeof preferences.redactionTerms === "string"
+                    ? preferences.redactionTerms
+                    : ""
+                }
+                name="redactionTerms"
+                placeholder="One phrase per line"
+              />
+            </label>
+            <DayField label="Evidence days" name="evidenceDays" value={retention.evidenceDays} />
+            <DayField label="Finding days" name="findingDays" value={retention.findingDays} />
+            <DayField label="Report days" name="reportDays" value={retention.reportDays} />
+            <DayField
+              label="Engagement days"
+              name="engagementDays"
+              value={retention.engagementDays}
+            />
+            <div className="sm:col-span-2">
+              <button
+                className="h-10 rounded-md bg-[var(--harbour-700)] px-4 text-sm font-medium text-white"
+                type="submit"
+              >
+                Save defaults
+              </button>
+            </div>
+          </form>
+        </section>
       </div>
     </>
+  );
+}
+function DayField({
+  label,
+  name,
+  value,
+}: {
+  label: string;
+  name: string;
+  value: unknown;
+}) {
+  return (
+    <label className="text-xs font-medium text-slate-500">
+      {label}
+      <input
+        className="mt-1 h-10 w-full rounded-md border bg-paper px-3 text-sm"
+        defaultValue={typeof value === "number" ? value : ""}
+        min={1}
+        name={name}
+        type="number"
+      />
+    </label>
   );
 }
 function Item({ label, value }: { label: string; value: string }) {

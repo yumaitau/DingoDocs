@@ -3,9 +3,12 @@ import { db } from "@/db";
 import {
   auditEvents,
   backgroundJobs,
+  engagements,
   evidence,
   evidenceLegalHolds,
+  findings,
   organisations,
+  reports,
 } from "@/db/schema";
 import { storage, type StorageProvider } from "@/lib/storage";
 
@@ -171,6 +174,71 @@ export async function purgeExpiredEvidence(
     if (didDestroy) destroyed += 1;
   }
   return { eligible: candidates.length, destroyed };
+}
+
+export async function applyRetention(
+  organisationId: string,
+  asOf = new Date(),
+) {
+  const cutoff = asOf;
+  const softDeleted = { findings: 0, reports: 0, engagements: 0 };
+
+  const expiredFindings = await db
+    .update(findings)
+    .set({ deletedAt: cutoff, updatedAt: cutoff })
+    .where(
+      and(
+        eq(findings.organisationId, organisationId),
+        isNull(findings.deletedAt),
+        lte(findings.retainUntil, cutoff),
+      ),
+    )
+    .returning({ id: findings.id });
+  softDeleted.findings = expiredFindings.length;
+
+  // reports has no deletedAt; archive is the soft-delete stand-in.
+  const expiredReports = await db
+    .update(reports)
+    .set({ status: "archived", updatedAt: cutoff })
+    .where(
+      and(
+        eq(reports.organisationId, organisationId),
+        lte(reports.retainUntil, cutoff),
+        sql`${reports.status} <> 'archived'`,
+      ),
+    )
+    .returning({ id: reports.id });
+  softDeleted.reports = expiredReports.length;
+
+  const expiredEngagements = await db
+    .update(engagements)
+    .set({ deletedAt: cutoff, updatedAt: cutoff })
+    .where(
+      and(
+        eq(engagements.organisationId, organisationId),
+        isNull(engagements.deletedAt),
+        lte(engagements.retainUntil, cutoff),
+      ),
+    )
+    .returning({ id: engagements.id });
+  softDeleted.engagements = expiredEngagements.length;
+
+  if (
+    softDeleted.findings ||
+    softDeleted.reports ||
+    softDeleted.engagements
+  ) {
+    await db.insert(auditEvents).values({
+      organisationId,
+      action: "retention.apply",
+      targetType: "organisation",
+      targetId: organisationId,
+      metadata: { asOf: cutoff.toISOString(), softDeleted },
+    });
+  }
+
+  // Evidence purge already skips active legal holds via purgeExpiredEvidence.
+  return softDeleted;
 }
 
 export async function enqueueScheduledRetention(asOf = new Date()) {

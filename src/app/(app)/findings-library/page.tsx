@@ -18,11 +18,23 @@ import { searchFindingTemplates } from "@/server/services/findings";
 export default async function FindingsLibraryPage({
   searchParams,
 }: {
-  searchParams: Promise<{ q?: string }>;
+  searchParams: Promise<{
+    q?: string;
+    severity?: string;
+    tag?: string;
+    framework?: string;
+    assessmentType?: string;
+  }>;
 }) {
   const context = await requireOrganisationContext();
-  const { q = "" } = await searchParams;
-  const [rows, clientRows, matrices] = await Promise.all([
+  const {
+    q = "",
+    severity = "",
+    tag = "",
+    framework = "",
+    assessmentType = "",
+  } = await searchParams;
+  const [matched, clientRows, matrices] = await Promise.all([
     searchFindingTemplates(context.organisationId, q),
     db
       .select({ id: clients.id, name: clients.name })
@@ -39,6 +51,35 @@ export default async function FindingsLibraryPage({
       .where(eq(riskMatrices.organisationId, context.organisationId))
       .orderBy(desc(riskMatrices.createdAt)),
   ]);
+  const severityFilter = severity.trim().toLowerCase();
+  const tagFilter = tag.trim().toLowerCase();
+  const frameworkFilter = framework.trim().toLowerCase();
+  const assessmentTypeFilter = assessmentType.trim().toLowerCase();
+  const rows = matched.filter((row) => {
+    if (severityFilter && row.severity !== severityFilter) return false;
+    if (
+      tagFilter &&
+      !row.tags.some((item) => item.toLowerCase().includes(tagFilter))
+    )
+      return false;
+    if (
+      frameworkFilter &&
+      !row.mappings.some((mapping) =>
+        `${mapping.framework} ${mapping.reference}`
+          .toLowerCase()
+          .includes(frameworkFilter),
+      )
+    )
+      return false;
+    if (
+      assessmentTypeFilter &&
+      !row.assessmentTypes.some((item) =>
+        item.toLowerCase().includes(assessmentTypeFilter),
+      )
+    )
+      return false;
+    return true;
+  });
 
   return (
     <>
@@ -118,8 +159,11 @@ export default async function FindingsLibraryPage({
         </div>
 
         <section>
-          <form className="mb-4 flex max-w-xl items-end gap-2" method="get">
-            <label className="relative block w-full">
+          <form
+            className="mb-4 grid max-w-4xl gap-2 sm:grid-cols-2 lg:grid-cols-3"
+            method="get"
+          >
+            <label className="relative block sm:col-span-2 lg:col-span-3">
               <Search className="absolute bottom-3 left-3 size-4 text-slate-400" />
               <span className="text-sm font-medium">Search templates</span>
               <input
@@ -129,9 +173,53 @@ export default async function FindingsLibraryPage({
                 className={`${field} pl-9`}
               />
             </label>
-            <Button type="submit" variant="secondary">
-              Search
-            </Button>
+            <label className="text-sm font-medium">
+              Severity
+              <select
+                name="severity"
+                defaultValue={severity}
+                className={field}
+              >
+                <option value="">Any</option>
+                {severities.map((item) => (
+                  <option key={item} value={item}>
+                    {item}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="text-sm font-medium">
+              Tag
+              <input
+                name="tag"
+                defaultValue={tag}
+                placeholder="e.g. api, locale:en"
+                className={field}
+              />
+            </label>
+            <label className="text-sm font-medium">
+              Framework
+              <input
+                name="framework"
+                defaultValue={framework}
+                placeholder="e.g. OWASP, CWE-89"
+                className={field}
+              />
+            </label>
+            <label className="text-sm font-medium sm:col-span-2">
+              Assessment type
+              <input
+                name="assessmentType"
+                defaultValue={assessmentType}
+                placeholder="e.g. API Assessment"
+                className={field}
+              />
+            </label>
+            <div className="flex items-end">
+              <Button type="submit" variant="secondary">
+                Search
+              </Button>
+            </div>
           </form>
           <div className="space-y-3">
             {rows.map((row) => (

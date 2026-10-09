@@ -49,12 +49,67 @@ export async function addPortalCommentAction(
   formData: FormData,
 ) {
   const actor = await requireClientActor();
+  const parentRaw = formData.get("parentId");
+  const parentId =
+    typeof parentRaw === "string" && parentRaw.trim()
+      ? id.parse(parentRaw)
+      : undefined;
   await addPortalComment(actor, {
     targetType,
     targetId: id.parse(targetId),
     body: text.parse(formData.get("body")),
+    parentId,
   });
   revalidatePath(`/portal/engagements/${id.parse(engagementId)}`);
+}
+
+export async function pushFindingToJiraAction(
+  engagementId: string,
+  findingId: string,
+  _formData?: FormData,
+): Promise<"Jira is not connected" | undefined> {
+  const actor = await requireClientActor();
+  const parsedEngagementId = id.parse(engagementId);
+  const parsedFindingId = id.parse(findingId);
+  await requirePortalEngagement(actor, parsedEngagementId, true);
+  const portal = await getPortalEngagement(actor, parsedEngagementId);
+  if (!portal.findings.some((finding) => finding.id === parsedFindingId)) {
+    throw new Error("The requested portal resource was not found");
+  }
+  try {
+    const specifier = "@/server/services/jira";
+    const jira = (await import(specifier)) as {
+      pushFindingToJira?: (
+        actor: { organisationId: string; userId: string },
+        input: { findingId: string },
+      ) => Promise<unknown>;
+    };
+    if (typeof jira.pushFindingToJira !== "function") {
+      return "Jira is not connected";
+    }
+    await jira.pushFindingToJira(actor, { findingId: parsedFindingId });
+    revalidatePath(`/portal/engagements/${parsedEngagementId}`);
+    return undefined;
+  } catch (error) {
+    if (isModuleMissing(error)) return "Jira is not connected";
+    if (error instanceof Error && /not connected/i.test(error.message)) {
+      return "Jira is not connected";
+    }
+    throw error;
+  }
+}
+
+function isModuleMissing(error: unknown) {
+  if (!(error instanceof Error)) return false;
+  const code = (error as NodeJS.ErrnoException).code;
+  return (
+    code === "ERR_MODULE_NOT_FOUND" ||
+    code === "MODULE_NOT_FOUND" ||
+    /cannot find module/i.test(error.message) ||
+    /module not found/i.test(error.message) ||
+    /failed to resolve module/i.test(error.message) ||
+    /cannot find package/i.test(error.message)
+  );
 }
 
 export async function submitRemediationAction(

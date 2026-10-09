@@ -6,7 +6,7 @@ services:
       context: .
       dockerfile: Dockerfile
     environment:
-      DATABASE_URL: postgres://dingodocs:dingodocs@postgres:5432/dingodocs
+      DATABASE_URL: postgres://dingodocs:${POSTGRES_PASSWORD:-dingodocs}@postgres:5432/dingodocs
       BETTER_AUTH_SECRET: ${BETTER_AUTH_SECRET:?Set BETTER_AUTH_SECRET in .env}
       BETTER_AUTH_URL: ${BETTER_AUTH_URL:-http://localhost:3000}
       INTEGRATION_ENCRYPTION_KEY: ${INTEGRATION_ENCRYPTION_KEY:?Set INTEGRATION_ENCRYPTION_KEY in .env}
@@ -32,7 +32,7 @@ services:
     build: *app-build
     command: ["node", "dist/migrate.cjs"]
     environment:
-      DATABASE_URL: postgres://dingodocs:dingodocs@postgres:5432/dingodocs
+      DATABASE_URL: postgres://dingodocs:${POSTGRES_PASSWORD:-dingodocs}@postgres:5432/dingodocs
     depends_on:
       postgres:
         condition: service_healthy
@@ -43,7 +43,8 @@ services:
     environment:
       POSTGRES_DB: dingodocs
       POSTGRES_USER: dingodocs
-      POSTGRES_PASSWORD: dingodocs
+      # Production must set POSTGRES_PASSWORD.
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-dingodocs}
     ports:
       - "127.0.0.1:5432:5432"
     volumes:

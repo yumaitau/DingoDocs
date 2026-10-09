@@ -1,6 +1,10 @@
 import { headers } from "next/headers";
 import { db } from "@/db";
 import { auditEvents } from "@/db/schema";
+import {
+  assertPublicHttpUrl,
+  outboundFetchInit,
+} from "@/lib/security/outbound-url";
 
 type AuditInput = {
   organisationId?: string | null;
@@ -32,9 +36,29 @@ export function redactAuditValues(
   );
 }
 
+async function forwardToSiem(event: Record<string, unknown>) {
+  const webhook = process.env.SIEM_WEBHOOK_URL;
+  if (!webhook) return;
+  try {
+    const url = await assertPublicHttpUrl(webhook);
+    await fetch(url, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "user-agent": "DingoDocs-SIEM/1.0",
+      },
+      body: JSON.stringify(event),
+      signal: AbortSignal.timeout(3_000),
+      ...outboundFetchInit,
+    });
+  } catch {
+    // Swallow SIEM delivery errors; audit insert already succeeded.
+  }
+}
+
 export async function recordAudit(input: AuditInput) {
   const requestHeaders = await headers();
-  await db.insert(auditEvents).values({
+  const values = {
     organisationId: input.organisationId,
     actorId: input.actorId,
     action: input.action,
@@ -46,5 +70,10 @@ export async function recordAudit(input: AuditInput) {
     metadata: redactAuditValues(input.metadata) ?? {},
     previousValues: redactAuditValues(input.previousValues),
     newValues: redactAuditValues(input.newValues),
+  };
+  await db.insert(auditEvents).values(values);
+  await forwardToSiem({
+    ...values,
+    emittedAt: new Date().toISOString(),
   });
 }

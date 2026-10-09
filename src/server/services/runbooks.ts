@@ -11,6 +11,7 @@ import {
   runbookTemplateSteps,
   tasks,
 } from "@/db/schema";
+import { refreshEngagementHealth } from "@/server/services/engagement-health";
 
 export type RunbookActor = { organisationId: string; userId: string };
 export type RunbookStepStatus =
@@ -164,7 +165,7 @@ export async function applyRunbookTemplate(
   actor: RunbookActor,
   input: { engagementId: string; templateId: string },
 ) {
-  return db.transaction(async (tx) => {
+  const applied = await db.transaction(async (tx) => {
     const [engagement] = await tx
       .select({ id: engagements.id })
       .from(engagements)
@@ -261,6 +262,8 @@ export async function applyRunbookTemplate(
     });
     return runbook;
   });
+  await refreshEngagementHealth(actor.organisationId, input.engagementId);
+  return applied;
 }
 
 export async function updateEngagementRunbookStep(
@@ -275,7 +278,7 @@ export async function updateEngagementRunbookStep(
     taskId?: string | null;
   },
 ) {
-  return db.transaction(async (tx) => {
+  const step = await db.transaction(async (tx) => {
     const [current] = await tx
       .select({
         step: engagementRunbookSteps,
@@ -389,6 +392,8 @@ export async function updateEngagementRunbookStep(
     });
     return updated;
   });
+  await refreshEngagementHealth(actor.organisationId, input.engagementId);
+  return step;
 }
 
 export async function listEngagementRunbooks(

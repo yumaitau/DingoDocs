@@ -78,4 +78,4 @@ Remediation updates and retest requests are append-only. A retest request snapsh
 
 ## Background work
 
-The application starts the job runner only from `instrumentation.ts` in the Node.js runtime. PostgreSQL rows are claimed with `FOR UPDATE SKIP LOCKED`. Failed jobs use exponential backoff and reach `dead_letter` after their configured attempt limit. Report rendering, large imports, evidence processing, notification delivery, and retention work register handlers against this mechanism.
+The application starts the job runner only from `instrumentation.ts` in the Node.js runtime. PostgreSQL rows are claimed with `FOR UPDATE SKIP LOCKED`. Failed jobs use exponential backoff and reach `dead_letter` after their configured attempt limit. Report rendering, evidence processing, notification delivery, and retention work register handlers against this mechanism. Scanner imports run inline in the request, with the existing cap of 10,000 records.

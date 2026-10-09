@@ -27,6 +27,7 @@ export default function proxy(request: NextRequest) {
   const requestId = request.headers.get("x-request-id") ?? crypto.randomUUID();
   const forwardedHeaders = new Headers(request.headers);
   forwardedHeaders.set("x-request-id", requestId);
+  forwardedHeaders.set("x-pathname", pathname);
   const response = NextResponse.next({
     request: { headers: forwardedHeaders },
   });

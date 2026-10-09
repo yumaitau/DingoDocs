@@ -213,6 +213,7 @@ export const mcpTools: McpToolDefinition[] = [
       occurredAt: z.string().datetime().optional(),
       commands: z.string().trim().min(1).max(20_000).optional(),
       clientVisible: z.boolean().optional(),
+      attackMappings: z.string().trim().max(2_000).optional(),
     }),
     call: (api, input) =>
       api.addTimelineEntry(
@@ -223,6 +224,7 @@ export const mcpTools: McpToolDefinition[] = [
           occurredAt?: string;
           commands?: string;
           clientVisible?: boolean;
+          attackMappings?: string;
         },
       ),
   },
@@ -407,6 +409,308 @@ export const mcpTools: McpToolDefinition[] = [
       };
       return api.linkEvidence(findingId, evidenceIds);
     },
+  },
+  {
+    name: "list_templates",
+    title: "List finding templates",
+    description:
+      "List finding templates in the organisation library. Read-only; does not create or approve templates.",
+    requiredScopes: ["findings:read"],
+    annotations: { readOnlyHint: true, openWorldHint: false },
+    inputSchema: z.object({
+      q: z.string().trim().max(200).optional(),
+      approvedOnly: z.boolean().optional(),
+    }),
+    call: (api, input) =>
+      api.listTemplates(
+        input as { q?: string; approvedOnly?: boolean },
+      ),
+  },
+  {
+    name: "get_template",
+    title: "Get a finding template",
+    description: "Read one finding template by id from the organisation library.",
+    requiredScopes: ["findings:read"],
+    annotations: { readOnlyHint: true, openWorldHint: false },
+    inputSchema: z.object({ templateId: z.string().uuid() }),
+    call: (api, input) => api.getTemplate(String(input.templateId)),
+  },
+  {
+    name: "create_finding_from_template",
+    title: "Create a finding from a template",
+    description:
+      "Create a draft finding from an approved template. Does not publish or approve the finding.",
+    requiredScopes: ["findings:write"],
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      openWorldHint: false,
+    },
+    inputSchema: z.object({
+      engagementId: z.string().uuid(),
+      templateId: z.string().uuid(),
+      identifier: z.string().trim().min(1).max(80),
+      assetIds: z.array(z.string().uuid()).max(100).optional(),
+    }),
+    call: (api, input) =>
+      api.createFindingFromTemplate(
+        input as {
+          engagementId: string;
+          templateId: string;
+          identifier: string;
+          assetIds?: string[];
+        },
+      ),
+  },
+  {
+    name: "create_report",
+    title: "Create a report",
+    description:
+      "Create a draft report for an engagement from a report template. Does not publish or approve the report.",
+    requiredScopes: ["findings:write"],
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      openWorldHint: false,
+    },
+    inputSchema: z.object({
+      engagementId: z.string().uuid(),
+      title: z.string().trim().min(2).max(240),
+      templateId: z.string().uuid(),
+      kind: z.string().trim().min(1).max(80).optional(),
+    }),
+    call: (api, input) =>
+      api.createReport(
+        input as {
+          engagementId: string;
+          title: string;
+          templateId: string;
+          kind?: string;
+        },
+      ),
+  },
+  {
+    name: "transition_report",
+    title: "Transition a report",
+    description:
+      "Move a report to another workflow status. Publishing and archival require report:publish; review gates require finding:approve.",
+    requiredScopes: ["findings:write"],
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      openWorldHint: false,
+    },
+    inputSchema: z.object({
+      reportId: z.string().uuid(),
+      status: z.enum([
+        "draft",
+        "internal_review",
+        "changes_requested",
+        "qa_approved",
+        "client_review",
+        "approved",
+        "published",
+        "superseded",
+        "archived",
+      ]),
+    }),
+    call: (api, input) =>
+      api.transitionReport(String(input.reportId), String(input.status)),
+  },
+  {
+    name: "export_report",
+    title: "Export a report",
+    description:
+      "Return export metadata for a report format (key, media type, download path). Queues generation when the export is missing. Does not return file bytes.",
+    requiredScopes: ["reports:read"],
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      openWorldHint: false,
+    },
+    inputSchema: z.object({
+      reportId: z.string().uuid(),
+      format: z.enum(["pdf", "docx", "html", "markdown", "json"]),
+    }),
+    call: (api, input) =>
+      api.exportReport(String(input.reportId), String(input.format)),
+  },
+  {
+    name: "list_tasks",
+    title: "List tasks",
+    description: "List engagement tasks, optionally limited to one engagement.",
+    requiredScopes: ["tasks:read"],
+    annotations: { readOnlyHint: true, openWorldHint: false },
+    inputSchema: z.object({ engagementId: z.string().uuid().optional() }),
+    call: (api, input) =>
+      api.listTasks(
+        typeof input.engagementId === "string" ? input.engagementId : undefined,
+      ),
+  },
+  {
+    name: "create_task",
+    title: "Create a task",
+    description:
+      "Create an engagement task for tracking work. Does not complete or cancel existing tasks.",
+    requiredScopes: ["tasks:write"],
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      openWorldHint: false,
+    },
+    inputSchema: z.object({
+      engagementId: z.string().uuid(),
+      title: z.string().trim().min(2).max(200),
+      description: z.string().trim().max(10_000).optional(),
+      priority: z.enum(["low", "normal", "high", "urgent"]).optional(),
+      assigneeId: z.string().uuid().optional(),
+      dueAt: z.string().datetime().optional(),
+      assetIds: z.array(z.string().uuid()).max(100).optional(),
+    }),
+    call: (api, input) =>
+      api.createTask(
+        input as {
+          engagementId: string;
+          title: string;
+          description?: string;
+          priority?: "low" | "normal" | "high" | "urgent";
+          assigneeId?: string;
+          dueAt?: string;
+          assetIds?: string[];
+        },
+      ),
+  },
+  {
+    name: "transition_finding",
+    title: "Transition a finding",
+    description:
+      "Move a finding to another workflow status with an optional reason. Approval and publish statuses require finding:approve. Does not delete findings.",
+    requiredScopes: ["findings:write"],
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      openWorldHint: false,
+    },
+    inputSchema: z.object({
+      findingId: z.string().uuid(),
+      status: z.enum([
+        "draft",
+        "in_progress",
+        "ready_for_review",
+        "changes_requested",
+        "peer_reviewed",
+        "qa_approved",
+        "published",
+        "remediation_in_progress",
+        "ready_for_retest",
+        "retested",
+        "resolved",
+        "risk_accepted",
+        "closed",
+      ]),
+      reason: z.string().trim().max(4_000).optional(),
+    }),
+    call: (api, input) => {
+      const { findingId, status, reason } = input as {
+        findingId: string;
+        status: string;
+        reason?: string;
+      };
+      return api.transitionFinding(findingId, { status, reason });
+    },
+  },
+  {
+    name: "request_retest",
+    title: "Request a retest",
+    description:
+      "Open a retest attempt against a finding with optional notes. Does not complete or schedule the retest.",
+    requiredScopes: ["findings:write"],
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      openWorldHint: false,
+    },
+    inputSchema: z.object({
+      findingId: z.string().uuid(),
+      notes: z.string().trim().max(10_000).optional(),
+    }),
+    call: (api, input) =>
+      api.requestRetest(
+        String(input.findingId),
+        typeof input.notes === "string" ? input.notes : undefined,
+      ),
+  },
+  {
+    name: "complete_runbook_step",
+    title: "Complete a runbook step",
+    description:
+      "Update an engagement runbook step status (defaults to completed) with optional notes and links. Does not delete runbooks.",
+    requiredScopes: ["engagements:write"],
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      openWorldHint: false,
+    },
+    inputSchema: z.object({
+      engagementId: z.string().uuid(),
+      stepId: z.string().uuid(),
+      status: z
+        .enum([
+          "not_started",
+          "in_progress",
+          "completed",
+          "blocked",
+          "not_applicable",
+        ])
+        .optional(),
+      notes: z.string().trim().max(10_000).optional(),
+      findingId: z.string().uuid().nullable().optional(),
+      evidenceId: z.string().uuid().nullable().optional(),
+      taskId: z.string().uuid().nullable().optional(),
+    }),
+    call: (api, input) =>
+      api.completeRunbookStep(
+        input as {
+          engagementId: string;
+          stepId: string;
+          status?: string;
+          notes?: string;
+          findingId?: string | null;
+          evidenceId?: string | null;
+          taskId?: string | null;
+        },
+      ),
+  },
+  {
+    name: "log_time",
+    title: "Log time",
+    description:
+      "Record a billable or non-billable time entry against an engagement. Does not edit or delete prior entries.",
+    requiredScopes: ["engagements:write"],
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      openWorldHint: false,
+    },
+    inputSchema: z.object({
+      engagementId: z.string().uuid(),
+      category: z.string().trim().min(2).max(80),
+      hours: z.string().regex(/^\d{1,2}(\.\d{1,2})?$/),
+      description: z.string().trim().max(10_000).optional(),
+      startedAt: z.string().datetime(),
+      billable: z.boolean().optional(),
+    }),
+    call: (api, input) =>
+      api.logTime(
+        input as {
+          engagementId: string;
+          category: string;
+          hours: string;
+          description?: string;
+          startedAt: string;
+          billable?: boolean;
+        },
+      ),
   },
 ];
 

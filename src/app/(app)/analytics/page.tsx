@@ -6,11 +6,22 @@ import {
   Target,
 } from "lucide-react";
 import Link from "next/link";
+import {
+  AnalyticsCharts,
+  TimeRollupTable,
+} from "@/components/analytics-charts";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { StatusPill } from "@/components/ui/status-pill";
+import { severityEnum } from "@/db/schema";
 import { requireInternalOrganisationContext } from "@/lib/permissions/require";
 import { formatDate } from "@/lib/utils";
+import {
+  listSlaPolicies,
+  listViews,
+  saveViewAction,
+  upsertSlaPolicyAction,
+} from "@/server/actions/planning";
 import {
   getRiskAnalytics,
   parseRiskAnalyticsFilters,
@@ -26,8 +37,13 @@ export default async function AnalyticsPage({
   searchParams: Promise<Record<string, string | string[] | undefined>>;
 }) {
   const context = await requireInternalOrganisationContext();
-  const filters = parseRiskAnalyticsFilters(await searchParams);
-  const data = await getRiskAnalytics(context, filters);
+  const rawParams = await searchParams;
+  const filters = parseRiskAnalyticsFilters(rawParams);
+  const [data, views, slaPolicies] = await Promise.all([
+    getRiskAnalytics(context, filters),
+    listViews("analytics"),
+    listSlaPolicies(),
+  ]);
   const metrics = [
     {
       label: "Filtered findings",
@@ -54,6 +70,12 @@ export default async function AnalyticsPage({
       icon: CheckCircle2,
     },
   ];
+  const filterSnapshot = {
+    period: filters.period,
+    severity: filters.severity,
+    status: filters.status,
+    ...(filters.clientId ? { clientId: filters.clientId } : {}),
+  };
 
   return (
     <>
@@ -132,6 +154,114 @@ export default async function AnalyticsPage({
           </Button>
         </form>
 
+        <section className="rounded-xl border bg-paper p-4">
+          <div className="flex flex-wrap items-end justify-between gap-3">
+            <div>
+              <h2 className="text-sm font-semibold">Saved views</h2>
+              <p className="mt-1 text-xs text-slate-500">
+                Store the current filter query for quick return.
+              </p>
+            </div>
+            <form action={saveViewAction} className="flex flex-wrap gap-2">
+              <input type="hidden" name="resource" value="analytics" />
+              <input
+                type="hidden"
+                name="filtersJson"
+                value={JSON.stringify(filterSnapshot)}
+              />
+              <input
+                className={field}
+                name="name"
+                placeholder="View name"
+                required
+                maxLength={120}
+              />
+              <Button type="submit" variant="secondary">
+                Save view
+              </Button>
+            </form>
+          </div>
+          {views.length ? (
+            <ul className="mt-3 flex flex-wrap gap-2">
+              {views.map((view) => (
+                <li key={view.id}>
+                  <Link
+                    className="inline-flex rounded-md border px-2.5 py-1.5 text-xs font-medium hover:bg-[var(--harbour-50)]"
+                    href={`/analytics?${toQuery(view.filters)}`}
+                  >
+                    {view.name}
+                  </Link>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="mt-3 text-xs text-slate-500">No saved views yet.</p>
+          )}
+        </section>
+
+        <section className="rounded-xl border bg-paper p-4">
+          <h2 className="text-sm font-semibold">SLA by severity</h2>
+          <p className="mt-1 text-xs text-slate-500">
+            New findings take a due date from the client policy, then the
+            organisation policy. Open findings past that window count as SLA
+            overdue ({data.metrics.slaOverdue}).
+          </p>
+          <form
+            action={upsertSlaPolicyAction}
+            className="mt-3 grid gap-3 md:grid-cols-[1fr_1fr_8rem_auto] md:items-end"
+          >
+            <label className="text-xs font-medium text-slate-500">
+              Severity
+              <select className={`${field} mt-1`} name="severity" required>
+                {severityEnum.enumValues.map((severity) => (
+                  <option key={severity} value={severity}>
+                    {titleCase(severity)}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="text-xs font-medium text-slate-500">
+              Client
+              <select className={`${field} mt-1`} name="clientId">
+                <option value="">Organisation default</option>
+                {data.clientOptions.map((client) => (
+                  <option key={client.id} value={client.id}>
+                    {client.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label className="text-xs font-medium text-slate-500">
+              Days
+              <input
+                className={`${field} mt-1`}
+                min={1}
+                name="days"
+                required
+                type="number"
+              />
+            </label>
+            <Button type="submit" variant="secondary">
+              Save SLA
+            </Button>
+          </form>
+          {slaPolicies.length ? (
+            <ul className="mt-3 divide-y text-sm">
+              {slaPolicies.map((policy) => (
+                <li key={policy.id} className="flex justify-between py-2">
+                  <span>
+                    {titleCase(policy.severity)} ·{" "}
+                    {policy.clientName ?? "Organisation"}
+                  </span>
+                  <span className="tabular-nums">{policy.days} days</span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="mt-3 text-xs text-slate-500">No SLA policies yet.</p>
+          )}
+        </section>
+
         <section aria-labelledby="analytics-summary">
           <h2 id="analytics-summary" className="sr-only">
             Risk summary
@@ -163,19 +293,15 @@ export default async function AnalyticsPage({
           </div>
         </section>
 
+        <AnalyticsCharts
+          severityCounts={data.severityCounts}
+          statusCounts={
+            data.statusCounts.length ? data.statusCounts : data.workflowCounts
+          }
+          monthlyCounts={data.monthlyCounts}
+        />
+
         <div className="grid gap-6 xl:grid-cols-3">
-          <ChartCard title="Severity distribution">
-            <BarList
-              rows={data.severityCounts}
-              colour={(key) => severityColour(key)}
-            />
-          </ChartCard>
-          <ChartCard title="Workflow position">
-            <BarList
-              rows={data.workflowCounts}
-              colour={() => "bg-[var(--harbour-500)]"}
-            />
-          </ChartCard>
           <ChartCard title="Finding age">
             <BarList
               rows={data.ageBands}
@@ -187,6 +313,49 @@ export default async function AnalyticsPage({
                     : "bg-slate-400"
               }
             />
+          </ChartCard>
+          <ChartCard title="Remediation and SLA">
+            <dl className="space-y-3 text-sm">
+              <div className="flex justify-between gap-4">
+                <dt className="text-slate-600">Mean days to remediate</dt>
+                <dd className="font-semibold tabular-nums">
+                  {data.metrics.meanRemediationDays ?? "—"}
+                </dd>
+              </div>
+              <div className="flex justify-between gap-4">
+                <dt className="text-slate-600">Retest pass rate</dt>
+                <dd className="font-semibold tabular-nums">
+                  {data.metrics.retestPassRate === null
+                    ? "—"
+                    : `${data.metrics.retestPassRate}% (${data.metrics.retestTotal})`}
+                </dd>
+              </div>
+              <div className="flex justify-between gap-4">
+                <dt className="text-slate-600">Overdue vs org SLA</dt>
+                <dd className="font-semibold tabular-nums">
+                  {data.metrics.slaOverdue}
+                </dd>
+              </div>
+            </dl>
+          </ChartCard>
+          <ChartCard title="Top recurring CWE">
+            {data.metrics.topCwes.length ? (
+              <ul className="space-y-2 text-sm">
+                {data.metrics.topCwes.map((row) => (
+                  <li
+                    key={row.cwe}
+                    className="flex justify-between gap-4 border-b pb-2 last:border-b-0 last:pb-0"
+                  >
+                    <span className="font-mono text-xs">{row.cwe}</span>
+                    <span className="tabular-nums font-semibold">
+                      {row.count}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="text-sm text-slate-500">No CWE values in view.</p>
+            )}
           </ChartCard>
         </div>
 
@@ -236,6 +405,39 @@ export default async function AnalyticsPage({
             {!data.clients.length ? (
               <EmptyState message="No clients have findings in this view." />
             ) : null}
+          </div>
+        </section>
+
+        <section aria-labelledby="time-rollups-heading">
+          <div className="mb-3">
+            <h2 id="time-rollups-heading" className="text-base font-semibold">
+              Time rollups
+            </h2>
+            <p className="mt-1 text-xs text-slate-500">
+              Hours logged by consultant and by engagement.
+            </p>
+          </div>
+          <div className="grid gap-6 xl:grid-cols-2">
+            <TimeRollupTable
+              nameHeader="User"
+              rows={data.timeByUser.map((row) => ({
+                id: row.userId,
+                name: row.userName,
+                hours: row.hours,
+                billable: row.billable,
+                nonBillable: row.nonBillable,
+              }))}
+            />
+            <TimeRollupTable
+              nameHeader="Engagement"
+              rows={data.timeByEngagement.map((row) => ({
+                id: row.engagementId,
+                name: row.engagementName,
+                hours: row.hours,
+                billable: row.billable,
+                nonBillable: row.nonBillable,
+              }))}
+            />
           </div>
         </section>
 
@@ -389,18 +591,6 @@ function severityTone(value: string) {
         : ("neutral" as const);
 }
 
-function severityColour(value: string) {
-  return value === "critical"
-    ? "bg-rose-600"
-    : value === "high"
-      ? "bg-orange-500"
-      : value === "medium"
-        ? "bg-amber-400"
-        : value === "low"
-          ? "bg-sky-500"
-          : "bg-slate-400";
-}
-
 function titleCase(value: string) {
   return value
     .replaceAll("_", " ")
@@ -418,4 +608,13 @@ function analyticsClientHref(
     clientId,
   });
   return `/analytics?${query}`;
+}
+
+function toQuery(filters: Record<string, unknown>) {
+  const params = new URLSearchParams();
+  for (const [key, value] of Object.entries(filters)) {
+    if (value === undefined || value === null || value === "") continue;
+    params.set(key, String(value));
+  }
+  return params.toString();
 }

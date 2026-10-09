@@ -28,6 +28,10 @@ import {
 } from "@/lib/security/upload";
 import { storage } from "@/lib/storage";
 import type { StorageProvider } from "@/lib/storage/types";
+import {
+  readClientReportDefaults,
+  retentionUntilFromPolicy,
+} from "./client-defaults";
 
 export type EvidenceActor = {
   organisationId: string;
@@ -119,6 +123,16 @@ export async function uploadEvidence(
     .limit(1);
   if (!engagement) throw new EvidenceScopeError();
   assertActorScope(actor, engagement.clientId, input.engagementId);
+
+  let retentionUntil = input.retentionUntil;
+  if (!retentionUntil) {
+    try {
+      const defaults = await readClientReportDefaults(engagement.clientId);
+      retentionUntil = retentionUntilFromPolicy(defaults.retentionPolicy);
+    } catch {
+      retentionUntil = undefined;
+    }
+  }
   if (
     input.classification === "client_visible" &&
     !actor.clientIds &&
@@ -208,7 +222,8 @@ export async function uploadEvidence(
             reason: input.restrictionReason,
             userIds: input.restrictedUserIds,
           },
-          retentionUntil: input.retentionUntil,
+          retentionUntil,
+          encryptionMetadata: stored.encryptionMetadata ?? {},
           version,
           malwareScanStatus: "pending",
         })

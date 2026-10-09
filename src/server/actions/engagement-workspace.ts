@@ -246,6 +246,7 @@ export async function createTimelineEntryAction(
       phase: z.string().trim().min(2).max(80),
       description: text,
       commands: optionalText,
+      attackMappings: z.string().trim().max(2_000).optional(),
       clientVisible: z.string().optional(),
     })
     .parse(Object.fromEntries(formData));

@@ -14,4 +14,14 @@ export function storage(): StorageProvider {
   return provider;
 }
 
+/** Build an S3 client for a caller-supplied org dataRegion label. Does not move buckets. */
+export function storageForRegion(region?: string): StorageProvider {
+  if (!region) return storage();
+  const name = process.env.STORAGE_PROVIDER ?? "local";
+  if (name === "local") return new LocalStorageProvider();
+  if (name === "s3" || name === "minio" || name === "r2")
+    return new S3StorageProvider(name, { region });
+  throw new Error(`Unknown storage provider ${name}`);
+}
+
 export * from "./types";
