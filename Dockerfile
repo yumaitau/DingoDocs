@@ -58,10 +58,11 @@ LABEL org.opencontainers.image.version="${APP_VERSION}"
 LABEL org.opencontainers.image.revision="${COMMIT_SHA}"
 LABEL com.dingodocs.distribution="${DINGODOCS_DISTRIBUTION}"
 RUN apk upgrade --no-cache \
-    && apk add --no-cache libc6-compat libstdc++ ca-certificates \
+    && apk add --no-cache libc6-compat libstdc++ libatomic ca-certificates \
     && addgroup -S -g 1001 nodejs \
     && adduser -S -u 1001 -G nodejs nextjs
 COPY --from=nodebin /usr/local/bin/node /usr/local/bin/node
+RUN node -e 'if (!process.version.startsWith("v")) process.exit(1)'
 COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
