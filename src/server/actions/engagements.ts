@@ -45,7 +45,7 @@ export async function createEngagement(formData: FormData) {
     throw new Error("Client is not available in the active organisation");
 
   const id = uuidv7();
-  const reference = `ENG-${new Date().getFullYear()}-${id.slice(0, 6).toUpperCase()}`;
+  const reference = `ENG-${new Date().getFullYear()}-${id.toUpperCase()}`;
   const defaults = await readClientReportDefaults(input.clientId);
   const retainUntil = retainUntilFromDays(
     positiveDays(defaults.retentionPolicy.engagementDays),

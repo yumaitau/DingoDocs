@@ -19,6 +19,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "test:e2e": "playwright test",
+    "test:e2e:army": "node scripts/run-testerarmy-tests.mjs",
     "test:e2e:lightpanda": "node scripts/run-lightpanda-tests.mjs",
     "mcp": "tsx src/mcp/server.ts",
     "dingodocs": "node scripts/dingodocs.mjs",
@@ -77,6 +78,7 @@
     "zod": "^4.6.5"
   },
   "devDependencies": {
+    "@e2e-dev/web": "^0.15.2",
     "@playwright/test": "^1.62.1",
     "@tailwindcss/postcss": "^4.3.3",
     "@testing-library/jest-dom": "^7.0.1",
@@ -89,6 +91,7 @@
     "@types/react-dom": "^19.3.0",
     "@vitest/coverage-v8": "^4.1.9",
     "drizzle-kit": "^0.31.10",
+    "e2e": "^0.21.2",
     "esbuild": "^0.28.2",
     "eslint": "^9.39.4",
     "eslint-config-next": "16.4.1",

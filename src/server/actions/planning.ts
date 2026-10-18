@@ -124,7 +124,7 @@ export async function createNextOccurrenceAction(formData: FormData) {
   const startDate = addPeriod(source.startDate, recurrence);
   const endDate = addPeriod(source.endDate, recurrence);
   const newId = uuidv7();
-  const reference = `ENG-${new Date().getFullYear()}-${newId.slice(0, 6).toUpperCase()}`;
+  const reference = `ENG-${new Date().getFullYear()}-${newId.toUpperCase()}`;
   await db.transaction(async (tx) => {
     await tx.insert(engagements).values({
       id: newId,

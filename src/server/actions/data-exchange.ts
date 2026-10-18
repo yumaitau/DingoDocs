@@ -53,7 +53,9 @@ export async function previewScannerImportAction(formData: FormData) {
     engagementId,
     adapter: z.enum(importAdapterNames).parse(formData.get("adapter")),
     filename: file.name,
-    mediaType: file.type || mediaTypeForImport(file.name, bytes),
+    // Browser MIME labels vary (for example text/xml and JSON-lines files).
+    // Derive the stored type from the source; evidence still validates its bytes.
+    mediaType: mediaTypeForImport(file.name, bytes),
     bytes,
   });
   redirect(`/imports/${result.run.id}`);

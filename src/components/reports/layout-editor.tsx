@@ -106,8 +106,9 @@ export function ReportLayoutEditor({
           try {
             const result = await action(data);
             setMessage("Saved successfully.");
-            if (result?.href) router.push(result.href);
-            router.refresh();
+            // A saved template version must mount a fresh editor.
+            if (result?.href) window.location.assign(result.href);
+            else router.refresh();
           } catch (error) {
             setMessage(
               error instanceof Error

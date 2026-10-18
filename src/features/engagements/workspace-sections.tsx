@@ -1562,7 +1562,7 @@ function TimeSection({ workspace, engagementId, timeZone }: SectionProps) {
               type="number"
               min="0.01"
               max="24"
-              step="0.25"
+              step="0.01"
               required
             />
           </Field>
