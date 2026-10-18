@@ -2,3 +2,6 @@ dist
 
 # pnpm owns this file. Prettier rewrites it into a diff pnpm will not keep.
 pnpm-lock.yaml
+
+# Helm templates contain Go template syntax, not plain YAML.
+charts/**/templates/**
