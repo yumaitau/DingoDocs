@@ -86,8 +86,10 @@ for (const stage of ["lead", "scoped", "proposal", "won", "lost"]) {
         .getByLabel("SoW template")
         .fill("Synthetic authorised assessment scope.");
       await screen.getByRole("button", "Create opportunity").click();
-      await browser.reload();
       const row = screen.getByRole("listitem").filter({ hasText: name });
+      // Wait for the server action to finish (cold first run) before reloading.
+      await expect(row).toBeVisible();
+      await browser.reload();
       await expect(row).toContainText(stage);
       await expect(row).toContainText("45000");
       await expect(row).toContainText("Synthetic authorised assessment scope.");
