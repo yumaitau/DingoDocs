@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.7
 
-ARG NODE_VERSION=26-alpine
+ARG NODE_VERSION=26.12.1-alpine
 ARG ALPINE_VERSION=3.23
 ARG APP_VERSION=1.0.0
 ARG COMMIT_SHA=unknown

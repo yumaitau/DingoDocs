@@ -5,7 +5,7 @@
   "license": "Apache-2.0",
   "packageManager": "pnpm@10.33.0",
   "engines": {
-    "node": ">=20.0.0"
+    "node": "^22.23.4 || ^24.22.1 || >=26.12.1"
   },
   "scripts": {
     "dev": "next dev",
@@ -109,6 +109,7 @@
       ]
     },
     "overrides": {
+      "vite@>=8.0.0 <8.1.6": "8.1.6",
       "source-map-js@<1.2.2": "1.2.2",
       "@hono/node-server@<1.19.15": "1.19.15",
       "browserslist@<=4.28.6": "4.28.7",
