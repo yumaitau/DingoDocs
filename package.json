@@ -109,6 +109,7 @@
       ]
     },
     "overrides": {
+      "vite@>=8.0.0 <8.1.6": "8.1.6",
       "source-map-js@<1.2.2": "1.2.2",
       "@hono/node-server@<1.19.15": "1.19.15",
       "browserslist@<=4.28.6": "4.28.7",
