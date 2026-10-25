@@ -76,7 +76,7 @@
     "sharp": "^0.35.5",
     "tailwind-merge": "^3.7.0",
     "uuid": "^14.0.2",
-    "zod": "^4.6.5"
+    "zod": "^4.6.6"
   },
   "devDependencies": {
     "@e2e-dev/web": "^0.15.2",
@@ -119,7 +119,9 @@
       "fast-uri": "3.1.7",
       "postcss@<8.5.18": "8.5.23",
       "js-yaml@>=4.0.0 <4.3.2": "4.3.2",
-      "undici@>=7.0.0 <7.29.1": "7.29.1"
+      "undici@>=7.0.0 <7.30.1": "7.30.1",
+      "body-parser@>=2.0.0 <2.4.0": "2.4.0",
+      "e2e>zod": "^4.6.6"
     },
     "patchedDependencies": {
       "minimatch@3.1.5": "patches/minimatch@3.1.5.patch"
