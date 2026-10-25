@@ -177,6 +177,30 @@ for (const priority of ["low", "normal", "high", "urgent"]) {
         await app.open("/tasks");
         const row = screen.getByRole("listitem").filter({ hasText: title });
         await row.getByLabel("Status").selectOption({ value: status });
+        // Navigating while the server action is pending aborts it (flaky on
+        // mobile), so poll the server-rendered list without navigating until
+        // the status has persisted. Terminal "done" leaves the list.
+        await expect
+          .poll(
+            () =>
+              browser.evaluate(async (text: string) => {
+                const html = await (await fetch("/tasks")).text();
+                const doc = new DOMParser().parseFromString(html, "text/html");
+                const item = [...doc.querySelectorAll("li")].find((li) =>
+                  li.textContent?.includes(text),
+                );
+                if (!item) return "gone";
+                return (
+                  item
+                    .querySelector("select option[selected]")
+                    ?.getAttribute("value") ??
+                  item.querySelector("select")?.value ??
+                  null
+                );
+              }, title),
+            { timeout: 15000, message: `status ${status} did not persist` },
+          )
+          .toBe(status === "done" ? "gone" : status);
         await app.open(status === "done" ? "/tasks?view=board" : "/tasks");
         const container =
           status === "done"
