@@ -21,7 +21,7 @@ test("renders public authentication and security metadata", async ({
 
 test("redirects protected workspaces to sign-in", async ({ page, appURL }) => {
   await page.goto(appURL("/clients"), { waitUntil: "domcontentloaded" });
-  await expect(page).toHaveURL(/\/sign-in$/);
+  await expect(page).toHaveURL(/\/sign-in\?next=%2Fclients$/);
   await expect(
     page.getByRole("heading", { name: "Welcome back" }),
   ).toBeVisible();
