@@ -1,6 +1,7 @@
 import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { AppShell } from "@/components/app-shell";
+import { RadixPointerEventsReset } from "@/components/radix-pointer-events-reset";
 import { isAccountSecurityPath } from "@/lib/auth/mfa-policy";
 import { getSession } from "@/lib/auth/session";
 import { resolveActiveOrganisation } from "@/lib/auth/active-organisation";
@@ -31,6 +32,7 @@ export default async function ProtectedLayout({
       organisationName={organisation.name}
       userName={session.user.name ?? session.user.email}
     >
+      <RadixPointerEventsReset />
       {children}
     </AppShell>
   );

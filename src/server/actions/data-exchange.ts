@@ -15,6 +15,7 @@ import {
   mediaTypeForImport,
   previewScannerImport,
 } from "@/server/services/data-exchange";
+import { userFacingError } from "@/lib/errors";
 
 const id = z.string().uuid();
 
@@ -38,8 +39,7 @@ export async function importOrganisationBundleAction(
     };
   } catch (error) {
     return {
-      error:
-        error instanceof Error ? error.message : "Organisation import failed",
+      error: userFacingError(error, "Organisation import failed"),
     };
   }
 }

@@ -386,11 +386,12 @@ export async function getEvidenceLocator(
 export async function auditEvidenceDownload(
   actor: EvidenceActor,
   row: typeof evidence.$inferSelect,
+  action: "evidence.downloaded" | "evidence.previewed" = "evidence.downloaded",
 ) {
   await db.insert(auditEvents).values({
     organisationId: actor.organisationId,
     actorId: actor.userId,
-    action: "evidence.downloaded",
+    action,
     targetType: "evidence",
     targetId: row.id,
     metadata: {

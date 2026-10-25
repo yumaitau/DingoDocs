@@ -131,6 +131,8 @@ export function GET() {
       "/reports/{id}/transition": {
         post: {
           summary: "Transition a report workflow status",
+          description:
+            "Publishing, superseding and archiving require report:publish; review gates require finding:approve. Service-account (dd_svc) keys are always refused these transitions with 403 service_account_forbidden.",
           security: [{ bearerAuth: ["findings:write"] }, { cookieAuth: [] }],
           parameters: [
             {
@@ -235,6 +237,8 @@ export function GET() {
       "/findings/{id}/transition": {
         post: {
           summary: "Transition a finding workflow status",
+          description:
+            "Review, approval, publication and closure targets (changes_requested, peer_reviewed, qa_approved, published, retested, resolved, risk_accepted, closed) require finding:approve. Service-account (dd_svc) keys are always refused these transitions with 403 service_account_forbidden; agents stay on drafts.",
           security: [{ bearerAuth: ["findings:write"] }, { cookieAuth: [] }],
           parameters: [
             {

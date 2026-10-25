@@ -11,11 +11,13 @@ import {
 import {
   addFindingComment,
   assertFindingEngagement,
+  bulkFindingUpdatePermission,
   bulkUpdateFindings,
   createFindingFromTemplate,
   createFindingTemplate,
   createRiskMatrix,
   enrichFindingIntel,
+  findingTransitionPermission,
   getEngagementFindings,
   linkFindingEvidence,
   reviseFindingTemplate,
@@ -225,7 +227,23 @@ export async function bulkUpdateFindingsAction(
   formData: FormData,
 ) {
   id.parse(engagementId);
-  const context = await requirePermission("finding:create", { engagementId });
+  const input = z
+    .object({
+      status: z.union([findingStatus, z.literal("")]).optional(),
+      severity: z.union([severity, z.literal("")]).optional(),
+      clientVisible: z.enum(["", "true", "false"]).optional(),
+    })
+    .parse(Object.fromEntries(formData));
+  const update = {
+    status: input.status || undefined,
+    severity: input.severity || undefined,
+    clientVisible: input.clientVisible
+      ? input.clientVisible === "true"
+      : undefined,
+  };
+  const context = await requirePermission(bulkFindingUpdatePermission(update), {
+    engagementId,
+  });
   const ids = formData.getAll("ids").map(String);
   for (const findingId of ids)
     await assertFindingEngagement(
@@ -233,22 +251,7 @@ export async function bulkUpdateFindingsAction(
       engagementId,
       findingId,
     );
-  const input = z
-    .object({
-      status: z.union([findingStatus, z.literal("")]).optional(),
-      severity: z.union([severity, z.literal("")]).optional(),
-      assigneeId: z.union([id, z.literal("")]).optional(),
-      clientVisible: z.enum(["", "true", "false"]).optional(),
-    })
-    .parse(Object.fromEntries(formData));
-  await bulkUpdateFindings(context, {
-    ids,
-    status: input.status || undefined,
-    severity: input.severity || undefined,
-    assigneeId: input.assigneeId || undefined,
-    clientVisible:
-      input.clientVisible === "" ? undefined : input.clientVisible === "true",
-  });
+  await bulkUpdateFindings(context, { ids, ...update });
   refreshEngagement(engagementId);
 }
 
@@ -342,16 +345,10 @@ export async function transitionFindingAction(
       overrideReason: z.string().trim().max(2_000).optional(),
     })
     .parse(Object.fromEntries(formData));
-  const approvalStatuses = new Set([
-    "changes_requested",
-    "peer_reviewed",
-    "qa_approved",
-    "published",
-  ]);
   const permission =
-    input.override === "on" || approvalStatuses.has(input.toStatus)
+    input.override === "on"
       ? "finding:approve"
-      : "finding:create";
+      : findingTransitionPermission(input.toStatus);
   const context = await requirePermission(permission, { engagementId });
   await assertFindingEngagement(
     context.organisationId,

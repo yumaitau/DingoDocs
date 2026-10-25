@@ -3,14 +3,21 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/db";
 import { webhooks } from "@/db/schema";
-import { apiReadContext, apiWriteContext } from "@/lib/api/authentication";
+import {
+  apiWriteContext,
+  authenticateApiRequest,
+} from "@/lib/api/authentication";
 import { apiError } from "@/lib/api/responses";
+import { requirePermission } from "@/lib/permissions/require";
 import { createWebhook } from "@/server/services/webhooks";
 
 export async function GET(request: Request) {
   const requestId = request.headers.get("x-request-id");
   try {
-    const context = await apiReadContext(request, "webhooks:manage");
+    // API keys are gated by scope; session callers need integration:configure.
+    const context =
+      (await authenticateApiRequest(request, "webhooks:manage")) ??
+      (await requirePermission("integration:configure"));
     const data = await db
       .select({
         id: webhooks.id,

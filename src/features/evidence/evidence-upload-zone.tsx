@@ -33,29 +33,38 @@ export function EvidenceUploadZone({
   }
 
   function submit(formData: FormData) {
-    for (const file of files) formData.append("files", file);
+    // One request per file keeps each request within the server's upload cap.
     startTransition(async () => {
-      const response = await fetch(
-        `/api/v1/engagements/${engagementId}/evidence`,
-        {
-          method: "POST",
-          body: formData,
-        },
-      );
-      const body = (await response.json()) as {
-        results?: UploadResult[];
-        error?: string;
-      };
-      setResults(
-        body.results ?? [
-          {
-            ok: false,
-            filename: "Upload",
-            error: body.error ?? "Upload failed",
-          },
-        ],
-      );
-      if (body.results?.some((result) => result.ok)) {
+      const collected: UploadResult[] = [];
+      for (const file of files) {
+        const body = new FormData();
+        for (const [key, value] of formData) body.append(key, value);
+        body.append("files", file);
+        let payload: UploadResponse;
+        try {
+          const response = await fetch(
+            `/api/v1/engagements/${engagementId}/evidence`,
+            { method: "POST", body },
+          );
+          payload = await readUploadResponse(response);
+        } catch {
+          payload = {
+            error:
+              "Network error. Check your connection and try the upload again.",
+          };
+        }
+        collected.push(
+          ...(payload.results ?? [
+            {
+              ok: false,
+              filename: file.name,
+              error: errorMessage(payload.error) ?? "Upload failed",
+            },
+          ]),
+        );
+      }
+      setResults(collected);
+      if (collected.some((result) => result.ok)) {
         setFiles([]);
         if (inputRef.current) inputRef.current.value = "";
         router.refresh();
@@ -182,6 +191,28 @@ export function EvidenceUploadZone({
 
 const field =
   "mt-1 min-h-11 w-full rounded-md border bg-paper px-3 text-sm outline-none focus:border-[var(--harbour-500)]";
+
+type UploadResponse = {
+  results?: UploadResult[];
+  error?: string | { message?: string };
+};
+
+async function readUploadResponse(response: Response): Promise<UploadResponse> {
+  try {
+    return (await response.json()) as UploadResponse;
+  } catch {
+    return {
+      error: response.ok
+        ? "Unexpected response from the server"
+        : `Upload failed (HTTP ${response.status})`,
+    };
+  }
+}
+
+// API errors arrive as { code, message }; older paths send a plain string.
+function errorMessage(error: UploadResponse["error"]) {
+  return typeof error === "string" ? error : error?.message;
+}
 
 function formatBytes(bytes: number) {
   if (bytes < 1_024) return `${bytes} B`;

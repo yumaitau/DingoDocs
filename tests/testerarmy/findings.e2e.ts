@@ -120,7 +120,7 @@ for (const severity of ["informational", "low", "medium", "high", "critical"]) {
             .first(),
         ).toBeVisible();
       };
-      const signIn = async (name: "admin" | "reviewer") => {
+      const signIn = async (name: "admin" | "reviewer" | "qa") => {
         // Clear this context without revoking the shared saved admin session.
         await browser.setCookies(
           (await browser.cookies()).map((cookie) => ({
@@ -147,10 +147,12 @@ for (const severity of ["informational", "low", "medium", "high", "critical"]) {
         await transition(status);
       await signIn("reviewer");
       await transition("peer_reviewed");
+      // The admin authored the finding, so a third identity approves and publishes.
+      await signIn("qa");
+      await transition("qa_approved");
+      await transition("published");
       await signIn("admin");
       for (const status of [
-        "qa_approved",
-        "published",
         "remediation_in_progress",
         "ready_for_retest",
         "retested",

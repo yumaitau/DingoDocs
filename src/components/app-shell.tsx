@@ -21,6 +21,7 @@ import {
   Gauge,
   History,
   Library,
+  LogOut,
   Menu,
   Search,
   Settings,
@@ -40,6 +41,7 @@ import {
   useSyncExternalStore,
 } from "react";
 import { LocaleSwitch } from "@/components/locale-switch";
+import { signOut } from "@/lib/auth/client";
 import {
   defaultLocale,
   getDictionary,
@@ -209,6 +211,8 @@ function Navigation({
     () => defaultLocale,
   );
   const dictionary = getDictionary(locale);
+  const router = useRouter();
+  const [signingOut, setSigningOut] = useState(false);
 
   return (
     <div className="flex h-full flex-col px-3 py-3">
@@ -241,43 +245,49 @@ function Navigation({
           ⌘K
         </kbd>
       </button>
-      <nav aria-label="Primary" className="mt-4 space-y-1">
-        {primary.map((item) => (
-          <NavLink
-            key={item.href}
-            item={{
-              href: item.href,
-              icon: item.icon,
-              label: dictionary.nav[item.labelKey],
-            }}
-            active={
-              pathname === item.href || pathname.startsWith(`${item.href}/`)
-            }
-            onClick={onNavigate}
-          />
-        ))}
-      </nav>
-      <div className="my-3 border-t" />
-      <nav aria-label="Administration" className="space-y-1">
-        {secondary.map((item) => (
-          <NavLink
-            key={item.href}
-            item={{
-              href: item.href,
-              icon: item.icon,
-              label: dictionary.nav[item.labelKey],
-            }}
-            active={
-              pathname === item.href || pathname.startsWith(`${item.href}/`)
-            }
-            onClick={onNavigate}
-          />
-        ))}
-      </nav>
-      <div className="mt-auto border-t pt-3">
-        <button
-          type="button"
-          className="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left hover:bg-muted"
+      {/* Scroll the nav lists so the account/sign-out row stays reachable
+          on short viewports instead of overflowing the sticky sidebar. */}
+      <div className="scrollbar-subtle mt-4 min-h-0 flex-1 overflow-y-auto">
+        <nav aria-label="Primary" className="space-y-1">
+          {primary.map((item) => (
+            <NavLink
+              key={item.href}
+              item={{
+                href: item.href,
+                icon: item.icon,
+                label: dictionary.nav[item.labelKey],
+              }}
+              active={
+                pathname === item.href || pathname.startsWith(`${item.href}/`)
+              }
+              onClick={onNavigate}
+            />
+          ))}
+        </nav>
+        <div className="my-3 border-t" />
+        <nav aria-label="Administration" className="space-y-1">
+          {secondary.map((item) => (
+            <NavLink
+              key={item.href}
+              item={{
+                href: item.href,
+                icon: item.icon,
+                label: dictionary.nav[item.labelKey],
+              }}
+              active={
+                pathname === item.href || pathname.startsWith(`${item.href}/`)
+              }
+              onClick={onNavigate}
+            />
+          ))}
+        </nav>
+      </div>
+      <div className="mt-3 flex items-center gap-1 border-t pt-3">
+        <Link
+          href="/account/security"
+          onClick={onNavigate}
+          title="Account security"
+          className="flex min-w-0 flex-1 items-center gap-2 rounded-md px-2 py-2 text-left hover:bg-muted"
         >
           <span className="grid size-7 place-items-center rounded-full bg-[var(--harbour-100)] text-xs font-semibold text-[var(--harbour-700)]">
             {userName.slice(0, 2).toUpperCase()}
@@ -286,6 +296,24 @@ function Navigation({
             {userName}
           </span>
           <ChevronRight className="size-4 text-slate-400" />
+        </Link>
+        <button
+          type="button"
+          aria-label={`Sign out ${userName}`}
+          title="Sign out"
+          disabled={signingOut}
+          className="rounded-md p-2 text-slate-500 hover:bg-muted hover:text-slate-900 disabled:opacity-50"
+          onClick={async () => {
+            setSigningOut(true);
+            try {
+              await signOut();
+            } finally {
+              router.push("/sign-in");
+              router.refresh();
+            }
+          }}
+        >
+          <LogOut className="size-4" aria-hidden="true" />
         </button>
       </div>
     </div>
@@ -482,6 +510,28 @@ function CommandPalette({
       href: string;
     }>
   >([]);
+  const searchAbortRef = useRef<AbortController | null>(null);
+
+  useEffect(() => () => searchAbortRef.current?.abort(), []);
+
+  function search(query: string) {
+    searchAbortRef.current?.abort();
+    searchAbortRef.current = null;
+    if (query.trim().length < 2) return setResults([]);
+    const controller = new AbortController();
+    searchAbortRef.current = controller;
+    fetch(`/api/search?q=${encodeURIComponent(query)}`, {
+      signal: controller.signal,
+    })
+      .then((response) => (response.ok ? response.json() : { results: [] }))
+      .then((value: { results?: typeof results }) => {
+        if (!controller.signal.aborted) setResults(value.results ?? []);
+      })
+      .catch(() => {
+        if (!controller.signal.aborted) setResults([]);
+      });
+  }
+
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
@@ -494,17 +544,7 @@ function CommandPalette({
               <Command.Input
                 autoFocus
                 placeholder="Search pages, clients, engagements, or actions"
-                onValueChange={(query) => {
-                  if (query.trim().length < 2) return setResults([]);
-                  fetch(`/api/search?q=${encodeURIComponent(query)}`)
-                    .then((response) =>
-                      response.ok ? response.json() : { results: [] },
-                    )
-                    .then((value: { results?: typeof results }) =>
-                      setResults(value.results ?? []),
-                    )
-                    .catch(() => setResults([]));
-                }}
+                onValueChange={search}
                 className="h-13 min-w-0 flex-1 bg-transparent text-sm outline-none placeholder:text-slate-400"
               />
               <kbd className="rounded border bg-muted px-1.5 py-0.5 text-[10px] text-slate-500">
@@ -512,17 +552,23 @@ function CommandPalette({
               </kbd>
             </div>
             <Command.List className="scrollbar-subtle max-h-[min(420px,60vh)] overflow-y-auto p-2">
-              <Command.Empty className="px-3 py-10 text-center text-sm text-slate-500">
-                No matching commands
-              </Command.Empty>
+              {results.length ? null : (
+                <Command.Empty className="px-3 py-10 text-center text-sm text-slate-500">
+                  No matching commands
+                </Command.Empty>
+              )}
+              {/* Server results are already full-text ranked; forceMount stops
+                  cmdk re-filtering them by title/subtitle and hiding body hits. */}
               <Command.Group
+                forceMount={results.length > 0}
                 heading="Search results"
                 className="text-xs text-slate-500 [&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:py-2"
               >
                 {results.map((result) => (
                   <Command.Item
                     key={`${result.type}-${result.id}`}
-                    value={`${result.title} ${result.subtitle}`}
+                    value={`search:${result.type}:${result.id}`}
+                    forceMount
                     onSelect={() => {
                       router.push(result.href);
                       onOpenChange(false);

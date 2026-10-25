@@ -57,7 +57,7 @@ test("personal preferences redirect unauthenticated users to sign in", async ({
   page,
 }) => {
   await page.goto("/account/preferences");
-  await expect(page).toHaveURL(/\/sign-in$/);
+  await expect(page).toHaveURL(/\/sign-in\?next=%2Faccount%2Fpreferences$/);
 });
 
 test("owner can reach every workspace and follow seeded assessment records", async ({

@@ -4,8 +4,10 @@ import {
   requireOrganisationContext,
   rolesForOperation,
 } from "@/lib/permissions/require";
+import { previewContentType } from "@/lib/security/upload";
 import { storage } from "@/lib/storage";
 import {
+  auditEvidenceDownload,
   EvidenceScopeError,
   getEvidenceForAccess,
   getEvidenceLocator,
@@ -47,9 +49,10 @@ async function handlePreview(context: { params: Promise<{ id: string }> }) {
     roles,
   });
   const row = await getEvidenceForAccess(actor, id);
+  await auditEvidenceDownload(actor, row, "evidence.previewed");
   return new Response(await storage().get(row.storageKey), {
     headers: {
-      "content-type": row.mediaType,
+      "content-type": previewContentType(row.mediaType),
       "content-length": String(row.sizeBytes),
       "content-disposition": `inline; filename="${row.originalFilename}"`,
       "cache-control": "private, no-store",

@@ -1,7 +1,7 @@
 import "server-only";
 
 import { createHash, randomUUID } from "node:crypto";
-import { and, asc, eq, inArray, isNull, notInArray } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, notInArray, or } from "drizzle-orm";
 import { db } from "@/db";
 import {
   assets,
@@ -63,6 +63,10 @@ export class ExchangeScopeError extends Error {
   }
 }
 
+function importIdentifier(fingerprint: string) {
+  return `IMP-${fingerprint.slice(0, 10).toUpperCase()}`;
+}
+
 export async function previewScannerImport(
   actor: ExchangeActor,
   input: {
@@ -102,26 +106,44 @@ export async function previewScannerImport(
     .update(evidence)
     .set({ immutable: true })
     .where(eq(evidence.id, source.id));
+  // Live findings with the same fingerprint are duplicates. The generated
+  // identifier is unique per engagement even for soft-deleted rows, so any
+  // existing row holding it (deleted or not) is a conflict too.
   const existing = await db
-    .select({ fingerprint: findings.sourceFingerprint })
+    .select({
+      fingerprint: findings.sourceFingerprint,
+      identifier: findings.identifier,
+    })
     .from(findings)
     .where(
       and(
         eq(findings.organisationId, actor.organisationId),
         eq(findings.engagementId, input.engagementId),
-        inArray(
-          findings.sourceFingerprint,
-          normalized.map((item) => item.fingerprint),
+        or(
+          and(
+            inArray(
+              findings.sourceFingerprint,
+              normalized.map((item) => item.fingerprint),
+            ),
+            isNull(findings.deletedAt),
+          ),
+          inArray(
+            findings.identifier,
+            normalized.map((item) => importIdentifier(item.fingerprint)),
+          ),
         ),
-        isNull(findings.deletedAt),
       ),
     );
   const duplicate = new Set(
-    existing.map((row) => row.fingerprint).filter(Boolean),
+    existing.flatMap((row) => [
+      row.identifier,
+      ...(row.fingerprint ? [importIdentifier(row.fingerprint)] : []),
+    ]),
   );
   const actions = normalized.map((item) => {
-    const action = duplicate.has(item.fingerprint) ? "duplicate" : "create";
-    duplicate.add(item.fingerprint);
+    const identifier = importIdentifier(item.fingerprint);
+    const action = duplicate.has(identifier) ? "duplicate" : "create";
+    duplicate.add(identifier);
     return action;
   });
   const duplicateCount = actions.filter(
@@ -186,6 +208,7 @@ export async function applyScannerImport(
   input: { importRunId: string; selectedItemIds: string[] },
 ) {
   const applied = await db.transaction(async (tx) => {
+    // Lock the run so concurrent applies serialise; re-check status under lock.
     const [run] = await tx
       .select()
       .from(importRuns)
@@ -193,11 +216,11 @@ export async function applyScannerImport(
         and(
           eq(importRuns.id, input.importRunId),
           eq(importRuns.organisationId, actor.organisationId),
-          eq(importRuns.status, "previewed"),
         ),
       )
-      .limit(1);
-    if (!run) throw new ExchangeScopeError();
+      .limit(1)
+      .for("update");
+    if (!run || run.status !== "previewed") throw new ExchangeScopeError();
     const [engagement] = await tx
       .select({ clientId: engagements.clientId })
       .from(engagements)
@@ -232,8 +255,33 @@ export async function applyScannerImport(
       findingId: string;
       assetId?: string;
     }> = [];
+    let skipped = 0;
+    const skip = async (itemId: string) => {
+      skipped += 1;
+      await tx
+        .update(importItems)
+        .set({ action: "duplicate", selected: false })
+        .where(eq(importItems.id, itemId));
+    };
     for (const row of rows) {
       const item = row.normalized as unknown as NormalizedImportItem;
+      const identifier = importIdentifier(row.fingerprint);
+      // A finding (possibly soft-deleted, or from another preview) already
+      // holds this identifier: skip it rather than abort the transaction.
+      const [taken] = await tx
+        .select({ id: findings.id })
+        .from(findings)
+        .where(
+          and(
+            eq(findings.engagementId, run.engagementId),
+            eq(findings.identifier, identifier),
+          ),
+        )
+        .limit(1);
+      if (taken) {
+        await skip(row.id);
+        continue;
+      }
       let assetId: string | undefined;
       if (item.assetIdentifier) {
         const existing = await tx
@@ -282,7 +330,7 @@ export async function applyScannerImport(
         .values({
           organisationId: actor.organisationId,
           engagementId: run.engagementId,
-          identifier: `IMP-${row.fingerprint.slice(0, 10).toUpperCase()}`,
+          identifier,
           title: item.title,
           status: "draft",
           severity: item.severity,
@@ -302,23 +350,30 @@ export async function applyScannerImport(
             sourceSha256: run.sourceSha256,
           },
         })
+        .onConflictDoNothing({
+          target: [findings.engagementId, findings.identifier],
+        })
         .returning({ id: findings.id });
+      if (!finding) {
+        await skip(row.id);
+        continue;
+      }
       if (assetId)
         await tx.insert(findingAssets).values({
           organisationId: actor.organisationId,
-          findingId: finding!.id,
+          findingId: finding.id,
           assetId,
         });
       await tx
         .update(importItems)
         .set({
           selected: true,
-          findingId: finding!.id,
+          findingId: finding.id,
           assetId,
           appliedAt: new Date(),
         })
         .where(eq(importItems.id, row.id));
-      applied.push({ itemId: row.id, findingId: finding!.id, assetId });
+      applied.push({ itemId: row.id, findingId: finding.id, assetId });
     }
     await tx
       .update(importItems)
@@ -354,7 +409,11 @@ export async function applyScannerImport(
       action: "import.applied",
       targetType: "import_run",
       targetId: run.id,
-      metadata: { engagementId: run.engagementId, selected: applied.length },
+      metadata: {
+        engagementId: run.engagementId,
+        selected: applied.length,
+        skipped,
+      },
     });
     return { applied, engagementId: run.engagementId };
   });
@@ -364,6 +423,7 @@ export async function applyScannerImport(
     eventType: "import.applied",
     title: `Scanner import applied (${applied.applied.length} findings)`,
     actionUrl: `/engagements/${applied.engagementId}?view=findings`,
+    engagementId: applied.engagementId,
     payload: {
       importRunId: input.importRunId,
       engagementId: applied.engagementId,
@@ -552,7 +612,12 @@ export async function exportOrganisation(
         createdAt: evidence.createdAt,
       })
       .from(evidence)
-      .where(eq(evidence.organisationId, organisationId)),
+      .where(
+        and(
+          eq(evidence.organisationId, organisationId),
+          isNull(evidence.deletedAt),
+        ),
+      ),
     db.select().from(assets).where(eq(assets.organisationId, organisationId)),
     db
       .select()
@@ -673,42 +738,79 @@ export async function exportOrganisation(
             .where(eq(retestEvidence.organisationId, organisationId)),
         ])
       : null;
+  // Soft-deleted rows (and children of deleted parents) are not exported, so
+  // export → import cannot resurrect deleted data. Filter parents first.
+  const liveIds: Partial<Record<ExportRefKey, Set<string>>> = {};
+  const keep = <T extends ExportRefs>(rows: T[]) =>
+    rows.filter(
+      (row) =>
+        !row.deletedAt &&
+        exportRefKeys.every((key) => {
+          const value = row[key];
+          const live = liveIds[key];
+          return !value || !live || live.has(value);
+        }),
+    );
+  const idsOf = (rows: Array<{ id: string }>) =>
+    new Set(rows.map((row) => row.id));
+  const liveClients = keep(clientRows);
+  liveIds.clientId = idsOf(liveClients);
+  const liveEngagements = keep(engagementRows);
+  liveIds.engagementId = idsOf(liveEngagements);
+  const liveFindings = keep(findingRows);
+  liveIds.findingId = idsOf(liveFindings);
+  const liveEvidence = keep(evidenceRows);
+  liveIds.evidenceId = idsOf(liveEvidence);
+  const liveReports = keep(reportRows);
+  liveIds.reportId = idsOf(liveReports);
+  const liveReportVersions = keep(reportVersionRows);
+  liveIds.reportVersionId = idsOf(liveReportVersions);
+  const liveRetestAttempts = keep(migrationData?.[10] ?? []);
+  liveIds.retestAttemptId = idsOf(liveRetestAttempts);
+  const commentTargets: Record<string, Set<string> | undefined> = {
+    finding: liveIds.findingId,
+    report: liveIds.reportId,
+  };
   const payload = {
     format: "dingodocs-organisation",
     version: 1,
     mode,
     exportedAt: new Date().toISOString(),
-    organisation: organisation[0],
-    clients: clientRows,
-    engagements: engagementRows,
-    findings: findingRows,
-    evidence: evidenceRows,
-    assets: assetRows,
-    scopeVersions: scopeVersionRows,
-    scopeItems: scopeItemRows,
-    reports: reportRows,
-    reportVersions: reportVersionRows,
-    tasks: taskRows,
+    organisation: withoutSecrets(organisation[0]),
+    clients: liveClients,
+    engagements: liveEngagements,
+    findings: liveFindings,
+    evidence: liveEvidence,
+    assets: keep(assetRows),
+    scopeVersions: keep(scopeVersionRows),
+    scopeItems: keep(scopeItemRows),
+    reports: liveReports,
+    reportVersions: liveReportVersions,
+    tasks: keep(taskRows),
     auditEvents: auditRows,
-    timeEntries: timeRows,
-    ...(mode === "migration"
+    timeEntries: keep(timeRows),
+    ...(migrationData
       ? {
-          notes: noteRows,
+          notes: keep(noteRows).filter((row) => row.visibility !== "private"),
           findingTemplates: templateRows,
           members: memberRows,
-          clientContacts: migrationData![0],
-          engagementContacts: migrationData![1],
-          engagementMembers: migrationData![2],
-          comments: migrationData![3],
-          findingVersions: migrationData![4],
-          findingTransitions: migrationData![5],
-          evidenceFindings: migrationData![6],
-          reportTransitions: migrationData![7],
-          reportReviews: migrationData![8],
-          remediationUpdates: migrationData![9],
-          retestAttempts: migrationData![10],
-          retestNotes: migrationData![11],
-          retestEvidence: migrationData![12],
+          clientContacts: keep(migrationData[0]),
+          engagementContacts: keep(migrationData[1]),
+          engagementMembers: keep(migrationData[2]),
+          comments: keep(migrationData[3]).filter(
+            (row) =>
+              row.visibility !== "private" &&
+              (commentTargets[row.targetType]?.has(row.targetId) ?? true),
+          ),
+          findingVersions: keep(migrationData[4]),
+          findingTransitions: keep(migrationData[5]),
+          evidenceFindings: keep(migrationData[6]),
+          reportTransitions: keep(migrationData[7]),
+          reportReviews: keep(migrationData[8]),
+          remediationUpdates: keep(migrationData[9]),
+          retestAttempts: liveRetestAttempts,
+          retestNotes: keep(migrationData[11]),
+          retestEvidence: keep(migrationData[12]),
         }
       : {}),
   };
@@ -723,13 +825,36 @@ export async function exportOrganisation(
     metadata: {
       checksum,
       counts: {
-        engagements: engagementRows.length,
-        findings: findingRows.length,
-        evidence: evidenceRows.length,
+        engagements: liveEngagements.length,
+        findings: liveFindings.length,
+        evidence: liveEvidence.length,
       },
     },
   });
   return { payload, json, checksum };
+}
+
+const exportRefKeys = [
+  "clientId",
+  "engagementId",
+  "findingId",
+  "evidenceId",
+  "reportId",
+  "reportVersionId",
+  "retestAttemptId",
+] as const;
+type ExportRefKey = (typeof exportRefKeys)[number];
+type ExportRefs = { deletedAt?: Date | null } & Partial<
+  Record<ExportRefKey, string | null>
+>;
+
+/** Organisation row without credentials (SSO client secret). */
+function withoutSecrets(row: typeof organisations.$inferSelect) {
+  const sso = row.securityPolicy?.sso;
+  if (!sso) return row;
+  const publicSso = { ...sso };
+  delete publicSso.clientSecretEncrypted;
+  return { ...row, securityPolicy: { ...row.securityPolicy, sso: publicSso } };
 }
 
 type OrganisationBundle = {

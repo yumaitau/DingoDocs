@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { parseScannerImport, type ImportAdapterName } from "./adapters";
+import {
+  cleanHost,
+  parseScannerImport,
+  type ImportAdapterName,
+} from "./adapters";
 
 describe("scanner import adapters", () => {
   const fixtures = {
@@ -426,5 +430,57 @@ describe("scanner import adapters", () => {
       severity: "informational",
       description: "BloodHound Group asset",
     });
+  });
+});
+
+describe("scanner host and port normalisation", () => {
+  it.each([
+    ["example.com:443", "example.com"],
+    ["localhost:8080", "localhost"],
+    ["app.test", "app.test"],
+    ["app.test/path?q=1", "app.test"],
+    ["https://Example.com:8443/path", "example.com"],
+    ["2001:db8::1", "2001:db8::1"],
+    ["[2001:db8::1]:443", "2001:db8::1"],
+    ["[2001:db8::1]", "2001:db8::1"],
+    ["https://[2001:db8::1]:443/x", "2001:db8::1"],
+    ["10.0.0.1:22", "10.0.0.1"],
+    ["", undefined],
+  ])("cleanHost(%j) → %j", (input, expected) => {
+    expect(cleanHost(input)).toBe(expected);
+  });
+
+  it("parses OpenVAS port/protocol strings into the fingerprint", () => {
+    const xml = (port: string) =>
+      new TextEncoder().encode(
+        `<report><results><result><name>TLS issue</name><threat>High</threat><host>host.test</host><port>${port}</port><nvt oid="1.2.3"/></result></results></report>`,
+      );
+    const [https] = parseScannerImport("openvas", xml("443/tcp"));
+    const [ssh] = parseScannerImport("openvas", xml("22/tcp"));
+    const [general] = parseScannerImport("openvas", xml("general/tcp"));
+    expect(https?.port).toBe(443);
+    expect(ssh?.port).toBe(22);
+    expect(general?.port).toBeUndefined();
+    expect(https?.fingerprint).not.toBe(ssh?.fingerprint);
+  });
+
+  it("keeps the same ZAP plugin on two sites distinct", () => {
+    const alert = { pluginid: "10021", alert: "Missing header", riskcode: "1" };
+    const items = parseScannerImport(
+      "zap",
+      new TextEncoder().encode(
+        JSON.stringify({
+          site: [
+            { "@name": "https://a.test", "@port": "443", alerts: [alert] },
+            { "@name": "http://b.test:8080", "@port": "8080", alerts: [alert] },
+          ],
+        }),
+      ),
+    );
+    expect(items.map((item) => [item.assetIdentifier, item.port])).toEqual([
+      ["a.test", 443],
+      ["b.test", 8080],
+    ]);
+    expect(items[0]?.fingerprint).not.toBe(items[1]?.fingerprint);
   });
 });

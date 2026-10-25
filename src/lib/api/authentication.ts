@@ -151,6 +151,15 @@ export async function apiReadContext(request: Request, scope: ApiScope) {
   return principal ?? requireInternalOrganisationContext();
 }
 
+/**
+ * Approval and publication are human decisions. Service-account keys (CI,
+ * scanners, agents) author drafts only, whatever scopes they carry.
+ */
+export const serviceAccountDeniedPermissions: readonly Permission[] = [
+  "finding:approve",
+  "report:publish",
+];
+
 export async function apiWriteContext(
   request: Request,
   scope: ApiScope,
@@ -159,7 +168,14 @@ export async function apiWriteContext(
 ) {
   const principal = await authenticateApiRequest(request, scope);
   if (principal) {
-    if (!principal.serviceAccountId) {
+    if (principal.serviceAccountId) {
+      if (serviceAccountDeniedPermissions.includes(permission))
+        throw new ApiAuthenticationError(
+          "Service account API keys cannot approve or publish; a human reviewer must complete this step",
+          403,
+          "service_account_forbidden",
+        );
+    } else {
       if (!principal.userId)
         throw new ApiAuthenticationError("API key owner is unavailable");
       await requireActorPermission(

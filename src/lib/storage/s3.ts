@@ -26,7 +26,7 @@ export class S3StorageProvider implements StorageProvider {
       region: options.region ?? process.env.S3_REGION ?? "us-east-1",
       endpoint: process.env.S3_ENDPOINT || undefined,
       forcePathStyle:
-        name === "minio" || Boolean(process.env.S3_FORCE_PATH_STYLE),
+        name === "minio" || process.env.S3_FORCE_PATH_STYLE === "true",
       credentials: process.env.S3_ACCESS_KEY_ID
         ? {
             accessKeyId: required("S3_ACCESS_KEY_ID"),

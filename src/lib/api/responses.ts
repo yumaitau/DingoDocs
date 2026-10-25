@@ -13,7 +13,17 @@ import {
 } from "@/server/services/engagement-workspace";
 import { ReportScopeError } from "@/server/services/reports";
 
-export function apiError(error: unknown, requestId?: string | null) {
+/**
+ * API routes are excluded from proxy.ts (it would buffer and truncate large
+ * request bodies), so `x-request-id` is only present when the caller sends
+ * one. Generate an id so error responses and logs can still be correlated.
+ */
+export function resolveRequestId(requestId?: string | null) {
+  return requestId || crypto.randomUUID();
+}
+
+export function apiError(error: unknown, incomingRequestId?: string | null) {
+  const requestId = resolveRequestId(incomingRequestId);
   if (error instanceof ZodError)
     return NextResponse.json(
       {
@@ -103,7 +113,10 @@ export function apiError(error: unknown, requestId?: string | null) {
 
 export function apiNotFound(requestId?: string | null, message = "Not found") {
   return NextResponse.json(
-    { error: { code: "not_found", message }, requestId },
+    {
+      error: { code: "not_found", message },
+      requestId: resolveRequestId(requestId),
+    },
     { status: 404 },
   );
 }

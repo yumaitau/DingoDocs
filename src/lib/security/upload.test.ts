@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { validateContentSignature, validateUpload } from "./upload";
+import {
+  previewContentType,
+  validateContentSignature,
+  validateUpload,
+} from "./upload";
 
 describe("upload validation", () => {
   it("normalises filenames and creates an opaque key", () => {
@@ -68,5 +72,14 @@ describe("upload validation", () => {
         "image/png",
       ),
     ).toBe("image/png");
+  });
+});
+
+describe("previewContentType", () => {
+  it("keeps passive media types and renders everything else as text", () => {
+    expect(previewContentType("image/png")).toBe("image/png");
+    expect(previewContentType("application/pdf")).toBe("application/pdf");
+    for (const type of ["application/xml", "application/json", "text/csv"])
+      expect(previewContentType(type)).toBe("text/plain; charset=utf-8");
   });
 });

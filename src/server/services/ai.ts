@@ -115,7 +115,15 @@ export async function configureAiProvider(
   return configuration;
 }
 
-async function providerBaseUrl(
+const defaultOllamaBaseUrl = "http://127.0.0.1:11434";
+
+/**
+ * Tenant-supplied base URLs must be public HTTPS. Ollama may use loopback or
+ * HTTP only outside production, or when the URL's origin is the operator's
+ * OLLAMA_BASE_URL (which may then be any host, including a private one).
+ * Without OLLAMA_BASE_URL, only the standard local Ollama origin is trusted.
+ */
+export async function providerBaseUrl(
   provider: (typeof aiProviders)[number],
   configured?: string,
 ) {
@@ -125,13 +133,36 @@ async function providerBaseUrl(
       ? "https://api.openai.com/v1"
       : provider === "anthropic"
         ? "https://api.anthropic.com/v1"
-        : "http://127.0.0.1:11434");
-  const allowLoopback = provider === "ollama";
+        : process.env.OLLAMA_BASE_URL || defaultOllamaBaseUrl);
+  if (provider === "ollama" && isOperatorOllamaOrigin(value)) {
+    // Drop query and fragment so a stored URL cannot rewrite the API path.
+    const url = new URL(value);
+    return `${url.origin}${url.pathname}`.replace(/\/$/, "");
+  }
+  const development = process.env.NODE_ENV !== "production";
+  const allowLoopback = provider === "ollama" && development;
   const url = await assertPublicHttpUrl(value, {
-    allowHttp: allowLoopback || process.env.NODE_ENV !== "production",
+    allowHttp: development,
     allowLoopback,
   });
   return url.replace(/\/$/, "");
+}
+
+function isOperatorOllamaOrigin(value: string) {
+  const operator = process.env.OLLAMA_BASE_URL;
+  const trusted = operator
+    ? [operator]
+    : [defaultOllamaBaseUrl, "http://localhost:11434"];
+  try {
+    const url = new URL(value);
+    return (
+      !url.username &&
+      !url.password &&
+      trusted.some((origin) => url.origin === new URL(origin).origin)
+    );
+  } catch {
+    return false;
+  }
 }
 
 export async function requestAiDraft(

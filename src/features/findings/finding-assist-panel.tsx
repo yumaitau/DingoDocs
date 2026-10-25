@@ -40,9 +40,14 @@ export function FindingAssistPanel({
   async function enrich() {
     setIntelPending(true);
     setIntelError(null);
-    const result = await enrichFindingIntelAction(engagementId, findingId);
-    setIntelPending(false);
-    if (result.error) setIntelError(result.error);
+    try {
+      const result = await enrichFindingIntelAction(engagementId, findingId);
+      if (result.error) setIntelError(result.error);
+    } catch {
+      setIntelError("Enrichment failed. Try again in a moment.");
+    } finally {
+      setIntelPending(false);
+    }
   }
 
   return (

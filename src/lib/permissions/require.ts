@@ -8,6 +8,7 @@ import {
   mfaAccessDecision,
   MfaRequiredError,
 } from "@/lib/auth/mfa-policy";
+import { verifiedPathnameFromHeaders } from "@/lib/auth/pathname-signature";
 import { requireSession } from "@/lib/auth/session";
 import { resolveActiveOrganisation } from "@/lib/auth/active-organisation";
 import { EngagementAccessError } from "./access";
@@ -45,7 +46,8 @@ export async function guardOrganisationMfa(input: {
   const headerList = await headers();
   const effect = mfaAccessDecision({
     blocked: true,
-    pathname: headerList.get("x-pathname"),
+    // Only trust the pathname the proxy signed; unsigned values are spoofable.
+    pathname: verifiedPathnameFromHeaders(headerList),
     serverAction: headerList.has("next-action"),
   });
   if (effect === "redirect") redirect("/account/security");

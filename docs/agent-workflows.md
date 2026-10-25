@@ -6,8 +6,12 @@ DingoDocs treats automated scanners and CLI agents as first-class authors of **d
 
 1. **Ingest.** An agent or scanner calls `ingest_scanner_results` (or `preview_scanner_import` first). Supported adapters include Nuclei, Nmap, Nessus, OpenVAS, ZAP, Burp, CSV, and JSON. Ingest creates draft findings, a testing-journal note, and a timeline entry.
 2. **Draft write-up.** The agent enriches or creates findings with `create_finding_write_up` / `update_finding_write_up`, attaches evidence (`capture_evidence`, `attach_evidence_to_finding`), and records activity (`add_testing_note`, `add_timeline_entry`).
-3. **Human review.** Reviewers move findings through the status machine in the UI (or upcoming `transition_finding`). Peer review and QA stay separate from the author.
+3. **Human review.** Reviewers move findings through the status machine in the UI (or `transition_finding` with a personal key). Peer review, QA approval and publication stay separate from the author.
 4. **Publish.** Only after approval do findings become client-visible and land in reports (`create_report` upcoming). Retest and remediation continue in the client portal.
+
+## Service-account keys cannot approve or publish
+
+Service-account (`dd_svc_`) keys are refused any action that needs `finding:approve` or `report:publish`, whatever scopes they hold. The API returns `403 service_account_forbidden`. That covers moving a finding to `changes_requested`, `peer_reviewed`, `qa_approved`, `published`, `retested`, `resolved`, `risk_accepted` or `closed`, and any report review, approval, publish, supersede or archive transition. Agents can still move their own drafts between `draft`, `in_progress` and `ready_for_review`.
 
 ## MCP tools
 

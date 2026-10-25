@@ -22,6 +22,9 @@ import {
 import { sendAuthenticationEmail } from "@/lib/email/send";
 import { authProviderConfiguration } from "@/lib/auth/providers";
 import { DEFAULT_TIME_ZONE } from "@/lib/time-zone";
+import { DEVELOPMENT_AUTH_SECRET } from "@/lib/auth/secret";
+import { createSecondFactorSessionGuard } from "@/lib/auth/second-factor-session-guard";
+import { eq } from "drizzle-orm";
 
 const secret = process.env.BETTER_AUTH_SECRET;
 const providerConfiguration = authProviderConfiguration();
@@ -36,7 +39,7 @@ if (
 
 export const auth = betterAuth({
   appName: "DingoDocs",
-  secret: secret ?? "development-secret-change-before-production",
+  secret: secret ?? DEVELOPMENT_AUTH_SECRET,
   baseURL,
   trustedOrigins: (process.env.TRUSTED_ORIGINS ?? "http://localhost:3000")
     .split(",")
@@ -72,6 +75,16 @@ export const auth = betterAuth({
     },
     session: {
       create: {
+        // Magic-link and verify-email sign-in prove only email possession, so
+        // TOTP-enrolled accounts must use password + code instead.
+        before: createSecondFactorSessionGuard(async (userId) => {
+          const [row] = await db
+            .select({ twoFactorEnabled: users.twoFactorEnabled })
+            .from(users)
+            .where(eq(users.id, userId))
+            .limit(1);
+          return row?.twoFactorEnabled === true;
+        }),
         after: async (session, context) => {
           await db.insert(auditEvents).values({
             actorId: session.userId,

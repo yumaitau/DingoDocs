@@ -7,13 +7,21 @@ import { Button } from "@/components/ui/button";
 import { authClient } from "@/lib/auth/client";
 import type { PublicAuthProvider } from "@/lib/auth/providers";
 import { safeInternalPath } from "@/lib/security/internal-path";
+import {
+  SECOND_FACTOR_REQUIRED_ERROR,
+  SECOND_FACTOR_REQUIRED_MESSAGE,
+} from "@/lib/auth/second-factor-session-guard";
 
 export function SignInForm({ providers }: { providers: PublicAuthProvider[] }) {
   const search = useSearchParams();
   const router = useRouter();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState("");
+  const [error, setError] = useState(() =>
+    search.get("error") === SECOND_FACTOR_REQUIRED_ERROR
+      ? SECOND_FACTOR_REQUIRED_MESSAGE
+      : "",
+  );
   const [pending, setPending] = useState(false);
   const [magicSent, setMagicSent] = useState(false);
   const callbackURL = safeInternalPath(search.get("next"));
@@ -27,11 +35,15 @@ export function SignInForm({ providers }: { providers: PublicAuthProvider[] }) {
       password,
       callbackURL,
     });
-    setPending(false);
     if (result.error) {
+      setPending(false);
       setError(result.error.message ?? "Unable to sign in");
       return;
     }
+    // A second factor is required: the twoFactorClient onTwoFactorRedirect
+    // hook is already navigating to /sign-in/two-factor, so stay pending.
+    if (result.data && "twoFactorRedirect" in result.data) return;
+    setPending(false);
   }
 
   async function sendMagicLink() {

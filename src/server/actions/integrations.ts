@@ -19,6 +19,7 @@ import {
 import { configureAiProvider, requestAiDraft } from "@/server/services/ai";
 import { createNotificationChannel } from "@/server/services/notifications";
 import { createWebhook, rotateWebhookSecret } from "@/server/services/webhooks";
+import { userFacingError } from "@/lib/errors";
 
 export type SecretActionState = {
   secret?: string;
@@ -62,8 +63,7 @@ export async function createApiKeyAction(
     };
   } catch (error) {
     return {
-      error:
-        error instanceof Error ? error.message : "Could not create API key",
+      error: userFacingError(error, "Could not create API key"),
     };
   }
 }
@@ -95,8 +95,7 @@ export async function createWebhookAction(
     return { secret: result.secret, message: "Copy the signing secret now." };
   } catch (error) {
     return {
-      error:
-        error instanceof Error ? error.message : "Could not create webhook",
+      error: userFacingError(error, "Could not create webhook"),
     };
   }
 }
@@ -119,10 +118,7 @@ export async function rotateWebhookAction(
     };
   } catch (error) {
     return {
-      error:
-        error instanceof Error
-          ? error.message
-          : "Could not rotate webhook secret",
+      error: userFacingError(error, "Could not rotate webhook secret"),
     };
   }
 }
@@ -161,8 +157,7 @@ export async function createNotificationChannelAction(
     return { message: "Notification channel created." };
   } catch (error) {
     return {
-      error:
-        error instanceof Error ? error.message : "Could not create channel",
+      error: userFacingError(error, "Could not create channel"),
     };
   }
 }
@@ -192,7 +187,7 @@ export async function configureAiAction(
     return { message: "AI provider configuration saved." };
   } catch (error) {
     return {
-      error: error instanceof Error ? error.message : "Could not configure AI",
+      error: userFacingError(error, "Could not configure AI"),
     };
   }
 }
@@ -221,8 +216,7 @@ export async function requestAiDraftAction(
     };
   } catch (error) {
     return {
-      error:
-        error instanceof Error ? error.message : "Could not generate AI draft",
+      error: userFacingError(error, "Could not generate AI draft"),
     };
   }
 }

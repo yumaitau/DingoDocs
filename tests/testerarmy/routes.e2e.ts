@@ -23,6 +23,8 @@ test("every page route belongs to browser coverage inventory", async () => {
     ...screens.map(([path]) => normalize(path)),
     "/",
     "/sign-in",
+    // Covered by tests/e2e/mfa.spec.ts (needs an enrolled TOTP factor).
+    "/sign-in/two-factor",
     "/sign-up",
     "/forgot-password",
     "/reset-password",

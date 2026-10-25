@@ -10,6 +10,7 @@ import {
   clients,
   engagements,
   evidence,
+  evidenceFindings,
   findingAssets,
   findings,
   organisations,
@@ -56,6 +57,10 @@ import {
   type ReportFindingModel,
 } from "./report-renderers";
 import { diffReportVersions } from "./report-diff";
+import {
+  defaultExecutiveSummary,
+  reportableFindingStatuses,
+} from "./report-client-view";
 
 export { diffReportVersions };
 
@@ -80,6 +85,12 @@ const reportWorkflow: Record<ReportStatus, readonly ReportStatus[]> = {
   superseded: ["archived"],
   archived: [],
 };
+
+/** Transitions out of publication that change status but never content. */
+const lifecycleOnlyStatuses: readonly ReportStatus[] = [
+  "superseded",
+  "archived",
+];
 
 export class ReportScopeError extends Error {
   constructor(message = "Report is unavailable in the active organisation") {
@@ -490,12 +501,14 @@ export async function transitionReport(
       actor.organisationId,
       report,
     );
-    if (version.immutable)
-      throw new Error("Published report versions are immutable");
     if (!reportWorkflow[report.status].includes(input.toStatus))
       throw new Error(
         `Report cannot transition from ${report.status} to ${input.toStatus}`,
       );
+    // Immutable (published) versions may only move along the status-only
+    // lifecycle; their content, exports and approvals never change.
+    if (version.immutable && !lifecycleOnlyStatuses.includes(input.toStatus))
+      throw new Error("Published report versions are immutable");
     if (input.toStatus === "changes_requested" && !input.comment?.trim())
       throw new Error("Changes requested requires a comment");
     if (input.toStatus === "qa_approved" && version.createdBy === actor.userId)
@@ -515,7 +528,7 @@ export async function transitionReport(
       .update(reportVersions)
       .set({
         status: input.toStatus,
-        immutable: input.toStatus === "published",
+        immutable: version.immutable || input.toStatus === "published",
         approvedBy: ["qa_approved", "approved", "published"].includes(
           input.toStatus,
         )
@@ -565,6 +578,7 @@ export async function transitionReport(
       ? `Report published: ${updated.title}`
       : `Report transitioned to ${updated.status}: ${updated.title}`,
     actionUrl: `/reports/${updated.id}`,
+    engagementId: updated.engagementId,
     payload: {
       reportId: updated.id,
       status: updated.status,
@@ -687,7 +701,9 @@ export async function generateReportJob(
       })
       .where(eq(reportVersions.id, version.id));
   } catch (error) {
-    await Promise.all(storedKeys.map((key) => provider.delete(key)));
+    // Best-effort cleanup: a failed delete must not stop the version being
+    // marked failed, or it would stay "running" forever.
+    await Promise.allSettled(storedKeys.map((key) => provider.delete(key)));
     await db
       .update(reportVersions)
       .set({
@@ -1024,26 +1040,6 @@ function sectionsForKind(kind: ReportKind): ReportSectionDefinition[] | null {
   return base.sections;
 }
 
-function defaultExecutiveSummary(
-  severityCounts: Record<string, number>,
-  findings: ReportFindingModel[],
-) {
-  const total = findings.length;
-  if (total === 0)
-    return "No confirmed findings were identified within the approved scope and testing window.";
-  const parts = ["critical", "high", "medium", "low", "informational"]
-    .filter((severity) => (severityCounts[severity] ?? 0) > 0)
-    .map((severity) => `${severityCounts[severity]} ${severity}`);
-  const top = findings
-    .slice(0, 5)
-    .map(
-      (finding) =>
-        `${finding.identifier} (${finding.severity}): ${finding.title}`,
-    )
-    .join("; ");
-  return `This assessment identified ${total} finding${total === 1 ? "" : "s"} (${parts.join(", ")}). Highest priority items: ${top}.`;
-}
-
 function redactFinding(
   finding: ReportFindingModel,
   terms: string[],
@@ -1136,6 +1132,9 @@ async function buildReportModel(input: {
         and(
           eq(findings.organisationId, input.organisationId),
           eq(findings.engagementId, input.engagement.id),
+          // Only QA-approved or later findings may reach a report; drafts and
+          // in-review findings must not leak into any derived content.
+          inArray(findings.status, [...reportableFindingStatuses]),
           isNull(findings.deletedAt),
         ),
       )
@@ -1191,6 +1190,28 @@ async function buildReportModel(input: {
         .orderBy(asc(scopeItems.name))
     : [];
   const findingIds = findingRows.map((finding) => finding.id);
+  const evidenceLinks =
+    findingIds.length === 0
+      ? []
+      : await db
+          .select({ evidenceId: evidenceFindings.evidenceId })
+          .from(evidenceFindings)
+          .where(
+            and(
+              eq(evidenceFindings.organisationId, input.organisationId),
+              inArray(evidenceFindings.findingId, findingIds),
+            ),
+          );
+  const linkedEvidenceIds = new Set(
+    evidenceLinks.map((link) => link.evidenceId),
+  );
+  // The register lists evidence supporting included findings plus anything
+  // already released to the client; evidence for excluded findings stays out.
+  const registerEvidence = evidenceRows.filter(
+    (item) =>
+      item.classification === "client_visible" ||
+      linkedEvidenceIds.has(item.id),
+  );
   const assetLinks =
     findingIds.length === 0
       ? []
@@ -1297,7 +1318,7 @@ async function buildReportModel(input: {
     ) ?? "";
   const context = {
     hasFindings: findingRows.length > 0,
-    hasEvidence: evidenceRows.length > 0,
+    hasEvidence: registerEvidence.length > 0,
     hasScope: scopeRows.length > 0,
     status: input.engagement.status,
     hasCritical: (severityCounts.critical ?? 0) > 0,
@@ -1423,7 +1444,7 @@ async function buildReportModel(input: {
       identifier: asset.identifier,
       criticality: asset.criticality,
     })),
-    evidence: evidenceRows.map((item) => ({
+    evidence: registerEvidence.map((item) => ({
       filename: item.originalFilename,
       mediaType: item.mediaType,
       classification: item.classification,

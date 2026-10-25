@@ -3,15 +3,22 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/db";
 import { notificationChannels } from "@/db/schema";
-import { apiReadContext, apiWriteContext } from "@/lib/api/authentication";
+import {
+  apiWriteContext,
+  authenticateApiRequest,
+} from "@/lib/api/authentication";
 import { apiError } from "@/lib/api/responses";
+import { requirePermission } from "@/lib/permissions/require";
 import { notificationProviders } from "@/lib/integrations/constants";
 import { createNotificationChannel } from "@/server/services/notifications";
 
 export async function GET(request: Request) {
   const requestId = request.headers.get("x-request-id");
   try {
-    const context = await apiReadContext(request, "notifications:manage");
+    // API keys are gated by scope; session callers need integration:configure.
+    const context =
+      (await authenticateApiRequest(request, "notifications:manage")) ??
+      (await requirePermission("integration:configure"));
     const data = await db
       .select({
         id: notificationChannels.id,

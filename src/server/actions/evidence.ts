@@ -2,7 +2,10 @@
 
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { requirePermission } from "@/lib/permissions/require";
+import {
+  requireActorPermission,
+  requireInternalOrganisationContext,
+} from "@/lib/permissions/require";
 import {
   createEvidenceAnnotation,
   scopedEvidenceActor,
@@ -35,7 +38,14 @@ export async function createEvidenceAnnotationAction(
 ) {
   id.parse(engagementId);
   id.parse(evidenceId);
-  const context = await requirePermission("evidence:upload", { engagementId });
+  // Annotation is staff-only; client roles also hold evidence:upload.
+  const organisation = await requireInternalOrganisationContext();
+  const context = {
+    ...organisation,
+    roles: await requireActorPermission(organisation, "evidence:upload", {
+      engagementId,
+    }),
+  };
   const type = z
     .enum([
       "crop",

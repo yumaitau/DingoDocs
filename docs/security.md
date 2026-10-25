@@ -29,4 +29,25 @@ Client roles are intentionally excluded from organisation-wide REST reads, repor
 
 Better Auth's admin plugin defaults every new user to `role=user`. Break-glass impersonation and admin APIs are limited to user ids in `BETTER_AUTH_ADMIN_USER_IDS`. Banned or `disabledAt` users lose their session on the next request.
 
+## SCIM provisioning and verified domains
+
+A SCIM token lets an organisation's identity provider manage that organisation's memberships. User accounts are global, so SCIM may only create or attach users whose email domain the organisation has proven it controls.
+
+1. In **Settings → SCIM 2.0 → Verified domains**, add the email domain (for example `example.com`). Domains are lowercased, a trailing dot is ignored, and single labels, public suffixes such as `com.au`, and shared mailbox providers (Gmail, Outlook, Hotmail, Yahoo, iCloud, Proton and similar) are rejected.
+2. Create the DNS TXT record shown next to the domain:
+   - Name: `_dingodocs-verification.<domain>`
+   - Value: `dingodocs-domain-verification=<token>`
+3. Select **Verify**. DingoDocs looks up the TXT record and marks the domain verified when the value matches. A domain can be verified by only one organisation at a time; another organisation must remove it first.
+
+Matching is exact: `sub.example.com` needs its own verification. Adding, verifying and removing a domain are recorded in the audit log (`scim.domain.added`, `scim.domain.verified`, `scim.domain.removed`). The TXT record can be deleted after verification; removing the domain in DingoDocs stops further provisioning on it.
+
+`POST /api/scim/v2/Users` behaviour:
+
+- Email domain not verified for the organisation: `403`, `scimType: invalidValue`. No user or membership is created.
+- New address on a verified domain: a user is created with the IdP-asserted address treated as verified, plus a `read_only` membership.
+- Existing verified account on a verified domain: a membership is attached, even when the person belongs to other organisations. Global name and disabled state are never changed by SCIM.
+- Existing account whose email is not verified: `409`, `scimType: uniqueness`. The account must be verified or removed first, so a pre-registered look-alike account can't be adopted and elevated through group pushes.
+
+**Upgrading existing SCIM setups:** creates now fail with `403` until the organisation verifies its domains. Users already provisioned keep working: `GET`, `PATCH` and `DELETE` on existing members, and Group pushes, do not require a verified domain. Verify domains before the IdP's next create or re-POST cycle.
+
 See [SECURITY.md](../SECURITY.md) for vulnerability reporting.

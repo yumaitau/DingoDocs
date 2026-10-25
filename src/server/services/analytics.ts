@@ -110,10 +110,7 @@ export async function getRiskAnalytics(
   const statusCondition = analyticsStatusCondition(filters.status);
   if (statusCondition) conditions.push(statusCondition);
 
-  const sixMonthsAgo = new Date(now);
-  sixMonthsAgo.setUTCMonth(sixMonthsAgo.getUTCMonth() - 5);
-  sixMonthsAgo.setUTCDate(1);
-  sixMonthsAgo.setUTCHours(0, 0, 0, 0);
+  const sixMonthsAgo = startOfUtcMonthsAgo(now, 5);
 
   const [
     rows,
@@ -520,6 +517,13 @@ export async function getRiskAnalytics(
     ),
     findings: rows.slice(0, 50),
   };
+}
+
+/** First instant (UTC) of the month `months` before `now`'s month. */
+export function startOfUtcMonthsAgo(now: Date, months: number) {
+  return new Date(
+    Date.UTC(now.getUTCFullYear(), now.getUTCMonth() - months, 1),
+  );
 }
 
 function analyticsStatusCondition(status: RiskAnalyticsFilters["status"]) {

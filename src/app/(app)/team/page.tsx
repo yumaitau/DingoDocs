@@ -5,10 +5,10 @@ import { organisationMembers, users } from "@/db/schema";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { StatusPill } from "@/components/ui/status-pill";
-import { requireOrganisationContext } from "@/lib/permissions/require";
+import { requireInternalOrganisationContext } from "@/lib/permissions/require";
 
 export default async function TeamPage() {
-  const context = await requireOrganisationContext();
+  const context = await requireInternalOrganisationContext();
   const rows = await db
     .select({
       id: users.id,

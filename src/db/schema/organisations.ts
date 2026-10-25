@@ -14,6 +14,8 @@ export type SecurityPolicy = {
   mfaMode?: "optional" | "admin_required" | "all_users_required";
   mfaGracePeriodDays?: number;
   scimGroupRoles?: Record<string, string>;
+  /** Email domains this organisation may provision via SCIM (DNS TXT proof). */
+  scimDomains?: Array<{ domain: string; token: string; verifiedAt?: string }>;
   sso?: {
     protocol: "oidc" | "saml";
     issuer: string;

@@ -37,10 +37,36 @@ const nextConfig: NextConfig = {
           },
         ],
       },
+      // Inline previews of uploaded or generated content must never run
+      // script on the app origin. Next applies the matching header listed
+      // last, and route-handler CSP headers lose to the global one above, so
+      // the preview policies live here.
+      {
+        source: "/api/v1/evidence/:id/preview",
+        headers: [
+          {
+            key: "Content-Security-Policy",
+            value:
+              "default-src 'none'; img-src 'self' data:; media-src 'self'; style-src 'unsafe-inline'; frame-ancestors 'none'",
+          },
+        ],
+      },
+      {
+        source: "/api/(v1|portal)/reports/:id/preview",
+        headers: [
+          {
+            key: "Content-Security-Policy",
+            value:
+              "default-src 'none'; style-src 'unsafe-inline'; img-src data:; frame-ancestors 'none'; sandbox",
+          },
+        ],
+      },
     ];
   },
   experimental: {
     serverActions: { bodySizeLimit: "16mb" },
+    // Server actions post to page routes, which pass through src/proxy.ts.
+    proxyClientMaxBodySize: "16mb",
   },
 };
 

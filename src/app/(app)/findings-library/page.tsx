@@ -5,7 +5,7 @@ import { clients, riskMatrices } from "@/db/schema";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { StatusPill } from "@/components/ui/status-pill";
-import { requireOrganisationContext } from "@/lib/permissions/require";
+import { requireInternalOrganisationContext } from "@/lib/permissions/require";
 import { formatDateTime } from "@/lib/time-zone";
 import {
   createFindingTemplateAction,
@@ -26,7 +26,7 @@ export default async function FindingsLibraryPage({
     assessmentType?: string;
   }>;
 }) {
-  const context = await requireOrganisationContext();
+  const context = await requireInternalOrganisationContext();
   const {
     q = "",
     severity = "",

@@ -6,8 +6,10 @@ import { findings } from "@/db/schema";
 import { apiReadContext, apiWriteContext } from "@/lib/api/authentication";
 import { apiError, apiNotFound } from "@/lib/api/responses";
 import { engagementVisibility } from "@/lib/permissions/access";
-import type { Permission } from "@/lib/permissions/matrix";
-import { transitionFinding } from "@/server/services/findings";
+import {
+  findingTransitionPermission,
+  transitionFinding,
+} from "@/server/services/findings";
 
 const findingStatus = z.enum([
   "draft",
@@ -29,13 +31,6 @@ const bodySchema = z.object({
   status: findingStatus,
   reason: z.string().trim().max(4_000).optional(),
 });
-
-const approvalStatuses = new Set([
-  "changes_requested",
-  "peer_reviewed",
-  "qa_approved",
-  "published",
-]);
 
 export async function POST(
   request: Request,
@@ -61,9 +56,9 @@ export async function POST(
     if (!existing) return apiNotFound(requestId, "Finding was not found");
 
     const input = bodySchema.parse(await request.json());
-    const permission: Permission = approvalStatuses.has(input.status)
-      ? "finding:approve"
-      : "finding:create";
+    // Approval, publication and closure targets need finding:approve, which
+    // service-account keys never hold.
+    const permission = findingTransitionPermission(input.status);
     const writer = await apiWriteContext(
       request,
       "findings:write",

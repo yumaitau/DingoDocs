@@ -6,6 +6,12 @@ import {
   mfaAccessDecision,
   type MfaEnforcementInput,
 } from "./mfa-policy";
+import {
+  PATHNAME_HEADER,
+  PATHNAME_SIGNATURE_HEADER,
+  signPathname,
+  verifiedPathnameFromHeaders,
+} from "./pathname-signature";
 
 const now = new Date("2026-06-15T00:00:00.000Z");
 const day = 24 * 60 * 60 * 1000;
@@ -219,6 +225,38 @@ describe("mfaAccessDecision", () => {
         blocked: false,
         pathname: "/dashboard",
         serverAction: false,
+      }),
+    ).toBe("allow");
+  });
+});
+
+describe("mfaAccessDecision with proxy-signed pathnames", () => {
+  const secret = "test-secret-at-least-32-characters-long";
+  // What guardOrganisationMfa feeds mfaAccessDecision for a request.
+  function decideFor(headers: Record<string, string>) {
+    return mfaAccessDecision({
+      blocked: true,
+      pathname: verifiedPathnameFromHeaders(new Headers(headers), secret),
+      serverAction: false,
+    });
+  }
+
+  it("denies an /api/v1 request that spoofs an exempt x-pathname", () => {
+    expect(decideFor({ [PATHNAME_HEADER]: "/account/security" })).toBe("deny");
+    expect(decideFor({ [PATHNAME_HEADER]: "/api/auth" })).toBe("deny");
+    expect(
+      decideFor({
+        [PATHNAME_HEADER]: "/account/security",
+        [PATHNAME_SIGNATURE_HEADER]: signPathname("/api/v1/tasks", secret)!,
+      }),
+    ).toBe("deny");
+  });
+
+  it("still allows the account security page when the proxy signed it", () => {
+    expect(
+      decideFor({
+        [PATHNAME_HEADER]: "/account/security",
+        [PATHNAME_SIGNATURE_HEADER]: signPathname("/account/security", secret)!,
       }),
     ).toBe("allow");
   });

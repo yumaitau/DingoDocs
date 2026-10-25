@@ -94,5 +94,9 @@ export default {
       username: "reviewer@testerarmy.invalid",
       password: () => process.env.TESTERARMY_PASSWORD ?? "",
     },
+    qa: {
+      username: "qa@testerarmy.invalid",
+      password: () => process.env.TESTERARMY_PASSWORD ?? "",
+    },
   },
 } satisfies E2EConfig;

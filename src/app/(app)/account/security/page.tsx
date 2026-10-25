@@ -1,5 +1,8 @@
+import { eq } from "drizzle-orm";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
+import { db } from "@/db";
+import { users } from "@/db/schema";
 import { requireOrganisationContext } from "@/lib/permissions/require";
 import { formatDateTime } from "@/lib/time-zone";
 import { revokeOwnSessionAction } from "@/server/actions/security";
@@ -8,7 +11,14 @@ import { SecurityControls } from "./security-controls";
 
 export default async function AccountSecurityPage() {
   const context = await requireOrganisationContext();
-  const devices = await listUserDevices(context.userId);
+  const [devices, [account]] = await Promise.all([
+    listUserDevices(context.userId),
+    db
+      .select({ twoFactorEnabled: users.twoFactorEnabled })
+      .from(users)
+      .where(eq(users.id, context.userId))
+      .limit(1),
+  ]);
   return (
     <>
       <PageHeader
@@ -16,7 +26,9 @@ export default async function AccountSecurityPage() {
         description="Manage passkeys, multi-factor recovery, and signed-in devices."
       />
       <div className="space-y-6 px-4 py-6 sm:px-6 lg:px-8">
-        <SecurityControls />
+        <SecurityControls
+          twoFactorEnabled={Boolean(account?.twoFactorEnabled)}
+        />
         <section className="rounded-xl border bg-paper">
           <div className="border-b p-5">
             <h2 className="font-semibold">Signed-in devices</h2>

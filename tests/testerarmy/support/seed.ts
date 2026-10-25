@@ -55,6 +55,7 @@ async function main() {
       ["portal", "0197f30f-122c-7000-8000-000000000101"],
       ["newcomer", "0197f30f-122c-7000-8000-000000000102"],
       ["reviewer", "0197f30f-122c-7000-8000-000000000105"],
+      ["qa", "0197f30f-122c-7000-8000-000000000108"],
     ]) {
       await db
         .insert(users)
@@ -79,14 +80,21 @@ async function main() {
         });
     }
     const portalId = "0197f30f-122c-7000-8000-000000000101";
+    // Reviewer and QA are distinct from the admin author: findings need
+    // separate peer review, QA approval and publication identities.
     await db
       .insert(organisationMembers)
-      .values({
-        organisationId,
-        userId: "0197f30f-122c-7000-8000-000000000105",
-        role: "organisation_administrator",
-        joinedAt: new Date(),
-      })
+      .values(
+        [
+          "0197f30f-122c-7000-8000-000000000105",
+          "0197f30f-122c-7000-8000-000000000108",
+        ].map((userId) => ({
+          organisationId,
+          userId,
+          role: "organisation_administrator" as const,
+          joinedAt: new Date(),
+        })),
+      )
       .onConflictDoNothing();
     await db
       .insert(findings)

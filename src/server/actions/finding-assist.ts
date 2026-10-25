@@ -12,6 +12,7 @@ import {
   assertFindingEngagement,
   patchFindingNarrative,
 } from "@/server/services/findings";
+import { userFacingError } from "@/lib/errors";
 
 const id = z.string().uuid();
 
@@ -51,7 +52,7 @@ export async function requestFindingAssistAction(
     };
   } catch (error) {
     return {
-      error: error instanceof Error ? error.message : "AI assist failed",
+      error: userFacingError(error, "AI assist failed"),
     };
   }
 }

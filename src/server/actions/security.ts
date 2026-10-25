@@ -27,7 +27,15 @@ import {
   purgeExpiredEvidence,
   releaseLegalHold,
 } from "@/server/services/retention";
-import { createScimToken } from "@/server/services/scim";
+import { createScimToken, parseScimGroupRoles } from "@/server/services/scim";
+import {
+  addScimDomain,
+  removeScimDomain,
+  scimDomainTxtName,
+  scimDomainTxtValue,
+  verifyScimDomain,
+} from "@/server/services/domain-verification";
+import { userFacingError } from "@/lib/errors";
 
 const id = z.string().uuid();
 
@@ -154,10 +162,7 @@ export async function saveJiraConnectionAction(
     return { message: "Jira connection saved." };
   } catch (error) {
     return {
-      error:
-        error instanceof Error
-          ? error.message
-          : "Could not save Jira connection",
+      error: userFacingError(error, "Could not save Jira connection"),
     };
   }
 }
@@ -171,8 +176,7 @@ export async function testJiraConnectionAction(): Promise<SettingsSecretState> {
     };
   } catch (error) {
     return {
-      error:
-        error instanceof Error ? error.message : "Jira connection test failed",
+      error: userFacingError(error, "Jira connection test failed"),
     };
   }
 }
@@ -192,9 +196,63 @@ export async function createScimTokenAction(
     };
   } catch (error) {
     return {
-      error:
-        error instanceof Error ? error.message : "Could not create SCIM token",
+      error: userFacingError(error, "Could not create SCIM token"),
     };
+  }
+}
+
+const scimDomainInput = z.string().trim().min(1, "Enter a domain").max(253);
+
+export async function addScimDomainAction(
+  _state: SettingsSecretState,
+  formData: FormData,
+): Promise<SettingsSecretState> {
+  try {
+    const context = await requirePermission("integration:configure");
+    const entry = await addScimDomain(
+      context,
+      scimDomainInput.parse(formData.get("domain")),
+    );
+    revalidatePath("/settings");
+    return {
+      message: `Create a TXT record ${scimDomainTxtName(entry.domain)} with value ${scimDomainTxtValue(entry.token)}, then select Verify.`,
+    };
+  } catch (error) {
+    return { error: userFacingError(error, "Could not add SCIM domain") };
+  }
+}
+
+export async function verifyScimDomainAction(
+  _state: SettingsSecretState,
+  formData: FormData,
+): Promise<SettingsSecretState> {
+  try {
+    const context = await requirePermission("integration:configure");
+    const entry = await verifyScimDomain(
+      context,
+      scimDomainInput.parse(formData.get("domain")),
+    );
+    revalidatePath("/settings");
+    return { message: `${entry.domain} is verified for SCIM provisioning.` };
+  } catch (error) {
+    return { error: userFacingError(error, "Could not verify SCIM domain") };
+  }
+}
+
+export async function removeScimDomainAction(
+  _state: SettingsSecretState,
+  formData: FormData,
+): Promise<SettingsSecretState> {
+  try {
+    const context = await requirePermission("integration:configure");
+    await removeScimDomain(
+      context,
+      scimDomainInput.parse(formData.get("domain")),
+    );
+    revalidatePath("/settings");
+    return { message: "SCIM domain removed." };
+  } catch (error) {
+    return { error: userFacingError(error, "Could not remove SCIM domain") };
   }
 }
 
@@ -238,38 +296,42 @@ export async function saveSsoPolicyAction(
       .optional()
       .parse(formData.get("groupRoles") || undefined);
 
-    const [org] = await db
-      .select({ securityPolicy: organisations.securityPolicy })
-      .from(organisations)
-      .where(eq(organisations.id, context.organisationId))
-      .limit(1);
-    const current = (org?.securityPolicy ?? {}) as SecurityPolicy;
-    const scimGroupRoles = scimGroupRolesRaw
-      ? (JSON.parse(scimGroupRolesRaw) as Record<string, string>)
-      : current.scimGroupRoles;
-    const groupRoles = groupRolesRaw
-      ? (JSON.parse(groupRolesRaw) as Record<string, string>)
-      : current.sso?.groupRoles;
+    // Lock the row so a concurrent SCIM-domain change is not overwritten.
+    await db.transaction(async (tx) => {
+      const [org] = await tx
+        .select({ securityPolicy: organisations.securityPolicy })
+        .from(organisations)
+        .where(eq(organisations.id, context.organisationId))
+        .limit(1)
+        .for("update");
+      const current = (org?.securityPolicy ?? {}) as SecurityPolicy;
+      const scimGroupRoles = scimGroupRolesRaw
+        ? parseScimGroupRoles(scimGroupRolesRaw, context.role as Role)
+        : current.scimGroupRoles;
+      const groupRoles = groupRolesRaw
+        ? (JSON.parse(groupRolesRaw) as Record<string, string>)
+        : current.sso?.groupRoles;
 
-    const next: SecurityPolicy = {
-      ...current,
-      scimGroupRoles,
-      sso: {
-        protocol,
-        issuer,
-        clientId,
-        clientSecretEncrypted: clientSecret
-          ? encryptIntegrationSecret(clientSecret)
-          : current.sso?.clientSecretEncrypted,
-        entryPoint: entryPoint || current.sso?.entryPoint,
-        certificate: certificate || current.sso?.certificate,
-        groupRoles,
-      },
-    };
-    await db
-      .update(organisations)
-      .set({ securityPolicy: next, updatedAt: new Date() })
-      .where(eq(organisations.id, context.organisationId));
+      const next: SecurityPolicy = {
+        ...current,
+        scimGroupRoles,
+        sso: {
+          protocol,
+          issuer,
+          clientId,
+          clientSecretEncrypted: clientSecret
+            ? encryptIntegrationSecret(clientSecret)
+            : current.sso?.clientSecretEncrypted,
+          entryPoint: entryPoint || current.sso?.entryPoint,
+          certificate: certificate || current.sso?.certificate,
+          groupRoles,
+        },
+      };
+      await tx
+        .update(organisations)
+        .set({ securityPolicy: next, updatedAt: new Date() })
+        .where(eq(organisations.id, context.organisationId));
+    });
     revalidatePath("/settings");
     return {
       message:
@@ -279,8 +341,7 @@ export async function saveSsoPolicyAction(
     };
   } catch (error) {
     return {
-      error:
-        error instanceof Error ? error.message : "Could not save SSO policy",
+      error: userFacingError(error, "Could not save SSO policy"),
     };
   }
 }

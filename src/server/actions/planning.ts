@@ -17,7 +17,10 @@ import {
   taskStatusEnum,
   tasks,
 } from "@/db/schema";
+import { withEngagementAccess } from "@/lib/permissions/access";
 import {
+  requireActorPermission,
+  requireInternalOrganisationContext,
   requireOrganisationContext,
   requirePermission,
 } from "@/lib/permissions/require";
@@ -45,7 +48,7 @@ function addPeriod(
 }
 
 export async function updateTaskStatusAction(formData: FormData) {
-  const context = await requireOrganisationContext();
+  const context = await requireInternalOrganisationContext();
   const input = z
     .object({
       taskId: id,
@@ -55,6 +58,25 @@ export async function updateTaskStatusAction(formData: FormData) {
       taskId: formData.get("taskId"),
       status: formData.get("status"),
     });
+  const [task] = await db
+    .select({ engagementId: tasks.engagementId, assigneeId: tasks.assigneeId })
+    .from(tasks)
+    .where(
+      and(
+        eq(tasks.id, input.taskId),
+        eq(tasks.organisationId, context.organisationId),
+      ),
+    )
+    .limit(1);
+  if (!task) throw new Error("Task not found");
+  // The assignee may move their own task; anyone else needs the same gate as
+  // task creation: scope:manage on the task's engagement.
+  if (task.assigneeId !== context.userId)
+    await requireActorPermission(
+      context,
+      "scope:manage",
+      task.engagementId ? { engagementId: task.engagementId } : undefined,
+    );
   await db
     .update(tasks)
     .set({ status: input.status, updatedAt: new Date() })
@@ -102,7 +124,9 @@ export async function createNextOccurrenceAction(formData: FormData) {
     .select()
     .from(engagements)
     .where(
-      and(
+      withEngagementAccess(
+        context,
+        engagements.id,
         eq(engagements.id, input.engagementId),
         eq(engagements.organisationId, context.organisationId),
         isNull(engagements.deletedAt),

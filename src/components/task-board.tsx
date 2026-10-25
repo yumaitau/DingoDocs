@@ -83,6 +83,7 @@ export function TaskBoard({ tasks }: { tasks: BoardTask[] }) {
 
   return (
     <DndContext
+      id="task-board"
       sensors={sensors}
       collisionDetection={closestCorners}
       onDragStart={onDragStart}

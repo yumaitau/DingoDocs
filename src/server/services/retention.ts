@@ -10,6 +10,7 @@ import {
   organisations,
   reports,
 } from "@/db/schema";
+import { structuredLog } from "@/lib/observability/logger";
 import { storage, type StorageProvider } from "@/lib/storage";
 
 export type RetentionActor = { organisationId: string; userId: string };
@@ -128,7 +129,9 @@ export async function purgeExpiredEvidence(
   const cutoff = (options.asOf ?? new Date()).toISOString();
   let destroyed = 0;
   for (const candidate of candidates) {
-    const didDestroy = await db.transaction(async (tx) => {
+    // Delete the object only after the row update commits, so a rollback
+    // never leaves an "active" evidence row pointing at a missing object.
+    const storageKey = await db.transaction(async (tx) => {
       const records = await tx.execute<{ storage_key: string }>(sql`
         select e.storage_key
         from evidence e
@@ -144,8 +147,7 @@ export async function purgeExpiredEvidence(
         for update
       `);
       const record = records[0];
-      if (!record) return false;
-      await selectedProvider.delete(record.storage_key);
+      if (!record) return null;
       await tx
         .update(evidence)
         .set({ retentionStatus: "destroyed", deletedAt: new Date() })
@@ -169,9 +171,19 @@ export async function purgeExpiredEvidence(
           retainedMetadata: true,
         },
       });
-      return true;
+      return record.storage_key;
     });
-    if (didDestroy) destroyed += 1;
+    if (storageKey === null) continue;
+    destroyed += 1;
+    try {
+      await selectedProvider.delete(storageKey);
+    } catch (error) {
+      structuredLog("error", "retention.storage_delete_failed", {
+        organisationId,
+        evidenceId: candidate.id,
+        errorType: error instanceof Error ? error.name : "UnknownError",
+      });
+    }
   }
   return { eligible: candidates.length, destroyed };
 }

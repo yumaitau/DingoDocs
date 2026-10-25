@@ -1,6 +1,11 @@
 import { z } from "zod";
 import { apiWriteContext } from "@/lib/api/authentication";
-import { apiError } from "@/lib/api/responses";
+import { apiError, resolveRequestId } from "@/lib/api/responses";
+import {
+  formDataWithLimit,
+  maxUploadRequestBytes,
+  RequestBodyTooLargeError,
+} from "@/lib/security/request-body";
 import { maxUploadBytes } from "@/lib/security/upload";
 import {
   EvidenceDuplicateError,
@@ -17,6 +22,14 @@ export async function POST(
   try {
     return await handleUpload(request, context);
   } catch (error) {
+    if (error instanceof RequestBodyTooLargeError)
+      return Response.json(
+        {
+          error: { code: "payload_too_large", message: error.message },
+          requestId: resolveRequestId(request.headers.get("x-request-id")),
+        },
+        { status: 413 },
+      );
     return apiError(error, request.headers.get("x-request-id"));
   }
 }
@@ -46,7 +59,8 @@ async function handleUpload(
           organisationId: permission.organisationId,
           userId: permission.userId,
         };
-  const formData = await request.formData();
+  // Enforce streamed bytes before multipart parsing buffers the body.
+  const formData = await formDataWithLimit(request, maxUploadRequestBytes());
   const classification = z
     .enum(["internal", "restricted", "client_visible"])
     .parse(formData.get("classification") ?? "restricted");

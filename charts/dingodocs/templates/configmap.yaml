@@ -1,0 +1,17 @@
+{{- $provider := default "local" .Values.env.STORAGE_PROVIDER | toString | lower -}}
+{{- if and (eq $provider "local") .Values.securityContext.readOnlyRootFilesystem -}}
+{{- fail "env.STORAGE_PROVIDER=local cannot run with securityContext.readOnlyRootFilesystem=true (evidence would be written to the read-only image filesystem and lost per Pod). Use s3, minio or r2 storage." -}}
+{{- end -}}
+{{- if has $provider (list "s3" "minio" "r2") -}}
+{{- $_ := required (printf "env.S3_BUCKET is required when env.STORAGE_PROVIDER=%s" $provider) .Values.env.S3_BUCKET -}}
+{{- end -}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "dingodocs.fullname" . }}-config
+  labels:
+    {{- include "dingodocs.labels" . | nindent 4 }}
+data:
+  {{- range $key, $value := .Values.env }}
+  {{ $key }}: {{ $value | quote }}
+  {{- end }}

@@ -7,6 +7,7 @@ import { evidenceFindings } from "@/db/schema";
 import { type Role } from "@/lib/permissions/matrix";
 import { requirePortalEngagement } from "@/lib/permissions/portal";
 import {
+  requireInternalOrganisationContext,
   requireOrganisationContext,
   requirePermission,
 } from "@/lib/permissions/require";
@@ -30,6 +31,7 @@ import {
   scopedEvidenceActor,
   uploadEvidence,
 } from "@/server/services/evidence";
+import { pushFindingToJira } from "@/server/services/jira";
 
 const id = z.string().uuid();
 const text = z.string().trim().min(1).max(5_000);
@@ -63,10 +65,10 @@ export async function addPortalCommentAction(
   revalidatePath(`/portal/engagements/${id.parse(engagementId)}`);
 }
 
+// Bound as a form action; the submitted FormData is not needed.
 export async function pushFindingToJiraAction(
   engagementId: string,
   findingId: string,
-  _formData?: FormData,
 ): Promise<"Jira is not connected" | undefined> {
   const actor = await requireClientActor();
   const parsedEngagementId = id.parse(engagementId);
@@ -77,39 +79,17 @@ export async function pushFindingToJiraAction(
     throw new Error("The requested portal resource was not found");
   }
   try {
-    const specifier = "@/server/services/jira";
-    const jira = (await import(specifier)) as {
-      pushFindingToJira?: (
-        actor: { organisationId: string; userId: string },
-        input: { findingId: string },
-      ) => Promise<unknown>;
-    };
-    if (typeof jira.pushFindingToJira !== "function") {
-      return "Jira is not connected";
-    }
-    await jira.pushFindingToJira(actor, { findingId: parsedFindingId });
-    revalidatePath(`/portal/engagements/${parsedEngagementId}`);
-    return undefined;
+    await pushFindingToJira(actor, parsedFindingId);
   } catch (error) {
-    if (isModuleMissing(error)) return "Jira is not connected";
-    if (error instanceof Error && /not connected/i.test(error.message)) {
+    if (
+      error instanceof Error &&
+      /not (connected|configured)/i.test(error.message)
+    )
       return "Jira is not connected";
-    }
     throw error;
   }
-}
-
-function isModuleMissing(error: unknown) {
-  if (!(error instanceof Error)) return false;
-  const code = (error as NodeJS.ErrnoException).code;
-  return (
-    code === "ERR_MODULE_NOT_FOUND" ||
-    code === "MODULE_NOT_FOUND" ||
-    /cannot find module/i.test(error.message) ||
-    /module not found/i.test(error.message) ||
-    /failed to resolve module/i.test(error.message) ||
-    /cannot find package/i.test(error.message)
-  );
+  revalidatePath(`/portal/engagements/${parsedEngagementId}`);
+  return undefined;
 }
 
 export async function submitRemediationAction(
@@ -209,8 +189,10 @@ export async function uploadRemediationEvidenceAction(
 }
 
 export async function scheduleRetestAction(formData: FormData) {
+  // engagementId only selects the page to refresh; the service authorises
+  // finding:approve against the engagement that owns the attempt.
   const engagementId = id.parse(formData.get("engagementId"));
-  const context = await requirePermission("finding:approve", { engagementId });
+  const context = await requireInternalOrganisationContext();
   const scheduledFor = z.string().parse(formData.get("scheduledFor"));
   await scheduleRetest(context, {
     attemptId: id.parse(formData.get("attemptId")),
@@ -222,7 +204,7 @@ export async function scheduleRetestAction(formData: FormData) {
 
 export async function addRetestNoteAction(formData: FormData) {
   const engagementId = id.parse(formData.get("engagementId"));
-  const context = await requirePermission("finding:approve", { engagementId });
+  const context = await requireInternalOrganisationContext();
   await addRetestNote(context, {
     attemptId: id.parse(formData.get("attemptId")),
     body: text.parse(formData.get("body")),
@@ -235,7 +217,7 @@ export async function addRetestNoteAction(formData: FormData) {
 
 export async function attachRetestEvidenceAction(formData: FormData) {
   const engagementId = id.parse(formData.get("engagementId"));
-  const context = await requirePermission("finding:approve", { engagementId });
+  const context = await requireInternalOrganisationContext();
   await attachRetestEvidence(context, {
     attemptId: id.parse(formData.get("attemptId")),
     evidenceId: id.parse(formData.get("evidenceId")),
@@ -245,7 +227,7 @@ export async function attachRetestEvidenceAction(formData: FormData) {
 
 export async function completeRetestAction(formData: FormData) {
   const engagementId = id.parse(formData.get("engagementId"));
-  const context = await requirePermission("finding:approve", { engagementId });
+  const context = await requireInternalOrganisationContext();
   await completeRetest(context, {
     attemptId: id.parse(formData.get("attemptId")),
     outcome: z

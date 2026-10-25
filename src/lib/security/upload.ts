@@ -114,3 +114,20 @@ function matches(bytes: Uint8Array, signature: number[]) {
 function ascii(bytes: Uint8Array, start: number, end: number) {
   return String.fromCharCode(...bytes.slice(start, end));
 }
+
+// Browsers render XML (and anything else markup-like) as an active document,
+// so only passive media types are previewed as themselves; the rest is shown
+// as plain text. Downloads keep the original type.
+const inlinePreviewTypes = new Set([
+  "image/png",
+  "image/jpeg",
+  "image/webp",
+  "video/mp4",
+  "application/pdf",
+]);
+
+export function previewContentType(mediaType: string) {
+  return inlinePreviewTypes.has(mediaType)
+    ? mediaType
+    : "text/plain; charset=utf-8";
+}

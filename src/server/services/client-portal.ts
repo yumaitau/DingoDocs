@@ -29,7 +29,6 @@ import {
   requirePortalEngagement,
 } from "@/lib/permissions/portal";
 import {
-  assertEngagementAccess,
   PermissionDeniedError,
   requireActorPermission,
 } from "@/lib/permissions/require";
@@ -451,6 +450,15 @@ export async function submitRemediationUpdate(
         : input.status === "open"
           ? finding.status
           : "remediation_in_progress";
+  // Closed and resolved are tester decisions; a client remediation update
+  // cannot reopen them. Other statuses (e.g. a failed retest) stay updatable.
+  if (
+    nextFindingStatus !== finding.status &&
+    (finding.status === "closed" || finding.status === "resolved")
+  )
+    throw new Error(
+      `A ${finding.status} finding cannot be reopened from the portal`,
+    );
   const update = await db.transaction(async (tx) => {
     const [update] = await tx
       .insert(remediationUpdates)
@@ -463,7 +471,7 @@ export async function submitRemediationUpdate(
         note: input.note?.trim() || null,
       })
       .returning();
-    await tx
+    const [changed] = await tx
       .update(findings)
       .set({
         clientOwner: input.owner?.trim() || finding.clientOwner,
@@ -478,8 +486,13 @@ export async function submitRemediationUpdate(
         and(
           eq(findings.id, finding.id),
           eq(findings.organisationId, actor.organisationId),
+          eq(findings.status, finding.status),
+          eq(findings.version, finding.version),
         ),
-      );
+      )
+      .returning({ id: findings.id });
+    if (!changed)
+      throw new Error("Finding changed; reload and submit the update again");
     if (nextFindingStatus !== finding.status) {
       await tx.insert(findingTransitions).values({
         organisationId: actor.organisationId,
@@ -516,6 +529,7 @@ export async function submitRemediationUpdate(
     eventType: "remediation.submitted",
     title: `Remediation submitted for ${finding.identifier}`,
     actionUrl: `/engagements/${finding.engagementId}?view=findings`,
+    engagementId: finding.engagementId,
     payload: {
       updateId: update.id,
       findingId: finding.id,
@@ -570,6 +584,7 @@ export async function requestRetest(
     eventType: "retest.requested",
     title: `Retest requested for ${finding.identifier}`,
     actionUrl: `/engagements/${finding.engagementId}?view=findings`,
+    engagementId: finding.engagementId,
     payload: {
       attemptId: attempt!.id,
       findingId: finding.id,
@@ -668,9 +683,9 @@ async function requireInternalRetest(actor: PortalActor, attemptId: string) {
     )
     .limit(1);
   if (!rows[0]) throw new PortalNotFoundError();
-  await assertEngagementAccess({
-    userId: actor.userId,
-    organisationId: actor.organisationId,
+  // Authorise against the engagement that owns the attempt, never a
+  // caller-supplied engagement id.
+  await requireActorPermission(actor, "finding:approve", {
     engagementId: rows[0].finding.engagementId,
   });
   return rows[0];
@@ -702,6 +717,7 @@ export async function scheduleRetest(
       eventType: "retest.scheduled",
       title: `Retest scheduled for ${finding.identifier}`,
       actionUrl: `/engagements/${finding.engagementId}?view=findings`,
+      engagementId: finding.engagementId,
       payload: {
         attemptId: attempt.id,
         findingId: finding.id,
@@ -837,6 +853,7 @@ export async function completeRetest(
       eventType: "retest.completed",
       title: `Retest completed for ${current.finding.identifier}`,
       actionUrl: `/engagements/${current.finding.engagementId}?view=findings`,
+      engagementId: current.finding.engagementId,
       payload: {
         attemptId: input.attemptId,
         findingId: current.finding.id,

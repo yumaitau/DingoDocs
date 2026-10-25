@@ -11,7 +11,7 @@ export class LocalStorageProvider implements StorageProvider {
   private readonly root: string;
 
   constructor(root = process.env.LOCAL_STORAGE_ROOT ?? "./storage/data") {
-    this.root = resolve(root);
+    this.root = resolve(/* turbopackIgnore: true */ root);
   }
 
   private pathFor(key: string) {

@@ -181,7 +181,7 @@ export async function FindingsSection({
           <form
             id="bulk-findings"
             action={bulkUpdateFindingsAction.bind(null, engagementId)}
-            className="mt-4 grid gap-3 md:grid-cols-4"
+            className="mt-4 grid gap-3 md:grid-cols-3"
           >
             <Field label="Status">
               <select className={field} name="status" defaultValue="">
@@ -203,9 +203,6 @@ export async function FindingsSection({
                 ))}
               </select>
             </Field>
-            <Field label="Assignee user id">
-              <input className={field} name="assigneeId" placeholder="UUID" />
-            </Field>
             <Field label="Client visible">
               <select className={field} name="clientVisible" defaultValue="">
                 <option value="">No change</option>
@@ -213,7 +210,7 @@ export async function FindingsSection({
                 <option value="false">Hidden</option>
               </select>
             </Field>
-            <Button type="submit" className="md:col-span-4 md:w-fit">
+            <Button type="submit" className="md:col-span-3 md:w-fit">
               Apply bulk update
             </Button>
           </form>

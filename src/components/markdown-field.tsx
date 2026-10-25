@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "@tiptap/extension-image";
 import Link from "@tiptap/extension-link";
 import { EditorContent, useEditor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
@@ -13,7 +14,7 @@ function escapeHtml(value: string) {
     .replaceAll('"', "&quot;");
 }
 
-function markdownToHtml(markdown: string) {
+export function markdownToHtml(markdown: string) {
   const lines = markdown.replaceAll("\r\n", "\n").split("\n");
   const html: string[] = [];
   let inList: "ul" | "ol" | null = null;
@@ -110,7 +111,7 @@ function inlineMarkdown(value: string) {
     );
 }
 
-function htmlToMarkdown(html: string) {
+export function htmlToMarkdown(html: string) {
   const root = document.createElement("div");
   root.innerHTML = html;
   const blocks: string[] = [];
@@ -185,6 +186,22 @@ function htmlToMarkdown(html: string) {
   return blocks.join("\n\n").trim();
 }
 
+export function markdownEditorExtensions() {
+  return [
+    // StarterKit v3 bundles Link; disable it so the configured Link below is
+    // the only registration.
+    StarterKit.configure({ link: false }),
+    // Without Image, Tiptap drops <img> nodes and the next edit strips
+    // screenshots from the saved markdown. markdownToHtml only emits http(s)
+    // URLs as top-level images, so keep block images and reject data: URIs.
+    Image.configure({ inline: false, allowBase64: false }),
+    Link.configure({
+      openOnClick: false,
+      HTMLAttributes: { rel: "noopener noreferrer nofollow" },
+    }),
+  ];
+}
+
 export function MarkdownField({
   name,
   label,
@@ -200,13 +217,7 @@ export function MarkdownField({
   const [markdown, setMarkdown] = useState(defaultValue ?? "");
   const editor = useEditor({
     immediatelyRender: false,
-    extensions: [
-      StarterKit,
-      Link.configure({
-        openOnClick: false,
-        HTMLAttributes: { rel: "noopener noreferrer nofollow" },
-      }),
-    ],
+    extensions: markdownEditorExtensions(),
     content: markdownToHtml(defaultValue ?? ""),
     editorProps: {
       attributes: {
@@ -248,11 +259,7 @@ export function MarkdownField({
             if (!raw) return;
             const src = safeImageUrl(raw);
             if (!src) return;
-            editor
-              .chain()
-              .focus()
-              .insertContent(`<img alt="" src="${escapeHtml(src)}" />`)
-              .run();
+            editor.chain().focus().setImage({ src, alt: "" }).run();
           }}
         >
           Insert screenshot

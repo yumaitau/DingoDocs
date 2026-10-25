@@ -217,36 +217,58 @@ export async function deliverWebhookJob(deliveryId: string) {
       timestamp,
       body,
     );
-  await assertWebhookUrl(record.url);
-  const response = await fetch(record.url, {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      "user-agent": "DingoDocs-Webhooks/1.0",
-      "x-dingodocs-event-id": record.eventId,
-      "x-dingodocs-timestamp": String(timestamp),
-      ...signatureHeaders,
-    },
-    body,
-    signal: AbortSignal.timeout(10_000),
-    ...outboundFetchInit,
-  });
   const attempts = record.attempts + 1;
-  await db
-    .update(webhookDeliveries)
-    .set({
-      attempts,
-      attemptedAt: new Date(),
-      signatureTimestamp: new Date(timestamp * 1000),
-      responseStatus: String(response.status),
-      status: response.ok ? "delivered" : attempts >= 5 ? "failed" : "retrying",
-      completedAt: response.ok ? new Date() : undefined,
-      nextAttemptAt: response.ok
-        ? undefined
-        : new Date(Date.now() + Math.min(3600, 2 ** attempts * 15) * 1000),
-      lastError: response.ok ? null : `HTTP ${response.status}`,
-    })
-    .where(eq(webhookDeliveries.id, deliveryId));
+  const recordAttempt = (outcome: { status?: number; error?: string }) => {
+    const ok =
+      outcome.status !== undefined &&
+      outcome.status < 300 &&
+      outcome.status >= 200;
+    return db
+      .update(webhookDeliveries)
+      .set({
+        attempts,
+        attemptedAt: new Date(),
+        signatureTimestamp: new Date(timestamp * 1000),
+        responseStatus:
+          outcome.status === undefined ? null : String(outcome.status),
+        status: ok ? "delivered" : attempts >= 5 ? "failed" : "retrying",
+        completedAt: ok ? new Date() : undefined,
+        nextAttemptAt: ok
+          ? undefined
+          : new Date(Date.now() + Math.min(3600, 2 ** attempts * 15) * 1000),
+        lastError: ok
+          ? null
+          : (outcome.error ?? `HTTP ${outcome.status}`).slice(0, 2000),
+      })
+      .where(eq(webhookDeliveries.id, deliveryId));
+  };
+  let response: Response;
+  try {
+    await assertWebhookUrl(record.url);
+    response = await fetch(record.url, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "user-agent": "DingoDocs-Webhooks/1.0",
+        "x-dingodocs-event-id": record.eventId,
+        "x-dingodocs-timestamp": String(timestamp),
+        ...signatureHeaders,
+      },
+      body,
+      signal: AbortSignal.timeout(10_000),
+      ...outboundFetchInit,
+    });
+  } catch (error) {
+    // Network failure (timeout, DNS, refused): record it like a non-2xx.
+    await recordAttempt({
+      error:
+        error instanceof Error
+          ? `${error.name}: ${error.message}`
+          : "Webhook request failed",
+    });
+    throw error;
+  }
+  await recordAttempt({ status: response.status });
   if (!response.ok) throw new Error(`Webhook returned HTTP ${response.status}`);
 }
 

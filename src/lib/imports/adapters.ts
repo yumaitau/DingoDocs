@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { isIP } from "node:net";
 
 export const importAdapterNames = [
   "nmap",
@@ -732,16 +733,29 @@ function parseBlocks(
     remediation: text(item, fields.remediation),
     severity: mapSeverity(text(item, fields.severity)),
     assetIdentifier: cleanHost(text(item, fields.host)),
-    port: number(text(item, "port")),
+    port: port(text(item, "port")),
     cvssScore: number(text(item, "cvss_base")),
   }));
 }
 
 function parseZapJson(source: string) {
-  const value = JSON.parse(source) as { site?: Array<{ alerts?: unknown[] }> };
-  return parseJson(
-    JSON.stringify(value.site?.flatMap((site) => site.alerts ?? []) ?? []),
-  );
+  const value = JSON.parse(source) as {
+    site?: Array<Record<string, unknown> & { alerts?: unknown[] }>;
+  };
+  // Carry the site into each alert so one plugin on two sites stays distinct.
+  const alerts =
+    value.site?.flatMap((site) =>
+      (site.alerts ?? []).map((alert) =>
+        isRecord(alert)
+          ? {
+              host: site["@name"] ?? site["@host"],
+              port: site["@port"],
+              ...alert,
+            }
+          : alert,
+      ),
+    ) ?? [];
+  return parseJson(JSON.stringify(alerts));
 }
 
 function parseJson(source: string) {
@@ -890,13 +904,25 @@ function requireRoot(xml: string, root: string) {
   if (!new RegExp(`<${root}(?:\\s|>)`, "i").test(xml))
     throw new Error(`Expected ${root} XML document`);
 }
-function cleanHost(value?: string) {
-  if (!value) return undefined;
-  try {
-    return new URL(value).hostname;
-  } catch {
-    return value.replace(/^https?:\/\//, "").split(/[/:]/)[0] || undefined;
+const schemePattern = /^[a-z][a-z0-9+.-]*:\/\//i;
+export function cleanHost(value?: string) {
+  const raw = value?.trim();
+  if (!raw) return undefined;
+  // Only parse as a URL when there is an explicit scheme; otherwise
+  // "host:443" is read as scheme "host:" and bare IPv6 is mangled.
+  if (schemePattern.test(raw)) {
+    try {
+      const host = new URL(raw).hostname.replace(/^\[|\]$/g, "");
+      if (host) return host;
+    } catch {
+      // fall through to bare-host handling
+    }
   }
+  const bare = raw.replace(schemePattern, "").split(/[/?#]/)[0] ?? "";
+  const bracketed = bare.match(/^\[([^\]]+)\](?::\d*)?$/);
+  if (bracketed) return bracketed[1];
+  if (isIP(bare) === 6) return bare;
+  return bare.split(":")[0] || undefined;
 }
 function mapSeverity(value: unknown): NormalizedImportItem["severity"] {
   const raw = String(value ?? "")
@@ -932,4 +958,9 @@ function string(value: unknown) {
 function number(value: unknown) {
   const parsed = Number(value);
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : undefined;
+}
+/** Leading port number, e.g. OpenVAS "443/tcp" → 443; "general/tcp" → undefined. */
+function port(value: unknown) {
+  const match = string(value).match(/^\d+/);
+  return match ? number(match[0]) : undefined;
 }

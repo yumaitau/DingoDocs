@@ -41,9 +41,13 @@ export async function POST(
     if (!existing) return apiNotFound(requestId, "Report was not found");
 
     const input = bodySchema.parse(await request.json());
-    const permission: Permission = ["published", "archived"].includes(
-      input.status,
-    )
+    // Publication lifecycle and approval gates are human-only: service-account
+    // keys are denied report:publish and finding:approve.
+    const permission: Permission = [
+      "published",
+      "superseded",
+      "archived",
+    ].includes(input.status)
       ? "report:publish"
       : [
             "changes_requested",

@@ -132,7 +132,7 @@ describe("filterClientReportModel", () => {
       result.findings.some((finding) => finding.identifier === "DRAFT-001"),
     ).toBe(false);
     expect(source.findings).toHaveLength(3);
-    expect(result.sections).toBe(source.sections);
+    expect(result.sections).toEqual(source.sections);
   });
 
   it("keeps a published identifier that is in the allow-set", () => {

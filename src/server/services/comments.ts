@@ -5,7 +5,9 @@ import { db } from "@/db";
 import {
   commentRevisions,
   comments,
+  findings,
   organisationMembers,
+  reports,
   users,
 } from "@/db/schema";
 import { emitDomainEvent } from "./domain-events";
@@ -75,6 +77,11 @@ export async function createComment(
       eventType: "comment.created",
       title: (input.title ?? "Comment added").slice(0, 160),
       actionUrl: input.actionUrl,
+      engagementId: await targetEngagementId(
+        actor.organisationId,
+        input.targetType,
+        input.targetId,
+      ),
       payload: {
         commentId: comment.id,
         targetType: input.targetType,
@@ -128,36 +135,39 @@ export async function replyComment(
     .returning();
   if (!comment) throw new CommentError("Comment could not be created");
   const title = (input.title ?? "Comment reply").slice(0, 160);
-  if (visibility !== "private") {
-    await emitDomainEvent({
-      organisationId: actor.organisationId,
-      actorUserId: actor.userId,
-      eventType: "comment.created",
-      title,
-      actionUrl: input.actionUrl,
-      payload: {
-        commentId: comment.id,
-        parentId: rootParentId,
-        targetType: root.targetType,
-        targetId: root.targetId,
-        visibility,
-      },
-    });
-  }
+  // Private replies are author-only; never fan them out.
+  if (visibility === "private") return comment as CommentRecord;
+  const engagementId = await targetEngagementId(
+    actor.organisationId,
+    root.targetType,
+    root.targetId,
+  );
+  const payload = {
+    commentId: comment.id,
+    parentId: rootParentId,
+    targetType: root.targetType,
+    targetId: root.targetId,
+    visibility,
+  };
+  await emitDomainEvent({
+    organisationId: actor.organisationId,
+    actorUserId: actor.userId,
+    eventType: "comment.created",
+    title,
+    actionUrl: input.actionUrl,
+    engagementId,
+    payload,
+  });
   await emitDomainEvent({
     organisationId: actor.organisationId,
     actorUserId: actor.userId,
     eventType: "comment.replied",
     title,
     actionUrl: input.actionUrl,
-    clientSafe: true,
-    payload: {
-      commentId: comment.id,
-      parentId: rootParentId,
-      targetType: root.targetType,
-      targetId: root.targetId,
-      visibility,
-    },
+    engagementId,
+    // Only client-visible threads may reach portal users.
+    clientSafe: root.visibility === "client" && visibility === "client",
+    payload,
   });
   return comment as CommentRecord;
 }
@@ -276,6 +286,28 @@ async function resolveMentions(organisationId: string, body: string) {
         .filter(Boolean),
     ),
   ];
+}
+
+async function targetEngagementId(
+  organisationId: string,
+  targetType: string,
+  targetId: string,
+): Promise<string | undefined> {
+  const table =
+    targetType === "finding"
+      ? findings
+      : targetType === "report"
+        ? reports
+        : undefined;
+  if (!table) return undefined;
+  const [row] = await db
+    .select({ engagementId: table.engagementId })
+    .from(table)
+    .where(
+      and(eq(table.id, targetId), eq(table.organisationId, organisationId)),
+    )
+    .limit(1);
+  return row?.engagementId ?? undefined;
 }
 
 async function requireComment(organisationId: string, commentId: string) {

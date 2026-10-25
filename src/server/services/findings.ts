@@ -729,6 +729,45 @@ export async function patchFindingNarrative(
   });
 }
 
+/** Content edits (narrative, severity) are only allowed in these statuses. */
+const editableFindingStatuses: readonly FindingStatus[] = [
+  "draft",
+  "in_progress",
+  "changes_requested",
+];
+
+/**
+ * Statuses that record a review, approval, publication or closure decision.
+ * Moving a finding into one of them requires finding:approve.
+ */
+const approvalFindingStatuses: readonly FindingStatus[] = [
+  "changes_requested",
+  "peer_reviewed",
+  "qa_approved",
+  "published",
+  "retested",
+  "resolved",
+  "risk_accepted",
+  "closed",
+];
+
+export function findingTransitionPermission(toStatus: FindingStatus) {
+  return approvalFindingStatuses.includes(toStatus)
+    ? ("finding:approve" as const)
+    : ("finding:create" as const);
+}
+
+/** Permission required for a bulk update; client visibility is a release decision. */
+export function bulkFindingUpdatePermission(input: {
+  status?: FindingStatus;
+  clientVisible?: boolean;
+}) {
+  if (input.clientVisible !== undefined) return "finding:approve" as const;
+  return input.status
+    ? findingTransitionPermission(input.status)
+    : ("finding:create" as const);
+}
+
 export async function bulkUpdateFindings(
   actor: FindingActor,
   input: {
@@ -742,73 +781,92 @@ export async function bulkUpdateFindings(
   if (!input.ids.length) return [];
   if (input.ids.length > 100)
     throw new Error("Bulk update is capped at 100 findings");
+  // Findings have no assignee column; authorId records authorship for
+  // separation of duties and must never be reassigned in bulk.
+  if (input.assigneeId)
+    throw new Error("Bulk assignment is not supported for findings");
   const uniqueIds = [...new Set(input.ids)];
-  const rows = await db
-    .select()
-    .from(findings)
-    .where(
-      and(
-        eq(findings.organisationId, actor.organisationId),
-        inArray(findings.id, uniqueIds),
-        isNull(findings.deletedAt),
-      ),
-    );
-  if (rows.length !== uniqueIds.length) throw new FindingScopeError();
-  const updated = [];
-  for (const finding of rows) {
-    if (input.status && input.status !== finding.status) {
-      updated.push(
-        await transitionFinding(actor, {
-          findingId: finding.id,
-          toStatus: input.status,
-        }),
-      );
-    }
-    const patch: Partial<typeof findings.$inferInsert> = {
-      updatedAt: new Date(),
-    };
-    let needsPatch = false;
-    if (input.severity) {
-      patch.severity = input.severity;
-      needsPatch = true;
-    }
-    if (input.assigneeId !== undefined) {
-      patch.authorId = input.assigneeId || null;
-      needsPatch = true;
-    }
-    if (input.clientVisible !== undefined) {
-      patch.clientVisible = input.clientVisible;
-      needsPatch = true;
-    }
-    if (!needsPatch) continue;
-    const [row] = await db
-      .update(findings)
-      .set(patch)
+  const { updated, transitioned } = await db.transaction(async (tx) => {
+    const rows = await tx
+      .select()
+      .from(findings)
       .where(
         and(
-          eq(findings.id, finding.id),
           eq(findings.organisationId, actor.organisationId),
+          inArray(findings.id, uniqueIds),
           isNull(findings.deletedAt),
         ),
       )
-      .returning();
-    if (row) {
-      await db.insert(auditEvents).values({
-        organisationId: actor.organisationId,
-        actorId: actor.userId,
-        action: "finding.bulk_updated",
-        targetType: "finding",
-        targetId: finding.id,
-        metadata: {
-          status: input.status ?? null,
-          severity: input.severity ?? null,
-          assigneeId: input.assigneeId ?? null,
-          clientVisible: input.clientVisible ?? null,
-        },
-      });
-      updated.push(row);
+      .for("update");
+    if (rows.length !== uniqueIds.length) throw new FindingScopeError();
+    const updated: (typeof findings.$inferSelect)[] = [];
+    const transitioned: (typeof findings.$inferSelect)[] = [];
+    for (const finding of rows) {
+      let current = finding;
+      const patch: Partial<typeof findings.$inferInsert> = {};
+      if (input.severity && input.severity !== finding.severity) {
+        if (!editableFindingStatuses.includes(finding.status))
+          throw new Error(
+            `Finding ${finding.identifier} severity can only change during authoring or requested changes`,
+          );
+        await snapshotCurrentFinding(
+          tx,
+          actor,
+          finding,
+          "Bulk severity update",
+        );
+        patch.severity = input.severity;
+        patch.version = finding.version + 1;
+      }
+      if (
+        input.clientVisible !== undefined &&
+        input.clientVisible !== finding.clientVisible
+      )
+        patch.clientVisible = input.clientVisible;
+      if (Object.keys(patch).length) {
+        const [row] = await tx
+          .update(findings)
+          .set({ ...patch, updatedAt: new Date() })
+          .where(
+            and(
+              eq(findings.id, finding.id),
+              eq(findings.version, finding.version),
+              eq(findings.status, finding.status),
+            ),
+          )
+          .returning();
+        if (!row)
+          throw new Error("Finding state changed; reload and try again");
+        await tx.insert(auditEvents).values({
+          organisationId: actor.organisationId,
+          actorId: actor.userId,
+          action: "finding.bulk_updated",
+          targetType: "finding",
+          targetId: finding.id,
+          previousValues: {
+            severity: finding.severity,
+            clientVisible: finding.clientVisible,
+          },
+          newValues: {
+            severity: row.severity,
+            clientVisible: row.clientVisible,
+          },
+          metadata: { version: row.version },
+        });
+        current = row;
+      }
+      if (input.status && input.status !== current.status) {
+        current = await transitionFindingInTransaction(tx, actor, {
+          findingId: current.id,
+          toStatus: input.status,
+        });
+        transitioned.push(current);
+      }
+      if (current !== finding) updated.push(current);
     }
-  }
+    return { updated, transitioned };
+  });
+  for (const finding of transitioned) await emitTransitionEvent(actor, finding);
   return updated;
 }
 
@@ -879,104 +937,130 @@ export async function enrichFindingIntel(
 
 export async function transitionFinding(
   actor: FindingActor,
-  input: {
-    findingId: string;
-    toStatus: FindingStatus;
-    comment?: string;
-    canOverride?: boolean;
-    overrideReason?: string;
-  },
+  input: FindingTransitionInput,
 ) {
-  const updated = await db.transaction(async (tx) => {
-    const finding = await requireFinding(
-      tx,
-      actor.organisationId,
-      input.findingId,
-    );
-    const workflowDecision = assertFindingTransition({
-      from: finding.status,
-      to: input.toStatus,
-      canOverride: input.canOverride ?? false,
-      overrideReason: input.overrideReason,
-    });
-    if (input.toStatus === "peer_reviewed" && finding.authorId === actor.userId)
-      throw new Error("A finding author cannot complete peer review");
-    if (input.toStatus === "qa_approved" && finding.reviewerId === actor.userId)
-      throw new Error("QA approval requires a different reviewer");
-    const approvalVersionMismatch =
-      input.toStatus === "published" &&
-      finding.approvedVersion !== finding.version;
-    if (approvalVersionMismatch && !input.canOverride)
-      throw new Error(
-        "Publication requires QA approval of the current finding version",
-      );
-    if (approvalVersionMismatch && !input.overrideReason?.trim())
-      throw new Error(
-        "A publication approval-version override requires a reason",
-      );
-    const override = workflowDecision.override || approvalVersionMismatch;
-    if (input.toStatus === "changes_requested" && !input.comment?.trim())
-      throw new Error("Changes requested requires a comment");
-    const [updated] = await tx
-      .update(findings)
-      .set({
-        status: input.toStatus,
-        reviewerId: ["peer_reviewed", "qa_approved"].includes(input.toStatus)
-          ? actor.userId
-          : finding.reviewerId,
-        approvedVersion:
-          input.toStatus === "qa_approved"
-            ? finding.version
-            : finding.approvedVersion,
-        publishedAt:
-          input.toStatus === "published" ? new Date() : finding.publishedAt,
-        updatedAt: new Date(),
-      })
-      .where(
-        and(
-          eq(findings.id, finding.id),
-          eq(findings.status, finding.status),
-          eq(findings.version, finding.version),
-        ),
-      )
-      .returning();
-    if (!updated)
-      throw new Error("Finding state changed; reload and try again");
-    await tx.insert(findingTransitionRows).values({
-      organisationId: actor.organisationId,
-      findingId: finding.id,
-      fromStatus: finding.status,
-      toStatus: input.toStatus,
-      actorId: actor.userId,
-      comment: input.comment,
-      findingVersion: finding.version,
-      overrideReason: override ? input.overrideReason : undefined,
-    });
-    await tx.insert(auditEvents).values({
-      organisationId: actor.organisationId,
-      actorId: actor.userId,
-      action: override
-        ? "finding.transition.overridden"
-        : "finding.transitioned",
-      targetType: "finding",
-      targetId: finding.id,
-      previousValues: { status: finding.status },
-      newValues: { status: input.toStatus },
-      metadata: {
-        findingVersion: finding.version,
-        comment: input.comment ?? null,
-        overrideReason: override ? input.overrideReason : null,
-        approvalVersionMismatch,
-      },
-    });
-    return updated;
+  const updated = await db.transaction((tx) =>
+    transitionFindingInTransaction(tx, actor, input),
+  );
+  await emitTransitionEvent(actor, updated);
+  return updated;
+}
+
+type FindingTransitionInput = {
+  findingId: string;
+  toStatus: FindingStatus;
+  comment?: string;
+  canOverride?: boolean;
+  overrideReason?: string;
+};
+
+async function transitionFindingInTransaction(
+  tx: Transaction,
+  actor: FindingActor,
+  input: FindingTransitionInput,
+) {
+  const finding = await requireFinding(
+    tx,
+    actor.organisationId,
+    input.findingId,
+  );
+  const workflowDecision = assertFindingTransition({
+    from: finding.status,
+    to: input.toStatus,
+    canOverride: input.canOverride ?? false,
+    overrideReason: input.overrideReason,
   });
+  const isAuthor = finding.authorId === actor.userId;
+  if (input.toStatus === "peer_reviewed" && isAuthor)
+    throw new Error("A finding author cannot review their own finding");
+  // Small teams may need the author to QA or publish; that takes an audited
+  // override with a reason, never a silent self-approval.
+  const authorApproval =
+    isAuthor && ["qa_approved", "published"].includes(input.toStatus);
+  if (authorApproval && !(input.canOverride && input.overrideReason?.trim()))
+    throw new Error(
+      "A finding author cannot approve or publish their own finding without an override reason",
+    );
+  if (input.toStatus === "qa_approved" && finding.reviewerId === actor.userId)
+    throw new Error("QA approval requires a different reviewer");
+  const approvalVersionMismatch =
+    input.toStatus === "published" &&
+    finding.approvedVersion !== finding.version;
+  if (approvalVersionMismatch && !input.canOverride)
+    throw new Error(
+      "Publication requires QA approval of the current finding version",
+    );
+  if (approvalVersionMismatch && !input.overrideReason?.trim())
+    throw new Error(
+      "A publication approval-version override requires a reason",
+    );
+  const override =
+    workflowDecision.override || approvalVersionMismatch || authorApproval;
+  if (input.toStatus === "changes_requested" && !input.comment?.trim())
+    throw new Error("Changes requested requires a comment");
+  const [updated] = await tx
+    .update(findings)
+    .set({
+      status: input.toStatus,
+      reviewerId: ["peer_reviewed", "qa_approved"].includes(input.toStatus)
+        ? actor.userId
+        : finding.reviewerId,
+      approvedVersion:
+        input.toStatus === "qa_approved"
+          ? finding.version
+          : finding.approvedVersion,
+      publishedAt:
+        input.toStatus === "published" ? new Date() : finding.publishedAt,
+      updatedAt: new Date(),
+    })
+    .where(
+      and(
+        eq(findings.id, finding.id),
+        eq(findings.status, finding.status),
+        eq(findings.version, finding.version),
+      ),
+    )
+    .returning();
+  if (!updated) throw new Error("Finding state changed; reload and try again");
+  await tx.insert(findingTransitionRows).values({
+    organisationId: actor.organisationId,
+    findingId: finding.id,
+    fromStatus: finding.status,
+    toStatus: input.toStatus,
+    actorId: actor.userId,
+    comment: input.comment,
+    findingVersion: finding.version,
+    overrideReason: override ? input.overrideReason : undefined,
+  });
+  await tx.insert(auditEvents).values({
+    organisationId: actor.organisationId,
+    actorId: actor.userId,
+    action: override ? "finding.transition.overridden" : "finding.transitioned",
+    targetType: "finding",
+    targetId: finding.id,
+    previousValues: { status: finding.status },
+    newValues: { status: input.toStatus },
+    metadata: {
+      findingVersion: finding.version,
+      comment: input.comment ?? null,
+      overrideReason: override ? input.overrideReason : null,
+      approvalVersionMismatch,
+    },
+  });
+  return updated;
+}
+
+async function emitTransitionEvent(
+  actor: FindingActor,
+  updated: typeof findings.$inferSelect,
+) {
   await emitDomainEvent({
     organisationId: actor.organisationId,
     actorUserId: actor.userId,
     eventType: "finding.transitioned",
     title: `Finding ${updated.identifier} transitioned to ${updated.status}`,
     actionUrl: `/engagements/${updated.engagementId}?view=findings`,
+    engagementId: updated.engagementId,
     payload: {
       findingId: updated.id,
       identifier: updated.identifier,
@@ -984,7 +1068,6 @@ export async function transitionFinding(
       engagementId: updated.engagementId,
     },
   });
-  return updated;
 }
 
 export async function addFindingComment(
@@ -1018,6 +1101,7 @@ export async function addFindingComment(
       eventType: "comment.created",
       title: `Comment on ${finding.identifier}`,
       actionUrl: `/engagements/${finding.engagementId}?view=findings`,
+      engagementId: finding.engagementId,
       payload: {
         commentId: comment.id,
         targetType: "finding",

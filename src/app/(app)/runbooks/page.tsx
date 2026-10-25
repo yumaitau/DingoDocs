@@ -2,7 +2,7 @@ import { ClipboardList, Plus } from "lucide-react";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { StatusPill } from "@/components/ui/status-pill";
-import { requireOrganisationContext } from "@/lib/permissions/require";
+import { requireInternalOrganisationContext } from "@/lib/permissions/require";
 import {
   createRunbookTemplateAction,
   publishRunbookTemplateAction,
@@ -14,7 +14,7 @@ const field =
 const area = `${field} py-2`;
 
 export default async function RunbooksPage() {
-  const context = await requireOrganisationContext();
+  const context = await requireInternalOrganisationContext();
   const templates = await listRunbookTemplates(context.organisationId);
   return (
     <>

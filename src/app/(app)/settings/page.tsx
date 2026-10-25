@@ -6,9 +6,11 @@ import { db } from "@/db";
 import {
   evidence,
   evidenceLegalHolds,
+  integrationConnections,
   organisations,
   type SecurityPolicy,
 } from "@/db/schema";
+import { decryptIntegrationSecret } from "@/lib/integrations/crypto";
 import { grantableRoles } from "@/lib/permissions/matrix";
 import { requirePermission } from "@/lib/permissions/require";
 import { formatDateTime } from "@/lib/time-zone";
@@ -26,9 +28,14 @@ import {
   listOrganisationUsers,
   listPendingInvitations,
 } from "@/server/services/account-security";
+import {
+  scimDomainTxtName,
+  scimDomainTxtValue,
+} from "@/server/services/domain-verification";
 import { previewRetention } from "@/server/services/retention";
 import {
   JiraConnectionForm,
+  ScimDomainsForm,
   ScimTokenForm,
   SsoPolicyForm,
 } from "./settings-forms";
@@ -37,36 +44,43 @@ const field = "h-10 rounded-md border bg-paper px-3 text-sm";
 
 export default async function SettingsPage() {
   const context = await requirePermission("user:manage");
-  const [members, pendingInvitations, retentionPreview, activeHolds, org] =
-    await Promise.all([
-      listOrganisationUsers(context.organisationId),
-      listPendingInvitations(context.organisationId),
-      previewRetention(context.organisationId),
-      db
-        .select({
-          id: evidenceLegalHolds.id,
-          evidenceId: evidenceLegalHolds.evidenceId,
-          reason: evidenceLegalHolds.reason,
-          filename: evidence.originalFilename,
-        })
-        .from(evidenceLegalHolds)
-        .innerJoin(evidence, eq(evidence.id, evidenceLegalHolds.evidenceId))
-        .where(
-          and(
-            eq(evidenceLegalHolds.organisationId, context.organisationId),
-            isNull(evidenceLegalHolds.releasedAt),
-          ),
+  const [
+    members,
+    pendingInvitations,
+    retentionPreview,
+    activeHolds,
+    org,
+    jiraDefaults,
+  ] = await Promise.all([
+    listOrganisationUsers(context.organisationId),
+    listPendingInvitations(context.organisationId),
+    previewRetention(context.organisationId),
+    db
+      .select({
+        id: evidenceLegalHolds.id,
+        evidenceId: evidenceLegalHolds.evidenceId,
+        reason: evidenceLegalHolds.reason,
+        filename: evidence.originalFilename,
+      })
+      .from(evidenceLegalHolds)
+      .innerJoin(evidence, eq(evidence.id, evidenceLegalHolds.evidenceId))
+      .where(
+        and(
+          eq(evidenceLegalHolds.organisationId, context.organisationId),
+          isNull(evidenceLegalHolds.releasedAt),
         ),
-      db
-        .select({
-          dataRegion: organisations.dataRegion,
-          securityPolicy: organisations.securityPolicy,
-        })
-        .from(organisations)
-        .where(eq(organisations.id, context.organisationId))
-        .limit(1)
-        .then((rows) => rows[0]),
-    ]);
+      ),
+    db
+      .select({
+        dataRegion: organisations.dataRegion,
+        securityPolicy: organisations.securityPolicy,
+      })
+      .from(organisations)
+      .where(eq(organisations.id, context.organisationId))
+      .limit(1)
+      .then((rows) => rows[0]),
+    loadJiraFormDefaults(context.organisationId),
+  ]);
   const bytes = retentionPreview.reduce((sum, item) => sum + item.sizeBytes, 0);
   const securityPolicy = (org?.securityPolicy ?? {}) as SecurityPolicy;
 
@@ -297,7 +311,7 @@ export default async function SettingsPage() {
             finding workflow transitions.
           </p>
           <div className="mt-4">
-            <JiraConnectionForm />
+            <JiraConnectionForm {...jiraDefaults} />
           </div>
         </section>
 
@@ -321,6 +335,21 @@ export default async function SettingsPage() {
           </p>
           <div className="mt-4">
             <ScimTokenForm />
+          </div>
+          <h3 className="mt-6 text-sm font-semibold">Verified domains</h3>
+          <p className="mt-1 text-sm text-slate-500">
+            SCIM only creates users whose email domain this organisation has
+            verified with a DNS TXT record.
+          </p>
+          <div className="mt-3">
+            <ScimDomainsForm
+              domains={(securityPolicy.scimDomains ?? []).map((entry) => ({
+                domain: entry.domain,
+                verified: Boolean(entry.verifiedAt),
+                txtName: scimDomainTxtName(entry.domain),
+                txtValue: scimDomainTxtValue(entry.token),
+              }))}
+            />
           </div>
         </section>
 
@@ -354,4 +383,42 @@ export default async function SettingsPage() {
       </div>
     </>
   );
+}
+
+/** Non-secret Jira settings for form defaults. The API token is never sent to the client. */
+async function loadJiraFormDefaults(organisationId: string) {
+  const [row] = await db
+    .select({
+      configurationEncrypted: integrationConnections.configurationEncrypted,
+      enabled: integrationConnections.enabled,
+    })
+    .from(integrationConnections)
+    .where(
+      and(
+        eq(integrationConnections.organisationId, organisationId),
+        eq(integrationConnections.provider, "jira"),
+      ),
+    )
+    .limit(1);
+  if (!row) return { configured: false };
+  let config: Record<string, unknown> = {};
+  try {
+    const parsed: unknown = JSON.parse(
+      decryptIntegrationSecret(row.configurationEncrypted),
+    );
+    if (parsed && typeof parsed === "object")
+      config = parsed as Record<string, unknown>;
+  } catch {
+    // Unreadable configuration (for example a rotated key): fall back to blanks.
+  }
+  const text = (value: unknown) =>
+    typeof value === "string" && value ? value : undefined;
+  return {
+    configured: true,
+    defaultEnabled: row.enabled,
+    defaultBaseUrl: text(config.baseUrl),
+    defaultEmail: text(config.email),
+    defaultProjectKey: text(config.projectKey),
+    defaultIssueType: text(config.issueType),
+  };
 }

@@ -105,8 +105,11 @@ function columnName(index: number): string {
 }
 
 function csvEscape(value: string): string {
-  if (/[",\n\r]/.test(value)) return `"${value.replaceAll('"', '""')}"`;
-  return value;
+  let text = value;
+  // Neutralise spreadsheet formula injection (matches the audit CSV export).
+  if (/^[=+\-@\t\r]/.test(text)) text = `'${text}`;
+  if (/[",\n\r]/.test(text)) return `"${text.replaceAll('"', '""')}"`;
+  return text;
 }
 
 function escapeXml(value: string): string {

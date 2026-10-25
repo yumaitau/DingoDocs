@@ -145,6 +145,12 @@ run("report engine with PostgreSQL and storage fixtures", () => {
       classification: "restricted",
       malwareScanStatus: "clean",
     });
+    // Restricted evidence reaches the register only through an included finding.
+    await modules.db.insert(modules.evidenceFindings).values({
+      organisationId: ids.orgA,
+      evidenceId: ids.evidence,
+      findingId: ids.finding,
+    });
   });
 
   afterAll(async () => {

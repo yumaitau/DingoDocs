@@ -492,7 +492,7 @@ export const mcpTools: McpToolDefinition[] = [
     name: "transition_report",
     title: "Transition a report",
     description:
-      "Move a report to another workflow status. Publishing and archival require report:publish; review gates require finding:approve.",
+      "Move a report to another workflow status. Publishing, superseding and archival require report:publish; review gates require finding:approve. Service-account keys cannot approve or publish (403); a human must.",
     requiredScopes: ["findings:write"],
     annotations: {
       readOnlyHint: false,
@@ -583,7 +583,7 @@ export const mcpTools: McpToolDefinition[] = [
     name: "transition_finding",
     title: "Transition a finding",
     description:
-      "Move a finding to another workflow status with an optional reason. Approval and publish statuses require finding:approve. Does not delete findings.",
+      "Move a finding to another workflow status with an optional reason. Review, approval, publish and closure statuses require finding:approve; service-account keys cannot approve or publish (403), so agents stay on drafts. Does not delete findings.",
     requiredScopes: ["findings:write"],
     annotations: {
       readOnlyHint: false,

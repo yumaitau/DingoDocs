@@ -4,6 +4,7 @@ import {
   listScimUsers,
   ScimAuthError,
   scimError,
+  ScimRequestError,
 } from "@/server/services/scim";
 
 export const runtime = "nodejs";
@@ -11,12 +12,21 @@ export const runtime = "nodejs";
 export async function GET(request: Request) {
   try {
     const context = await authenticateScimRequest(request);
-    const body = await listScimUsers(context.organisationId);
+    const params = new URL(request.url).searchParams;
+    const startIndex = params.get("startIndex");
+    const count = params.get("count");
+    const body = await listScimUsers(context.organisationId, {
+      filter: params.get("filter"),
+      startIndex: startIndex ? Number(startIndex) : undefined,
+      count: count ? Number(count) : undefined,
+    });
     return Response.json(body, {
       headers: { "content-type": "application/scim+json" },
     });
   } catch (error) {
     if (error instanceof ScimAuthError) return scimError(401, error.message);
+    if (error instanceof ScimRequestError)
+      return scimError(error.status, error.message, error.scimType);
     return scimError(
       500,
       error instanceof Error ? error.message : "SCIM list failed",
@@ -46,6 +56,8 @@ export async function POST(request: Request) {
     });
   } catch (error) {
     if (error instanceof ScimAuthError) return scimError(401, error.message);
+    if (error instanceof ScimRequestError)
+      return scimError(error.status, error.message, error.scimType);
     return scimError(
       400,
       error instanceof Error ? error.message : "SCIM create failed",
