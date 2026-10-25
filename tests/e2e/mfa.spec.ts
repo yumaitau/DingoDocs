@@ -115,7 +115,7 @@ test("sign-in explains when an email link needs the second factor", async ({
   page,
 }) => {
   await page.goto("/sign-in?error=two_factor_required");
-  await expect(page.getByRole("alert")).toHaveText(
+  await expect(page.getByRole("main").getByRole("alert")).toHaveText(
     "This account uses an authenticator app. Sign in with your password and code.",
   );
 });
