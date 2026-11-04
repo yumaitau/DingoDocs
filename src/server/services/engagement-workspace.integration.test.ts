@@ -400,6 +400,88 @@ run("engagement workspace with PostgreSQL", () => {
     });
   });
 
+  it("stops service principals uploading client-visible evidence", async () => {
+    // storage() caches its provider on first use, so point it at a temp root
+    // before anything in this test can create it.
+    const { mkdtemp, rm } = await import("node:fs/promises");
+    const { tmpdir } = await import("node:os");
+    const { join } = await import("node:path");
+    const root = await mkdtemp(join(tmpdir(), "dingodocs-workspace-"));
+    const previousRoot = process.env.LOCAL_STORAGE_ROOT;
+    process.env.LOCAL_STORAGE_ROOT = root;
+    const { uploadEvidence } = await import("./evidence");
+    const { PermissionDeniedError } = await import("@/lib/permissions/require");
+    await expect(
+      uploadEvidence(
+        { ...actor, canViewRestricted: true, serviceAccountId: randomUUID() },
+        {
+          engagementId: ids.engagement,
+          filename: "agent.txt",
+          mediaType: "text/plain",
+          bytes: new TextEncoder().encode("agent output"),
+          classification: "client_visible",
+        },
+      ),
+    ).rejects.toBeInstanceOf(PermissionDeniedError);
+
+    const { createApiCredential } = await import("@/lib/api/authentication");
+    const { POST } =
+      await import("@/app/api/v1/engagements/[id]/evidence/route");
+    const key = await createApiCredential(actor, {
+      name: "Evidence agent",
+      kind: "service",
+      serviceAccountName: "Evidence agent",
+      scopes: ["evidence:write"],
+      expiresAt: new Date(Date.now() + 86_400_000),
+    });
+    const post = (classification: string) => {
+      const form = new FormData();
+      form.set("classification", classification);
+      form.set(
+        "files",
+        new File([`agent capture ${randomUUID()}`], "capture.txt", {
+          type: "text/plain",
+        }),
+      );
+      return POST(
+        new Request(
+          `https://test.invalid/api/v1/engagements/${ids.engagement}/evidence`,
+          {
+            method: "POST",
+            headers: { authorization: `Bearer ${key.plaintext}` },
+            body: form,
+          },
+        ),
+        { params: Promise.resolve({ id: ids.engagement }) },
+      );
+    };
+    const denied = await post("client_visible");
+    expect(denied.status).toBe(403);
+    await expect(denied.json()).resolves.toMatchObject({
+      error: { code: "service_account_forbidden" },
+    });
+    const rows = await modules.db
+      .select({ id: modules.evidence.id })
+      .from(modules.evidence)
+      .where(
+        modules.and(
+          modules.eq(modules.evidence.engagementId, ids.engagement),
+          modules.eq(modules.evidence.classification, "client_visible"),
+        ),
+      );
+    expect(rows).toHaveLength(0);
+    try {
+      const allowed = await post("internal");
+      expect(allowed.status).toBe(201);
+      const { storage } = await import("@/lib/storage");
+      expect((storage() as unknown as { root: string }).root).toBe(root);
+    } finally {
+      if (previousRoot === undefined) delete process.env.LOCAL_STORAGE_ROOT;
+      else process.env.LOCAL_STORAGE_ROOT = previousRoot;
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   it("persists linked work records and audited status transitions", async () => {
     const workspace = await modules.getEngagementWorkspace(
       actor,

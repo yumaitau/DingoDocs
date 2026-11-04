@@ -656,7 +656,7 @@ export async function approvePortalReport(
     .limit(1);
   const current = rows[0];
   if (!current) throw new PortalNotFoundError();
-  await requirePortalEngagement(actor, current.report.engagementId, true);
+  await requireWritablePortalEngagement(actor, current.report.engagementId);
   return db.transaction(async (tx) => {
     const now = new Date();
     const [version] = await tx

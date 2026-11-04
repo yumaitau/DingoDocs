@@ -1,5 +1,6 @@
 import { z } from "zod";
 import type { ApiScope } from "../lib/api/scopes";
+import { maxScannerImportBytes } from "../lib/imports/adapters";
 import {
   DingoDocsApiClient,
   type FindingWriteUp,
@@ -349,7 +350,7 @@ export const mcpTools: McpToolDefinition[] = [
       engagementId: z.string().uuid(),
       adapter,
       filename: z.string().trim().min(1).max(240).optional(),
-      content: z.string().min(1).max(2_000_000).optional(),
+      content: z.string().min(1).max(maxScannerImportBytes).optional(),
       filePath: z.string().min(1).max(4_096).optional(),
     }),
     call: (api, input) =>
@@ -387,7 +388,7 @@ export const mcpTools: McpToolDefinition[] = [
       engagementId: z.string().uuid(),
       adapter,
       filename: z.string().trim().min(1).max(240).optional(),
-      content: z.string().min(1).max(2_000_000).optional(),
+      content: z.string().min(1).max(maxScannerImportBytes).optional(),
       filePath: z.string().min(1).max(4_096).optional(),
     }),
     call: (api, input) =>

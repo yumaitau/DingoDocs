@@ -1,9 +1,16 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { importAdapterNames } from "@/lib/imports/adapters";
+import {
+  importAdapterNames,
+  maxScannerImportBytes,
+} from "@/lib/imports/adapters";
 import { apiWriteContext } from "@/lib/api/authentication";
 import { apiError } from "@/lib/api/responses";
-import { formDataWithLimit, jsonWithLimit } from "@/lib/security/request-body";
+import {
+  formDataWithLimit,
+  jsonWithLimit,
+  scannerImportEnvelopeBytes,
+} from "@/lib/security/request-body";
 import {
   ingestScannerImport,
   mediaTypeForImport,
@@ -12,13 +19,10 @@ import {
 
 export const runtime = "nodejs";
 
-/** Content is capped at 2 MB; allow for JSON escaping and multipart framing. */
-const importBodyLimit = 3 * 1_048_576;
-
 const jsonSchema = z.object({
   adapter: z.enum(importAdapterNames),
   filename: z.string().trim().min(1).max(240).default("scanner-output.txt"),
-  content: z.string().min(1).max(2_000_000),
+  content: z.string().min(1).max(maxScannerImportBytes),
   mode: z.enum(["preview", "ingest"]).default("ingest"),
 });
 
@@ -47,7 +51,9 @@ export async function POST(
     const contentType = request.headers.get("content-type") ?? "";
     const parsed = contentType.includes("multipart/form-data")
       ? await fromFormData(request)
-      : jsonSchema.parse(await jsonWithLimit(request, importBodyLimit));
+      : jsonSchema.parse(
+          await jsonWithLimit(request, scannerImportEnvelopeBytes),
+        );
     const bytes = new TextEncoder().encode(parsed.content);
     if (parsed.mode === "preview") {
       const preview = await previewScannerImport(actor, {
@@ -96,7 +102,7 @@ export async function POST(
 }
 
 async function fromFormData(request: Request) {
-  const form = await formDataWithLimit(request, importBodyLimit);
+  const form = await formDataWithLimit(request, scannerImportEnvelopeBytes);
   const file = z
     .instanceof(File)
     .parse(form.get("file") ?? form.get("content"));

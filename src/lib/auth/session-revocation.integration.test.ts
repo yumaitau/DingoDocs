@@ -98,6 +98,115 @@ run("tenant-scoped session revocation and absolute expiry", () => {
     return modules.requireOrganisationContext();
   }
 
+  function authRequest(path: string, init: RequestInit = {}) {
+    const base = new URL(modules.auth.options.baseURL as string).origin;
+    return modules.auth.handler(
+      new Request(`${base}/api/auth${path}`, {
+        ...init,
+        headers: {
+          cookie: request.cookie,
+          origin: base,
+          "content-type": "application/json",
+          ...init.headers,
+        },
+      }),
+    );
+  }
+
+  async function sessionIds(userId: string) {
+    const rows = await modules.db
+      .select({ id: modules.sessions.id })
+      .from(modules.sessions)
+      .where(modules.eq(modules.sessions.userId, userId));
+    return rows.map((row) => row.id).sort();
+  }
+
+  it("stops a revoked session minting a replacement to regain tenant access", async () => {
+    const password = `Revocation-${randomUUID()}`;
+    const [account] = await modules.db
+      .insert(modules.accounts)
+      .values({
+        userId: ids.member,
+        accountId: ids.member,
+        providerId: "credential",
+        password: await modules.hashPassword(password),
+      })
+      .returning({ id: modules.accounts.id });
+    try {
+      await modules.db
+        .update(modules.organisationMembers)
+        .set({ sessionsRevokedAt: null })
+        .where(modules.eq(modules.organisationMembers.userId, ids.member));
+      await modules.db
+        .delete(modules.sessions)
+        .where(modules.eq(modules.sessions.userId, ids.member));
+      await signIn(ids.member, new Date(Date.now() - 60_000));
+      const revokedCookie = request.cookie;
+
+      // Control: an unrevoked session may start passkey registration.
+      const allowed = await authRequest("/passkey/generate-register-options");
+      expect(allowed.status).toBe(200);
+
+      await modules.revokeOrganisationUserSessions(
+        { organisationId: ids.orgA, userId: ids.owner },
+        ids.member,
+      );
+      const before = await sessionIds(ids.member);
+
+      // Attack: rotate the revoked session (newer createdAt) or register a
+      // passkey for a later fresh sign-in, all without password + TOTP.
+      request.cookie = revokedCookie;
+      const passkey = await authRequest("/passkey/generate-register-options");
+      expect(passkey.status).toBe(401);
+      expect(await passkey.json()).toMatchObject({ code: "SESSION_REVOKED" });
+      const rotated = await authRequest("/change-password", {
+        method: "POST",
+        body: JSON.stringify({
+          currentPassword: password,
+          newPassword: `${password}-next`,
+          revokeOtherSessions: true,
+        }),
+      });
+      expect(rotated.status).toBe(401);
+      expect(rotated.headers.getSetCookie().join(";")).not.toMatch(
+        /session_token=[^;]/,
+      );
+      const enable = await authRequest("/two-factor/enable", {
+        method: "POST",
+        body: JSON.stringify({ password }),
+      });
+      expect(enable.status).toBe(401);
+      expect(await sessionIds(ids.member)).toEqual(before);
+
+      // Tenant access stays refused; other tenants still work.
+      request.cookie = revokedCookie;
+      await expect(contextFor(ids.orgA)).rejects.toBeInstanceOf(
+        modules.OrganisationSessionRevokedError,
+      );
+      await expect(contextFor(ids.orgB)).resolves.toMatchObject({
+        organisationId: ids.orgB,
+      });
+
+      // The revoked session may still sign out.
+      const signOut = await authRequest("/sign-out", {
+        method: "POST",
+        body: "{}",
+      });
+      expect(signOut.status).toBe(200);
+    } finally {
+      await modules.db
+        .delete(modules.accounts)
+        .where(modules.eq(modules.accounts.id, account!.id));
+      await modules.db
+        .delete(modules.sessions)
+        .where(modules.eq(modules.sessions.userId, ids.member));
+      await modules.db
+        .update(modules.organisationMembers)
+        .set({ sessionsRevokedAt: null })
+        .where(modules.eq(modules.organisationMembers.userId, ids.member));
+    }
+  });
+
   it("revokes the member's sessions for one organisation only", async () => {
     await signIn(ids.member, new Date(Date.now() - 60_000));
     await expect(contextFor(ids.orgA)).resolves.toMatchObject({
@@ -198,6 +307,7 @@ async function load() {
   const database = await import("@/db");
   const drizzle = await import("drizzle-orm");
   const { auth } = await import("./auth");
+  const { hashPassword } = await import("better-auth/crypto");
   const session = await import("./session");
   const activeOrganisation = await import("./active-organisation");
   const authenticationAudit = await import("./authentication-audit");
@@ -209,6 +319,7 @@ async function load() {
     ...database,
     ...drizzle,
     auth,
+    hashPassword,
     ...session,
     ...activeOrganisation,
     ...authenticationAudit,

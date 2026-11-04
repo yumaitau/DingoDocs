@@ -1,3 +1,4 @@
+import { maxScannerImportBytes } from "@/lib/imports/adapters";
 import { maxUploadBytes } from "./upload";
 
 /** Allowance for multipart boundaries, part headers and small text fields. */
@@ -67,6 +68,14 @@ export async function readBodyWithLimit(
 
 /** Default cap for JSON API request bodies (1 MiB). */
 export const defaultJsonBodyLimit = 1_048_576;
+
+/**
+ * Envelope cap for requests that carry scanner source inline (MCP JSON-RPC,
+ * the imports API). JSON escaping can roughly double the source, so allow
+ * twice the decoded limit plus 64 KiB for the surrounding fields. The decoded
+ * content is still validated against maxScannerImportBytes.
+ */
+export const scannerImportEnvelopeBytes = 2 * maxScannerImportBytes + 65_536;
 
 /** Malformed JSON request body; mapped to 400 by apiError. */
 export class InvalidJsonBodyError extends SyntaxError {

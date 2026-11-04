@@ -274,6 +274,9 @@ export async function createReport(
     positiveDays(defaults?.retentionPolicy.reportDays),
   );
   return db.transaction(async (tx) => {
+    // Re-check under lock: the engagement may have been archived while the
+    // model was being built.
+    await lockWritableEngagement(tx, actor.organisationId, engagement.id);
     const [report] = await tx
       .insert(reports)
       .values({
@@ -330,6 +333,7 @@ export async function saveReportDraft(
   validateReportTemplate(input.definition);
   return db.transaction(async (tx) => {
     const report = await requireReport(tx, actor.organisationId, reportId);
+    await lockWritableEngagement(tx, actor.organisationId, report.engagementId);
     const [version] = await tx
       .select()
       .from(reportVersions)
@@ -415,6 +419,7 @@ export async function createReportRevision(
 ) {
   return db.transaction(async (tx) => {
     const report = await requireReport(tx, actor.organisationId, reportId);
+    await lockWritableEngagement(tx, actor.organisationId, report.engagementId);
     const current = await requireCurrentVersion(
       tx,
       actor.organisationId,
@@ -498,6 +503,7 @@ export async function transitionReport(
       actor.organisationId,
       input.reportId,
     );
+    await lockWritableEngagement(tx, actor.organisationId, report.engagementId);
     const version = await requireCurrentVersion(
       tx,
       actor.organisationId,
@@ -606,6 +612,7 @@ export async function queueReportGeneration(
   const selected = [...new Set(formats)];
   return db.transaction(async (tx) => {
     const report = await requireReport(tx, actor.organisationId, reportId);
+    await lockWritableEngagement(tx, actor.organisationId, report.engagementId);
     const [version] = await tx
       .select()
       .from(reportVersions)
@@ -793,6 +800,7 @@ export async function refreshReportFindings(
 ) {
   return db.transaction(async (tx) => {
     const report = await requireReport(tx, actor.organisationId, reportId);
+    await lockWritableEngagement(tx, actor.organisationId, report.engagementId);
     const [version] = await tx
       .select()
       .from(reportVersions)
@@ -1537,6 +1545,37 @@ async function requireCurrentVersion(
     )
     .limit(1);
   if (!row) throw new ReportScopeError("Current report version is unavailable");
+  return row;
+}
+/**
+ * Report mutations on archived or cancelled engagements are refused, for
+ * every status including archived/superseded (consistent with findings).
+ * Lock order is always engagement, then report version: the engagement row
+ * is share-locked first so a concurrent archive transition (which updates
+ * that row) and a report mutation serialise instead of deadlocking.
+ */
+async function lockWritableEngagement(
+  tx: Transaction,
+  organisationId: string,
+  engagementId: string,
+) {
+  const [row] = await tx
+    .select({
+      id: engagements.id,
+      status: engagements.status,
+      archivedAt: engagements.archivedAt,
+    })
+    .from(engagements)
+    .where(
+      and(
+        eq(engagements.id, engagementId),
+        eq(engagements.organisationId, organisationId),
+        isNull(engagements.deletedAt),
+      ),
+    )
+    .for("share");
+  if (!row) throw new ReportScopeError();
+  assertEngagementWritable(row);
   return row;
 }
 async function requireEngagement(organisationId: string, id: string) {

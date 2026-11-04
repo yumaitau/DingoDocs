@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const uploadEvidence = vi.fn();
 
 vi.mock("@/lib/api/authentication", () => ({
+  ApiAuthenticationError: class extends Error {},
   apiWriteContext: vi.fn(async () => ({
     organisationId: "00000000-0000-4000-8000-000000000001",
     userId: "00000000-0000-4000-8000-000000000002",

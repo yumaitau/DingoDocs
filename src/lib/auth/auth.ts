@@ -12,6 +12,7 @@ import {
 import { db } from "@/db";
 import {
   accounts,
+  organisationMembers,
   passkeys,
   sessions,
   twoFactor as twoFactorRecords,
@@ -24,7 +25,8 @@ import { DEFAULT_TIME_ZONE } from "@/lib/time-zone";
 import { DEVELOPMENT_AUTH_SECRET } from "@/lib/auth/secret";
 import { createSecondFactorSessionGuard } from "@/lib/auth/second-factor-session-guard";
 import { insertAuthenticationAudit } from "@/lib/auth/authentication-audit";
-import { eq } from "drizzle-orm";
+import { createRevokedSessionGuard } from "@/lib/auth/revoked-session-guard";
+import { and, eq, gte } from "drizzle-orm";
 
 const secret = process.env.BETTER_AUTH_SECRET;
 const providerConfiguration = authProviderConfiguration();
@@ -64,6 +66,27 @@ export const auth = betterAuth({
         input: false,
       },
     },
+  },
+  hooks: {
+    // Tenant revocation keeps the session row, so stop a revoked session
+    // minting a replacement (newer createdAt) or registering a passkey.
+    before: createRevokedSessionGuard(async (token) => {
+      const [revoked] = await db
+        .select({ id: organisationMembers.id })
+        .from(sessions)
+        .innerJoin(
+          organisationMembers,
+          eq(organisationMembers.userId, sessions.userId),
+        )
+        .where(
+          and(
+            eq(sessions.token, token),
+            gte(organisationMembers.sessionsRevokedAt, sessions.createdAt),
+          ),
+        )
+        .limit(1);
+      return Boolean(revoked);
+    }),
   },
   databaseHooks: {
     user: {

@@ -32,6 +32,7 @@ import {
   isOrganisationWideRole,
   type Role,
 } from "@/lib/permissions/matrix";
+import { PermissionDeniedError } from "@/lib/permissions/require";
 import {
   validateContentSignature,
   validateUpload,
@@ -50,6 +51,8 @@ export type EvidenceActor = {
   canViewRestricted?: boolean;
   clientIds?: string[];
   engagementIds?: string[];
+  /** Set for service-account API keys; they may not release to clients. */
+  serviceAccountId?: string | null;
 };
 
 export type AnnotationOperation =
@@ -111,6 +114,13 @@ export async function uploadEvidence(
   },
   provider: StorageProvider = storage(),
 ) {
+  // Client release is a human decision; service principals upload internal
+  // or restricted evidence only, whichever user created their key.
+  if (input.classification === "client_visible" && actor.serviceAccountId)
+    throw new PermissionDeniedError(
+      "evidence:view_restricted",
+      "service accounts cannot upload client-visible evidence",
+    );
   if (actor.clientIds)
     await requirePortalEngagement(actor, input.engagementId, true);
   const upload = validateUpload({

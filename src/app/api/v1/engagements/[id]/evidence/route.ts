@@ -1,5 +1,8 @@
 import { z } from "zod";
-import { apiWriteContext } from "@/lib/api/authentication";
+import {
+  ApiAuthenticationError,
+  apiWriteContext,
+} from "@/lib/api/authentication";
 import { apiError, resolveRequestId } from "@/lib/api/responses";
 import {
   formDataWithLimit,
@@ -48,6 +51,8 @@ async function handleUpload(
   );
   if (!permission.userId)
     throw new Error("API key does not have an attributable owner");
+  const serviceAccountId =
+    "serviceAccountId" in permission ? permission.serviceAccountId : undefined;
   const actor =
     "roles" in permission
       ? await scopedEvidenceActor({
@@ -58,12 +63,20 @@ async function handleUpload(
       : {
           organisationId: permission.organisationId,
           userId: permission.userId,
+          serviceAccountId,
         };
   // Enforce streamed bytes before multipart parsing buffers the body.
   const formData = await formDataWithLimit(request, maxUploadRequestBytes());
   const classification = z
     .enum(["internal", "restricted", "client_visible"])
     .parse(formData.get("classification") ?? "restricted");
+  // Releasing evidence to the client portal is a human decision.
+  if (classification === "client_visible" && serviceAccountId)
+    throw new ApiAuthenticationError(
+      "Service account API keys cannot upload client-visible evidence; a human reviewer must release it",
+      403,
+      "service_account_forbidden",
+    );
   const retentionValue = z
     .string()
     .date()
