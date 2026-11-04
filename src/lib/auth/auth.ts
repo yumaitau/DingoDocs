@@ -26,6 +26,9 @@ import { DEVELOPMENT_AUTH_SECRET } from "@/lib/auth/secret";
 import { createSecondFactorSessionGuard } from "@/lib/auth/second-factor-session-guard";
 import { insertAuthenticationAudit } from "@/lib/auth/authentication-audit";
 import { createRevokedSessionGuard } from "@/lib/auth/revoked-session-guard";
+import { samlSso } from "@/lib/auth/saml-plugin";
+import { samlPolicy } from "@/lib/auth/saml-config";
+import { findSamlOrganisationBySlug } from "@/server/services/saml-sso";
 import { and, eq, gte } from "drizzle-orm";
 
 const secret = process.env.BETTER_AUTH_SECRET;
@@ -102,14 +105,29 @@ export const auth = betterAuth({
         // implicitly link a matching verified email) prove only email or IdP
         // possession, so TOTP-enrolled accounts must use password + code or a
         // passkey instead. Allow-listed in the guard.
-        before: createSecondFactorSessionGuard(async (userId) => {
-          const [row] = await db
-            .select({ twoFactorEnabled: users.twoFactorEnabled })
-            .from(users)
-            .where(eq(users.id, userId))
-            .limit(1);
-          return row?.twoFactorEnabled === true;
-        }),
+        before: createSecondFactorSessionGuard(
+          async (userId) => {
+            const [row] = await db
+              .select({ twoFactorEnabled: users.twoFactorEnabled })
+              .from(users)
+              .where(eq(users.id, userId))
+              .limit(1);
+            return row?.twoFactorEnabled === true;
+          },
+          {
+            // The SAML ACS is allow-listed only for organisations whose SSO
+            // policy says the IdP enforces MFA. The org is the path slug.
+            trustsIdpMfa: async (context) => {
+              const slug = context.params?.orgSlug;
+              if (!slug) return false;
+              const organisation = await findSamlOrganisationBySlug(slug);
+              return (
+                samlPolicy(organisation?.securityPolicy)?.idpEnforcesMfa ===
+                true
+              );
+            },
+          },
+        ),
         after: async (session, context) => {
           await insertAuthenticationAudit(
             {
@@ -235,6 +253,7 @@ export const auth = betterAuth({
       ? [genericOAuth({ config: providerConfiguration.oauthProviders })]
       : []),
     oAuthProxy(),
+    samlSso(),
     admin({
       defaultRole: "user",
       adminRoles: ["admin"],

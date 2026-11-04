@@ -8,6 +8,7 @@ import {
 } from "node:crypto";
 import { and, eq, isNull, or, sql } from "drizzle-orm";
 import { db } from "@/db";
+import { withTenant } from "@/db/tenant";
 import {
   auditEvents,
   backgroundJobs,
@@ -74,26 +75,31 @@ export async function createWebhook(
   input: { name: string; url: string; events: string[] },
 ) {
   const secret = `whsec_${randomBytes(32).toString("base64url")}`;
-  const [webhook] = await db
-    .insert(webhooks)
-    .values({
+  // The URL check resolves DNS, so it runs before the tenant transaction
+  // opens; callers should not already hold a tenant scope.
+  const url = await assertWebhookUrl(input.url);
+  return withTenant(actor.organisationId, async () => {
+    const [webhook] = await db
+      .insert(webhooks)
+      .values({
+        organisationId: actor.organisationId,
+        name: input.name.trim(),
+        url,
+        events: [...new Set(input.events)],
+        secretEncrypted: encryptIntegrationSecret(secret),
+        createdBy: actor.userId,
+      })
+      .returning({ id: webhooks.id });
+    await db.insert(auditEvents).values({
       organisationId: actor.organisationId,
-      name: input.name.trim(),
-      url: await assertWebhookUrl(input.url),
-      events: [...new Set(input.events)],
-      secretEncrypted: encryptIntegrationSecret(secret),
-      createdBy: actor.userId,
-    })
-    .returning({ id: webhooks.id });
-  await db.insert(auditEvents).values({
-    organisationId: actor.organisationId,
-    actorId: actor.userId,
-    action: "webhook.created",
-    targetType: "webhook",
-    targetId: webhook.id,
-    metadata: { events: input.events },
+      actorId: actor.userId,
+      action: "webhook.created",
+      targetType: "webhook",
+      targetId: webhook.id,
+      metadata: { events: input.events },
+    });
+    return { ...webhook, secret };
   });
-  return { ...webhook, secret };
 }
 
 export async function rotateWebhookSecret(

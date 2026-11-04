@@ -3,6 +3,7 @@ import { apiError } from "@/lib/api/responses";
 import {
   requireOrganisationContext,
   rolesForOperation,
+  runInOrganisation,
 } from "@/lib/permissions/require";
 import { storage } from "@/lib/storage";
 import { attachmentDisposition } from "@/lib/storage/s3";
@@ -36,21 +37,26 @@ async function handleDownload(context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params;
   z.string().uuid().parse(id);
   const organisation = await requireOrganisationContext();
-  const locator = await getEvidenceLocator(organisation.organisationId, id);
-  const roles = await rolesForOperation({
-    userId: organisation.userId,
-    organisationId: organisation.organisationId,
-    engagementId: locator.engagementId,
+  // Authorisation and the audit row run scoped; signing a URL or streaming
+  // from storage happens after the tenant transaction commits.
+  const row = await runInOrganisation(organisation, async () => {
+    const locator = await getEvidenceLocator(organisation.organisationId, id);
+    const roles = await rolesForOperation({
+      userId: organisation.userId,
+      organisationId: organisation.organisationId,
+      engagementId: locator.engagementId,
+    });
+    if (!roles.length) throw new EvidenceScopeError();
+    const actor = await scopedEvidenceActor({
+      organisationId: organisation.organisationId,
+      userId: organisation.userId,
+      roles,
+    });
+    const row = await getEvidenceForAccess(actor, id);
+    await auditEvidenceDownload(actor, row);
+    return row;
   });
-  if (!roles.length) throw new EvidenceScopeError();
-  const actor = await scopedEvidenceActor({
-    organisationId: organisation.organisationId,
-    userId: organisation.userId,
-    roles,
-  });
-  const row = await getEvidenceForAccess(actor, id);
   const provider = storage();
-  await auditEvidenceDownload(actor, row);
   const signed = provider.createDownloadUrl
     ? await provider.createDownloadUrl(row.storageKey, 120, {
         filename: row.originalFilename,

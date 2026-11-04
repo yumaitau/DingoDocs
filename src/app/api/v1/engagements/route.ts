@@ -3,7 +3,11 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/db";
 import { clients, engagementMembers, engagements } from "@/db/schema";
-import { apiReadContext, apiWriteContext } from "@/lib/api/authentication";
+import {
+  apiReadContext,
+  apiWriteContext,
+  runInOrganisation,
+} from "@/lib/api/authentication";
 import { apiError } from "@/lib/api/responses";
 import { jsonWithLimit } from "@/lib/security/request-body";
 import { engagementVisibility } from "@/lib/permissions/access";
@@ -46,19 +50,21 @@ export async function GET(request: Request) {
     );
     const orderColumn =
       query.sort === "name" ? engagements.name : engagements.createdAt;
-    const [items, totals] = await Promise.all([
-      db
-        .select()
-        .from(engagements)
-        .where(where)
-        .orderBy(query.order === "asc" ? asc(orderColumn) : desc(orderColumn))
-        .limit(query.pageSize)
-        .offset((query.page - 1) * query.pageSize),
-      db
-        .select({ total: sql<number>`count(*)::int` })
-        .from(engagements)
-        .where(where),
-    ]);
+    const [items, totals] = await runInOrganisation(context, () =>
+      Promise.all([
+        db
+          .select()
+          .from(engagements)
+          .where(where)
+          .orderBy(query.order === "asc" ? asc(orderColumn) : desc(orderColumn))
+          .limit(query.pageSize)
+          .offset((query.page - 1) * query.pageSize),
+        db
+          .select({ total: sql<number>`count(*)::int` })
+          .from(engagements)
+          .where(where),
+      ]),
+    );
     return NextResponse.json({
       data: items,
       pagination: {
@@ -92,45 +98,47 @@ export async function POST(request: Request) {
       "engagement:create",
     );
     const input = createSchema.parse(await jsonWithLimit(request));
-    const [client] = await db
-      .select({ id: clients.id })
-      .from(clients)
-      .where(
-        and(
-          eq(clients.id, input.clientId),
-          eq(clients.organisationId, context.organisationId),
-          isNull(clients.deletedAt),
-        ),
-      )
-      .limit(1);
-    if (!client)
-      return NextResponse.json(
-        {
-          error: { code: "not_found", message: "Client was not found" },
-          requestId,
-        },
-        { status: 404 },
-      );
-    const [created] = await db
-      .insert(engagements)
-      .values({
-        organisationId: context.organisationId,
-        ...input,
-      })
-      .returning();
-    if (
-      created &&
-      context.userId &&
-      !("serviceAccountId" in context && context.serviceAccountId)
-    ) {
-      await db.insert(engagementMembers).values({
-        organisationId: context.organisationId,
-        engagementId: created.id,
-        userId: context.userId,
-        role: "engagement_manager",
-      });
-    }
-    return NextResponse.json({ data: created, requestId }, { status: 201 });
+    return await runInOrganisation(context, async () => {
+      const [client] = await db
+        .select({ id: clients.id })
+        .from(clients)
+        .where(
+          and(
+            eq(clients.id, input.clientId),
+            eq(clients.organisationId, context.organisationId),
+            isNull(clients.deletedAt),
+          ),
+        )
+        .limit(1);
+      if (!client)
+        return NextResponse.json(
+          {
+            error: { code: "not_found", message: "Client was not found" },
+            requestId,
+          },
+          { status: 404 },
+        );
+      const [created] = await db
+        .insert(engagements)
+        .values({
+          organisationId: context.organisationId,
+          ...input,
+        })
+        .returning();
+      if (
+        created &&
+        context.userId &&
+        !("serviceAccountId" in context && context.serviceAccountId)
+      ) {
+        await db.insert(engagementMembers).values({
+          organisationId: context.organisationId,
+          engagementId: created.id,
+          userId: context.userId,
+          role: "engagement_manager",
+        });
+      }
+      return NextResponse.json({ data: created, requestId }, { status: 201 });
+    });
   } catch (error) {
     return apiError(error, requestId);
   }

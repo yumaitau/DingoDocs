@@ -32,6 +32,9 @@ export async function POST(request: Request) {
     const principal = await requireApiBearer(request);
     const token = bearerToken(request);
     if (!token) throw new Error("Bearer API key is required");
+    // Not wrapped in a tenant scope: tools call /api/v1 over HTTP, and those
+    // handlers scope their own work. A transaction here would be held open
+    // across the loopback requests.
     const api = DingoDocsApiClient.fromRequest(request, token);
     const payload = (await jsonWithLimit(
       request,

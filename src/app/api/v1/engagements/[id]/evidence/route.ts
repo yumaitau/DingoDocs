@@ -2,6 +2,7 @@ import { z } from "zod";
 import {
   ApiAuthenticationError,
   apiWriteContext,
+  runInOrganisation,
 } from "@/lib/api/authentication";
 import { apiError, resolveRequestId } from "@/lib/api/responses";
 import {
@@ -53,16 +54,21 @@ async function handleUpload(
     throw new Error("API key does not have an attributable owner");
   const serviceAccountId =
     "serviceAccountId" in permission ? permission.serviceAccountId : undefined;
+  const userId = permission.userId;
+  // uploadEvidence opens its own tenant transactions around each storage
+  // write, so only the actor lookup is scoped here.
   const actor =
     "roles" in permission
-      ? await scopedEvidenceActor({
-          organisationId: permission.organisationId,
-          userId: permission.userId,
-          roles: permission.roles,
-        })
+      ? await runInOrganisation(permission, () =>
+          scopedEvidenceActor({
+            organisationId: permission.organisationId,
+            userId,
+            roles: permission.roles,
+          }),
+        )
       : {
           organisationId: permission.organisationId,
-          userId: permission.userId,
+          userId,
           serviceAccountId,
         };
   // Enforce streamed bytes before multipart parsing buffers the body.

@@ -3,7 +3,11 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/db";
 import { findings } from "@/db/schema";
-import { apiReadContext, apiWriteContext } from "@/lib/api/authentication";
+import {
+  apiReadContext,
+  apiWriteContext,
+  runInOrganisation,
+} from "@/lib/api/authentication";
 import { apiError, apiNotFound } from "@/lib/api/responses";
 import { optionalJsonWithLimit } from "@/lib/security/request-body";
 import { engagementVisibility } from "@/lib/permissions/access";
@@ -22,18 +26,20 @@ export async function POST(
     const { id } = await context.params;
     z.string().uuid().parse(id);
     const principal = await apiReadContext(request, "findings:write");
-    const [existing] = await db
-      .select({ engagementId: findings.engagementId })
-      .from(findings)
-      .where(
-        and(
-          eq(findings.id, id),
-          eq(findings.organisationId, principal.organisationId),
-          isNull(findings.deletedAt),
-          engagementVisibility(principal, findings.engagementId),
-        ),
-      )
-      .limit(1);
+    const [existing] = await runInOrganisation(principal, () =>
+      db
+        .select({ engagementId: findings.engagementId })
+        .from(findings)
+        .where(
+          and(
+            eq(findings.id, id),
+            eq(findings.organisationId, principal.organisationId),
+            isNull(findings.deletedAt),
+            engagementVisibility(principal, findings.engagementId),
+          ),
+        )
+        .limit(1),
+    );
     if (!existing) return apiNotFound(requestId, "Finding was not found");
 
     const writer = await apiWriteContext(
@@ -42,14 +48,16 @@ export async function POST(
       "finding:create",
       { engagementId: existing.engagementId },
     );
-    if (!writer.userId)
-      throw new Error("API key does not have an attributable owner");
+    const userId = writer.userId;
+    if (!userId) throw new Error("API key does not have an attributable owner");
 
     const input = bodySchema.parse(await optionalJsonWithLimit(request));
-    const attempt = await requestRetestForApi(
-      { organisationId: writer.organisationId, userId: writer.userId },
-      id,
-      input.notes,
+    const attempt = await runInOrganisation(writer, () =>
+      requestRetestForApi(
+        { organisationId: writer.organisationId, userId },
+        id,
+        input.notes,
+      ),
     );
     return NextResponse.json({ data: attempt, requestId }, { status: 201 });
   } catch (error) {

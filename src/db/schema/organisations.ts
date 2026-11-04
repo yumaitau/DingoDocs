@@ -18,12 +18,23 @@ export type SecurityPolicy = {
   scimDomains?: Array<{ domain: string; token: string; verifiedAt?: string }>;
   sso?: {
     protocol: "oidc" | "saml";
+    /** OIDC issuer, or for SAML the IdP entity ID the assertion Issuer must match. */
     issuer: string;
     clientId: string;
     clientSecretEncrypted?: string;
     entryPoint?: string;
     certificate?: string;
     groupRoles?: Record<string, string>;
+    /** SAML attribute holding the email (default `email`, then an email NameID). */
+    emailAttribute?: string;
+    /** SAML attribute holding group names for groupRoles mapping. */
+    groupsAttribute?: string;
+    /** Create users and memberships on verified domains at first SAML sign-in. */
+    jitProvisioning?: boolean;
+    /** Accept unsolicited (IdP-initiated) SAML responses. */
+    allowIdpInitiated?: boolean;
+    /** Trust the IdP's MFA, so TOTP-enrolled users may sign in through SAML. */
+    idpEnforcesMfa?: boolean;
   };
 };
 

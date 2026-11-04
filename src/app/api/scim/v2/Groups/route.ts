@@ -5,6 +5,7 @@ import {
   ScimAuthError,
   scimError,
 } from "@/server/services/scim";
+import { runInOrganisation } from "@/lib/permissions/require";
 
 export const runtime = "nodejs";
 
@@ -34,7 +35,9 @@ export async function PATCH(request: Request) {
     };
     const groupId = payload.id ?? payload.displayName ?? "";
     if (!groupId) return scimError(400, "Group id or displayName required");
-    const result = await patchScimGroup(context, groupId, payload);
+    const result = await runInOrganisation(context, () =>
+      patchScimGroup(context, groupId, payload),
+    );
     if (result.ignored) {
       return Response.json(
         {

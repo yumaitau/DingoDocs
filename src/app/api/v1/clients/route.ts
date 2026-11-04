@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/db";
 import { clients } from "@/db/schema";
-import { apiReadContext } from "@/lib/api/authentication";
+import { apiReadContext, runInOrganisation } from "@/lib/api/authentication";
 import { apiError } from "@/lib/api/responses";
 import { clientVisibility } from "@/lib/permissions/access";
 
@@ -29,19 +29,21 @@ export async function GET(request: Request) {
       clientVisibility(context, clients.id),
     );
     const column = query.sort === "name" ? clients.name : clients.createdAt;
-    const [data, count] = await Promise.all([
-      db
-        .select()
-        .from(clients)
-        .where(where)
-        .orderBy(query.order === "asc" ? asc(column) : desc(column))
-        .limit(query.pageSize)
-        .offset((query.page - 1) * query.pageSize),
-      db
-        .select({ total: sql<number>`count(*)::int` })
-        .from(clients)
-        .where(where),
-    ]);
+    const [data, count] = await runInOrganisation(context, () =>
+      Promise.all([
+        db
+          .select()
+          .from(clients)
+          .where(where)
+          .orderBy(query.order === "asc" ? asc(column) : desc(column))
+          .limit(query.pageSize)
+          .offset((query.page - 1) * query.pageSize),
+        db
+          .select({ total: sql<number>`count(*)::int` })
+          .from(clients)
+          .where(where),
+      ]),
+    );
     return NextResponse.json({
       data,
       pagination: {

@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { apiReadContext, apiWriteContext } from "@/lib/api/authentication";
+import {
+  apiReadContext,
+  apiWriteContext,
+  runInOrganisation,
+} from "@/lib/api/authentication";
 import { apiError } from "@/lib/api/responses";
 import { jsonWithLimit } from "@/lib/security/request-body";
 import {
@@ -48,10 +52,12 @@ export async function GET(request: Request) {
     const query = querySchema.parse(
       Object.fromEntries(new URL(request.url).searchParams),
     );
-    const data = await searchFindingTemplates(
-      principal.organisationId,
-      query.q ?? "",
-      query.approvedOnly ?? false,
+    const data = await runInOrganisation(principal, () =>
+      searchFindingTemplates(
+        principal.organisationId,
+        query.q ?? "",
+        query.approvedOnly ?? false,
+      ),
     );
     return NextResponse.json({ data, requestId });
   } catch (error) {
@@ -67,12 +73,14 @@ export async function POST(request: Request) {
       "findings:write",
       "template:manage",
     );
-    if (!principal.userId)
-      throw new Error("API key does not have an attributable owner");
+    const userId = principal.userId;
+    if (!userId) throw new Error("API key does not have an attributable owner");
     const input = createSchema.parse(await jsonWithLimit(request));
-    const template = await createFindingTemplate(
-      { organisationId: principal.organisationId, userId: principal.userId },
-      input,
+    const template = await runInOrganisation(principal, () =>
+      createFindingTemplate(
+        { organisationId: principal.organisationId, userId },
+        input,
+      ),
     );
     return NextResponse.json({ data: template, requestId }, { status: 201 });
   } catch (error) {

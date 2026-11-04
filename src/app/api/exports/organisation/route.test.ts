@@ -16,6 +16,7 @@ vi.mock("@/lib/permissions/require", () => {
         throw new PermissionDeniedError("Forbidden");
       return { organisationId: "organisation", userId: "user" };
     },
+    runInOrganisation: (_context: unknown, fn: () => Promise<unknown>) => fn(),
   };
 });
 vi.mock("@/server/services/data-exchange", () => ({

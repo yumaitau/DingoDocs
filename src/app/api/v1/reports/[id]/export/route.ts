@@ -3,7 +3,11 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/db";
 import { reports } from "@/db/schema";
-import { apiReadContext, apiWriteContext } from "@/lib/api/authentication";
+import {
+  apiReadContext,
+  apiWriteContext,
+  runInOrganisation,
+} from "@/lib/api/authentication";
 import { apiError, apiNotFound } from "@/lib/api/responses";
 import { jsonWithLimit } from "@/lib/security/request-body";
 import { engagementVisibility } from "@/lib/permissions/access";
@@ -36,17 +40,19 @@ export async function POST(
     // write scope (as report transitions do) and data:export, which
     // service-account keys never hold.
     const principal = await apiReadContext(request, "findings:write");
-    const [existing] = await db
-      .select({ engagementId: reports.engagementId })
-      .from(reports)
-      .where(
-        and(
-          eq(reports.id, id),
-          eq(reports.organisationId, principal.organisationId),
-          engagementVisibility(principal, reports.engagementId),
-        ),
-      )
-      .limit(1);
+    const [existing] = await runInOrganisation(principal, () =>
+      db
+        .select({ engagementId: reports.engagementId })
+        .from(reports)
+        .where(
+          and(
+            eq(reports.id, id),
+            eq(reports.organisationId, principal.organisationId),
+            engagementVisibility(principal, reports.engagementId),
+          ),
+        )
+        .limit(1),
+    );
     if (!existing) return apiNotFound(requestId, "Report was not found");
 
     const writer = await apiWriteContext(
@@ -63,10 +69,23 @@ export async function POST(
       organisationId: writer.organisationId,
       userId: writer.userId,
     };
-    const workspace = await getReportWorkspace(writer.organisationId, id);
-    const existingKey = workspace.current.exportKeys?.[input.format];
-    if (!existingKey) {
-      await queueReportGeneration(actor, id, [input.format]);
+    // Rendering is a background job; this only queues it or records the
+    // download, so the whole step is database work.
+    const outcome = await runInOrganisation(writer, async () => {
+      const workspace = await getReportWorkspace(writer.organisationId, id);
+      const existingKey = workspace.current.exportKeys?.[input.format];
+      if (!existingKey) {
+        await queueReportGeneration(actor, id, [input.format]);
+        return { queued: true as const, workspace };
+      }
+      const result = await getReportExport(actor, {
+        reportVersionId: workspace.current.id,
+        format: input.format,
+      });
+      return { queued: false as const, result };
+    });
+    if (outcome.queued) {
+      const { workspace } = outcome;
       return NextResponse.json({
         data: {
           reportId: id,
@@ -81,10 +100,7 @@ export async function POST(
       });
     }
 
-    const result = await getReportExport(actor, {
-      reportVersionId: workspace.current.id,
-      format: input.format,
-    });
+    const { result } = outcome;
     return NextResponse.json({
       data: {
         reportId: id,

@@ -6,6 +6,7 @@ import { notificationChannels } from "@/db/schema";
 import {
   apiReadContextWithPermission,
   apiWriteContext,
+  runInOrganisation,
 } from "@/lib/api/authentication";
 import { apiError } from "@/lib/api/responses";
 import { jsonWithLimit } from "@/lib/security/request-body";
@@ -22,17 +23,19 @@ export async function GET(request: Request) {
       "notifications:manage",
       "integration:configure",
     );
-    const data = await db
-      .select({
-        id: notificationChannels.id,
-        name: notificationChannels.name,
-        provider: notificationChannels.provider,
-        enabled: notificationChannels.enabled,
-        createdAt: notificationChannels.createdAt,
-      })
-      .from(notificationChannels)
-      .where(eq(notificationChannels.organisationId, context.organisationId))
-      .orderBy(desc(notificationChannels.createdAt));
+    const data = await runInOrganisation(context, () =>
+      db
+        .select({
+          id: notificationChannels.id,
+          name: notificationChannels.name,
+          provider: notificationChannels.provider,
+          enabled: notificationChannels.enabled,
+          createdAt: notificationChannels.createdAt,
+        })
+        .from(notificationChannels)
+        .where(eq(notificationChannels.organisationId, context.organisationId))
+        .orderBy(desc(notificationChannels.createdAt)),
+    );
     return NextResponse.json({ data, requestId });
   } catch (error) {
     return apiError(error, requestId);
@@ -79,6 +82,8 @@ export async function POST(request: Request) {
     if (!principal.userId)
       throw new Error("API key does not have an attributable owner");
     const input = createSchema.parse(await jsonWithLimit(request));
+    // Validates the destination URL (DNS) first, then opens its own tenant
+    // transaction for the insert.
     const channel = await createNotificationChannel(
       { organisationId: principal.organisationId, userId: principal.userId },
       {

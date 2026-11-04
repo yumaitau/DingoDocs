@@ -56,7 +56,7 @@ erDiagram
 
 Better Auth owns users, credential and OAuth accounts, sessions, verification tokens, and TOTP records through its Drizzle adapter. Session tokens are secure HTTP-only cookies. The route proxy is only a fast redirect path; protected layouts, Server Actions, and Route Handlers resolve the session again on the server. Authentication tables remain separate from the engagement domain while foreign keys preserve attribution.
 
-Email/password, magic-link, TOTP, session revocation data, and OAuth proxy foundations are configured. Social and OIDC providers are enabled only when their server-side environment credentials are configured.
+Email/password, magic-link, TOTP, session revocation data, and OAuth proxy foundations are configured. Social and OIDC providers are enabled only when their server-side environment credentials are configured. Per-organisation SAML 2.0 is a first-party Better Auth plugin (`src/lib/auth/saml-plugin.ts`) configured in each organisation's security policy; see [Security model](security.md#per-organisation-saml-sso).
 
 ### Better Auth 1.7 upgrade
 

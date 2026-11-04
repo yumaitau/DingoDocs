@@ -3,6 +3,7 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { db } from "@/db";
 import { engagementMembers, organisationMembers } from "@/db/schema";
+import { withTenant } from "@/db/tenant";
 import {
   loadMfaEnforcement,
   mfaAccessDecision,
@@ -92,6 +93,24 @@ export async function requireOrganisationContext() {
     role: organisation.role,
   });
   return { userId: session.user.id, ...organisation };
+}
+
+/**
+ * Runs authorised request work inside a tenant transaction so Postgres
+ * row-level security confines it to `context.organisationId`. Call it after
+ * requireOrganisationContext()/requirePermission() and after reading the
+ * request body; keep storage and other network I/O outside `fn`.
+ *
+ * Deliberately explicit rather than entered implicitly at context
+ * resolution: an AsyncLocalStorage enterWith() there would hold a pooled
+ * connection and an open transaction for the rest of the request, including
+ * RSC streaming and any outbound calls.
+ */
+export function runInOrganisation<T>(
+  context: { organisationId: string },
+  fn: () => Promise<T>,
+) {
+  return withTenant(context.organisationId, () => fn());
 }
 
 export async function requireInternalOrganisationContext() {

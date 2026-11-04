@@ -1,6 +1,6 @@
 "use server";
 
-import { createHash } from "node:crypto";
+import { createHash, X509Certificate } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
@@ -39,6 +39,17 @@ import {
   verifyScimDomain,
 } from "@/server/services/domain-verification";
 import { userFacingError } from "@/lib/errors";
+import { idpCertificates } from "@/lib/auth/saml-config";
+
+function assertCertificate(pem: string) {
+  try {
+    new X509Certificate(pem);
+  } catch {
+    throw new Error(
+      "The SAML IdP certificate isn't a valid PEM or base64 X.509 certificate",
+    );
+  }
+}
 
 const id = z.string().uuid();
 
@@ -66,6 +77,11 @@ function ssoAuditSummary(policy: SecurityPolicy): Record<string, unknown> {
       : null,
     confidentialClient: Boolean(sso?.clientSecretEncrypted),
     groupRoles: sso?.groupRoles ?? null,
+    emailAttribute: sso?.emailAttribute ?? null,
+    groupsAttribute: sso?.groupsAttribute ?? null,
+    jitProvisioning: sso?.jitProvisioning === true,
+    allowIdpInitiated: sso?.allowIdpInitiated === true,
+    idpEnforcesMfa: sso?.idpEnforcesMfa === true,
     scimGroupRoles: policy.scimGroupRoles ?? null,
   };
 }
@@ -396,6 +412,33 @@ export async function saveSsoPolicyAction(
       .string()
       .optional()
       .parse(formData.get("groupRoles") || undefined);
+    const attributeName = (label: string) =>
+      z
+        .string()
+        .trim()
+        .max(256, `${label} must be at most 256 characters`)
+        .regex(/^[^\s<>"']*$/, `${label} can't contain spaces or quotes`)
+        .optional();
+    const emailAttribute = attributeName("Email attribute").parse(
+      formData.get("emailAttribute") || undefined,
+    );
+    const groupsAttribute = attributeName("Groups attribute").parse(
+      formData.get("groupsAttribute") || undefined,
+    );
+    const jitProvisioning = formData.get("jitProvisioning") === "on";
+    const allowIdpInitiated = formData.get("allowIdpInitiated") === "on";
+    const idpEnforcesMfa = formData.get("idpEnforcesMfa") === "on";
+    if (protocol === "saml" && entryPoint) {
+      let parsed: URL | undefined;
+      try {
+        parsed = new URL(entryPoint);
+      } catch {
+        parsed = undefined;
+      }
+      if (parsed?.protocol !== "https:")
+        throw new Error("SAML entry point must be an https:// URL");
+    }
+    if (certificate) idpCertificates(certificate).forEach(assertCertificate);
 
     // Same rules as SCIM: valid, non-protected roles the actor may grant.
     const parsedScimGroupRoles = scimGroupRolesRaw
@@ -430,8 +473,20 @@ export async function saveSsoPolicyAction(
           entryPoint: entryPoint || current.sso?.entryPoint,
           certificate: certificate || current.sso?.certificate,
           groupRoles,
+          emailAttribute: emailAttribute || undefined,
+          groupsAttribute: groupsAttribute || undefined,
+          jitProvisioning,
+          allowIdpInitiated,
+          idpEnforcesMfa,
         },
       };
+      if (
+        protocol === "saml" &&
+        (!next.sso?.entryPoint || !next.sso.certificate)
+      )
+        throw new Error(
+          "SAML needs the IdP entry point (SSO URL) and signing certificate",
+        );
       await tx
         .update(organisations)
         .set({ securityPolicy: next, updatedAt: new Date() })
@@ -463,7 +518,7 @@ export async function saveSsoPolicyAction(
       message:
         protocol === "oidc"
           ? "Per-org OIDC config stored. Deployment-wide env providers still apply; this config is for ACS/login redirect wiring."
-          : "Per-org SAML config saved. ACS is /api/auth/saml/acs.",
+          : "SAML settings saved. Copy the entity ID and ACS URL below into your identity provider.",
     };
   } catch (error) {
     return {

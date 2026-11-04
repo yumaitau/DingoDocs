@@ -6,6 +6,7 @@ import {
   assertEngagementAccess,
   requireInternalOrganisationContext,
   requirePermission,
+  runInOrganisation,
 } from "@/lib/permissions/require";
 import { storage } from "@/lib/storage";
 import {
@@ -33,18 +34,33 @@ export async function POST(
       )
       .parse(value);
     const organisation = await requireInternalOrganisationContext();
-    const workspace = await getReportWorkspace(organisation.organisationId, id);
-    await assertEngagementAccess({
-      userId: organisation.userId,
-      organisationId: organisation.organisationId,
-      engagementId: workspace.report.engagementId,
+    const workspace = await runInOrganisation(organisation, async () => {
+      const workspace = await getReportWorkspace(
+        organisation.organisationId,
+        id,
+      );
+      await assertEngagementAccess({
+        userId: organisation.userId,
+        organisationId: organisation.organisationId,
+        engagementId: workspace.report.engagementId,
+      });
+      return workspace;
     });
+    // Re-resolves the session and membership (auth tables, no RLS), so it
+    // runs outside the tenant transaction.
     const permission = await requirePermission("data:export", {
       engagementId: workspace.report.engagementId,
     });
-    const result = await getReportExport(
-      { organisationId: permission.organisationId, userId: permission.userId },
-      { reportVersionId: workspace.current.id, format },
+    // The download audit row is written scoped; signing a URL or streaming
+    // from storage happens after the transaction commits.
+    const result = await runInOrganisation(permission, () =>
+      getReportExport(
+        {
+          organisationId: permission.organisationId,
+          userId: permission.userId,
+        },
+        { reportVersionId: workspace.current.id, format },
+      ),
     );
     const exam = (workspace.current.content as ReportDocumentModel).exam;
     let examName: string | undefined;

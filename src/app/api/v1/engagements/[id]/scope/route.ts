@@ -3,7 +3,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/db";
 import { scopeItems, scopeVersions } from "@/db/schema";
-import { apiReadContext } from "@/lib/api/authentication";
+import { apiReadContext, runInOrganisation } from "@/lib/api/authentication";
 import { apiError } from "@/lib/api/responses";
 import { assertActorEngagementAccess } from "@/lib/permissions/require";
 
@@ -16,30 +16,33 @@ export async function GET(
     const { id } = await context.params;
     z.string().uuid().parse(id);
     const principal = await apiReadContext(request, "engagements:read");
-    await assertActorEngagementAccess(principal, id);
-    const [version] = await db
-      .select()
-      .from(scopeVersions)
-      .where(
-        and(
-          eq(scopeVersions.organisationId, principal.organisationId),
-          eq(scopeVersions.engagementId, id),
-        ),
-      )
-      .orderBy(desc(scopeVersions.version))
-      .limit(1);
-    const items = version
-      ? await db
-          .select()
-          .from(scopeItems)
-          .where(
-            and(
-              eq(scopeItems.organisationId, principal.organisationId),
-              eq(scopeItems.scopeVersionId, version.id),
-            ),
-          )
-          .orderBy(asc(scopeItems.name))
-      : [];
+    const { version, items } = await runInOrganisation(principal, async () => {
+      await assertActorEngagementAccess(principal, id);
+      const [version] = await db
+        .select()
+        .from(scopeVersions)
+        .where(
+          and(
+            eq(scopeVersions.organisationId, principal.organisationId),
+            eq(scopeVersions.engagementId, id),
+          ),
+        )
+        .orderBy(desc(scopeVersions.version))
+        .limit(1);
+      const items = version
+        ? await db
+            .select()
+            .from(scopeItems)
+            .where(
+              and(
+                eq(scopeItems.organisationId, principal.organisationId),
+                eq(scopeItems.scopeVersionId, version.id),
+              ),
+            )
+            .orderBy(asc(scopeItems.name))
+        : [];
+      return { version, items };
+    });
     return NextResponse.json({
       data: { version: version ?? null, items },
       requestId,

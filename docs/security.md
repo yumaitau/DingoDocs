@@ -6,7 +6,7 @@ The practical baseline is OWASP ASVS Level 2 with additional controls for sensit
 
 | Threat                    | Principal controls                                                                                                                                                                                                                               |
 | ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| Cross-organisation access | Server-derived tenant context, organisation key on owned tables, scoped repositories, membership revalidation, integration tests                                                                                                                 |
+| Cross-organisation access | Server-derived tenant context, organisation key on owned tables, scoped repositories, membership revalidation, PostgreSQL row-level security on tenant content tables (see below), integration tests                                             |
 | Cross-engagement access   | Need-to-know ACL: only organisation owners/admins see every engagement; other roles require an engagement membership. Lists, search, evidence, reports, and writes use that membership. Engagement assignment is the ACL, not a privilege add-on |
 | Invitation privilege      | Invites cannot grant a more privileged role than the inviter. Accepting an invite cannot overwrite an active membership                                                                                                                          |
 | Identifier enumeration    | UUID identifiers, tenant predicates, uniform not-found behaviour                                                                                                                                                                                 |
@@ -29,6 +29,18 @@ Client roles are intentionally excluded from organisation-wide REST reads, repor
 
 Better Auth's admin plugin defaults every new user to `role=user`. Break-glass impersonation and admin APIs are limited to user ids in `BETTER_AUTH_ADMIN_USER_IDS`. Banned or `disabledAt` users lose their session on the next request.
 
+## Tenant row-level security
+
+Every query already carries an explicit `organisation_id` predicate. PostgreSQL row-level security (RLS) is a second, independent layer that catches a missing predicate.
+
+- **Policies.** Migrations 0014 and 0016 enable RLS and a `tenant_isolation` policy on 59 tenant content tables (clients, engagements, findings, evidence, reports and their child tables, collaboration, runbooks, imports, and integration configuration). The policy allows a row only when `organisation_id` equals the transaction-local setting `app.organisation_id`, for reads (`USING`) and for writes (`WITH CHECK`). An unset setting matches nothing.
+- **Tables without RLS.** Auth, membership and system tables are read before an organisation is known, or across tenants by design, so they have no policy: `users`, `accounts`, `sessions`, `verification_tokens`, `two_factor`, `passkeys`, `login_attempts`, `organisations`, `organisation_members`, `organisation_invitations`, `api_keys`, `service_accounts`, `scim_tokens`, `audit_events` and `background_jobs`. The migration records the reason for each.
+- **Tenant role.** Table owners and superusers bypass RLS. Migration 0016 therefore creates a `NOLOGIN NOSUPERUSER NOBYPASSRLS` role, `dingodocs_tenant`, grants it to the migrating user, and gives it table privileges. Request work runs in `withTenant(organisationId, fn)` (`src/db/tenant.ts`). This opens a transaction, switches to `dingodocs_tenant` with `SET LOCAL ROLE`, and sets `app.organisation_id`. Both revert at commit, so pooled connections never carry tenant state. A superuser can still `SET ROLE` to the tenant role, and RLS then applies. This is why it enforces under the Docker Compose superuser, and the integration test checks that case.
+- **Owner path.** RLS is not `FORCE`d. Code outside a tenant scope runs as the connecting user and sees every row: migrations, the background job runner, authentication, SCIM token lookup and retention. That is the trusted system path. RLS only enforces when the connecting user is neither a superuser nor the owner, or when work runs inside `withTenant`.
+- **Global `db` proxy.** `db` from `@/db` resolves to the tenant transaction while a scope is active (AsyncLocalStorage), so existing services are scoped without code changes. A nested `db.transaction()` becomes a savepoint. A scope for a different organisation cannot be nested inside another.
+- **Scoped surfaces.** All `/api/v1` handlers run their authorised work inside a tenant scope, as do the client portal and SCIM routes, `/api/search`, `/api/notifications`, organisation and audit exports, the repository layer in `src/server/repositories/tenant.ts`, and the evidence, import, webhook and notification-channel services. Storage reads and writes, DNS checks for outbound URLs, and report rendering run outside the transaction. Webhook, notification, malware-scan and report-generation delivery are background jobs. App pages and server actions that do not go through the repository layer are not yet scoped and rely on application predicates. Use `runInOrganisation(context, fn)` from `@/lib/permissions/require` when adding scoping to them.
+- **Managed PostgreSQL.** When the migrating user lacks `CREATEROLE`, the migration logs a warning and continues. The app detects at startup that it cannot assume the role, logs `db.tenant_rls.inactive` once, and keeps working with only the GUC set, so RLS stays inactive. Have a DBA create the role (see [Deployment](deployment.md#postgresql-roles-and-row-level-security)).
+
 ## SCIM provisioning and verified domains
 
 A SCIM token lets an organisation's identity provider manage that organisation's memberships. User accounts are global, so SCIM may only create or attach users whose email domain the organisation has proven it controls.
@@ -49,5 +61,29 @@ Matching is exact: `sub.example.com` needs its own verification. Adding, verifyi
 - Existing account whose email is not verified: `409`, `scimType: uniqueness`. The account must be verified or removed first, so a pre-registered look-alike account can't be adopted and elevated through group pushes.
 
 **Upgrading existing SCIM setups:** creates now fail with `403` until the organisation verifies its domains. Users already provisioned keep working: `GET`, `PATCH` and `DELETE` on existing members, and Group pushes, do not require a verified domain. Verify domains before the IdP's next create or re-POST cycle.
+
+## Per-organisation SAML SSO
+
+SAML sign-in is a first-party Better Auth plugin (`src/lib/auth/saml-plugin.ts`) with endpoints under `/api/auth/sso/saml/<organisation-slug>/` (`login`, `acs`, `metadata`). Setup steps are in the [administrator guide](admin-guide.md#saml-single-sign-on).
+
+Response validation (`@node-saml/node-saml`):
+
+- The organisation is taken from the ACS path slug, never from RelayState. RelayState only carries an HMAC-signed, organisation-bound, expiring internal callback path.
+- The assertion must be signed by a certificate configured for that organisation, its Issuer must equal the configured IdP entity ID, and its Audience must equal the organisation's SP entity ID (`…/sso/saml/<slug>/metadata`). An assertion minted for another organisation or another service provider fails.
+- Clock skew tolerance is 60 seconds. `NotBefore`/`NotOnOrAfter` on the conditions and subject confirmation are enforced.
+- SP-initiated only by default (`InResponseTo` is required). AuthnRequest IDs are stored in `verification_tokens` (not process memory, so all replicas share them) for 10 minutes and consumed atomically on first use. The ID is also bound to the starting browser by a signed, `SameSite=None`, ACS-path-scoped cookie, so a response captured by one person can't sign in another browser (login CSRF).
+- Every assertion ID is recorded in `verification_tokens` until its `NotOnOrAfter` (plus skew). A second use is rejected, including for IdP-initiated responses when an organisation enables them.
+- The ACS is a cross-site POST from the IdP, so Better Auth's origin check is skipped for the `/sso/saml` prefix only (the only POST under it is the ACS). The assertion signature, audience and single-use `InResponseTo` are the protection there. `/sso/discover` keeps the normal origin check.
+
+Identity resolution is scoped to the organisation:
+
+- The email comes from the configured attribute (default `email`) or an email-shaped NameID, lowercased. Its domain must be DNS-verified by this organisation. Sessions are not tenant-scoped, so without domain proof one organisation's IdP could assert the address of a guest member and get that person's session for their other organisations.
+- An active member of this organisation is signed in. With JIT provisioning on, a new user (email verified, because the domain is proven) or a membership for an existing verified user is created, with the role from the group mapping (`read_only` default; owner and platform administrator are never granted, using the SCIM rules). Unverified look-alike accounts are never adopted.
+- Each IdP subject is linked as an `accounts` row with `providerId = saml:<organisationId>` and `accountId = NameID`. A NameID already linked to a different user is rejected.
+- Disabled or banned users, deactivated memberships and memberships whose `sessions_revoked_at` is later than now are refused. All failures redirect to `/sign-in?error=sso_failed` and never reveal whether the user, organisation or domain exists; the reason is written to the audit log (`sso.saml.rejected`). Discovery by email returns the same opaque, encrypted continue link for every domain.
+
+Sessions are created with `internalAdapter.createSession`, so the `databaseHooks` (second-factor guard, banned-user check, session audit) and the revoked-session guard apply as for any other sign-in. For TOTP-enrolled users the ACS is allow-listed in the second-factor guard only when the organisation sets **IdP enforces MFA**; otherwise they are sent to `/sign-in?error=two_factor_required` and must use password and code. A successful SAML sign-in sets the active-organisation cookie to that organisation.
+
+Not implemented: SAML Single Logout, signed AuthnRequests, encrypted assertions, and per-org OIDC sign-in (OIDC settings are stored only).
 
 See [SECURITY.md](../SECURITY.md) for vulnerability reporting.

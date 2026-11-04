@@ -6,6 +6,7 @@ import { webhooks } from "@/db/schema";
 import {
   apiReadContextWithPermission,
   apiWriteContext,
+  runInOrganisation,
 } from "@/lib/api/authentication";
 import { apiError } from "@/lib/api/responses";
 import { jsonWithLimit } from "@/lib/security/request-body";
@@ -21,20 +22,22 @@ export async function GET(request: Request) {
       "webhooks:manage",
       "integration:configure",
     );
-    const data = await db
-      .select({
-        id: webhooks.id,
-        name: webhooks.name,
-        url: webhooks.url,
-        events: webhooks.events,
-        enabled: webhooks.enabled,
-        secretVersion: webhooks.secretVersion,
-        createdAt: webhooks.createdAt,
-        rotatedAt: webhooks.rotatedAt,
-      })
-      .from(webhooks)
-      .where(eq(webhooks.organisationId, context.organisationId))
-      .orderBy(desc(webhooks.createdAt));
+    const data = await runInOrganisation(context, () =>
+      db
+        .select({
+          id: webhooks.id,
+          name: webhooks.name,
+          url: webhooks.url,
+          events: webhooks.events,
+          enabled: webhooks.enabled,
+          secretVersion: webhooks.secretVersion,
+          createdAt: webhooks.createdAt,
+          rotatedAt: webhooks.rotatedAt,
+        })
+        .from(webhooks)
+        .where(eq(webhooks.organisationId, context.organisationId))
+        .orderBy(desc(webhooks.createdAt)),
+    );
     return NextResponse.json({ data, requestId });
   } catch (error) {
     return apiError(error, requestId);
@@ -58,6 +61,7 @@ export async function POST(request: Request) {
     if (!principal.userId)
       throw new Error("API key does not have an attributable owner");
     const input = createSchema.parse(await jsonWithLimit(request));
+    // Validates the URL (DNS) first, then opens its own tenant transaction.
     const webhook = await createWebhook(
       { organisationId: principal.organisationId, userId: principal.userId },
       input,

@@ -14,6 +14,7 @@ import {
 } from "drizzle-orm";
 import sharp from "sharp";
 import { db } from "@/db";
+import { withTenant } from "@/db/tenant";
 import {
   assetEvidence,
   auditEvents,
@@ -131,95 +132,102 @@ export async function uploadEvidence(
   validateContentSignature(input.bytes, input.mediaType);
   const sha256 = createHash("sha256").update(input.bytes).digest("hex");
 
-  const [engagement] = await db
-    .select({
-      id: engagements.id,
-      clientId: engagements.clientId,
-      status: engagements.status,
-      archivedAt: engagements.archivedAt,
-    })
-    .from(engagements)
-    .where(
-      and(
-        eq(engagements.id, input.engagementId),
-        eq(engagements.organisationId, actor.organisationId),
-        isNull(engagements.deletedAt),
-      ),
-    )
-    .limit(1);
-  if (!engagement) throw new EvidenceScopeError();
-  assertActorScope(actor, engagement.clientId, input.engagementId);
-  assertEngagementWritable(engagement);
-
-  let retentionUntil = input.retentionUntil;
-  if (!retentionUntil) {
-    try {
-      const defaults = await readClientReportDefaults(engagement.clientId);
-      retentionUntil = retentionUntilFromPolicy(defaults.retentionPolicy);
-    } catch {
-      retentionUntil = undefined;
-    }
-  }
-  if (
-    input.classification === "client_visible" &&
-    !actor.clientIds &&
-    !actor.canViewRestricted
-  )
-    throw new EvidenceScopeError(
-      "Client-visible evidence requires restricted-evidence permission",
-    );
-
-  const [duplicate] = await db
-    .select({ id: evidence.id })
-    .from(evidence)
-    .where(
-      and(
-        eq(evidence.organisationId, actor.organisationId),
-        eq(evidence.engagementId, input.engagementId),
-        eq(evidence.sha256, sha256),
-        isNull(evidence.deletedAt),
-      ),
-    )
-    .limit(1);
-  if (duplicate && !input.allowDuplicate && !input.replaceEvidenceId) {
-    throw new EvidenceDuplicateError(duplicate.id);
-  }
-
-  let parentId: string | null = null;
-  let version = 1;
-  if (input.replaceEvidenceId) {
-    const [parent] = await db
+  // Two short tenant transactions around the storage write, so the open
+  // transaction never spans the (possibly remote) object store. Callers should
+  // not already hold a tenant scope, or the write would run inside it.
+  const prepared = await withTenant(actor.organisationId, async () => {
+    const [engagement] = await db
       .select({
-        id: evidence.id,
-        parentId: evidence.parentId,
-        version: evidence.version,
+        id: engagements.id,
+        clientId: engagements.clientId,
+        status: engagements.status,
+        archivedAt: engagements.archivedAt,
       })
+      .from(engagements)
+      .where(
+        and(
+          eq(engagements.id, input.engagementId),
+          eq(engagements.organisationId, actor.organisationId),
+          isNull(engagements.deletedAt),
+        ),
+      )
+      .limit(1);
+    if (!engagement) throw new EvidenceScopeError();
+    assertActorScope(actor, engagement.clientId, input.engagementId);
+    assertEngagementWritable(engagement);
+
+    let retentionUntil = input.retentionUntil;
+    if (!retentionUntil) {
+      try {
+        const defaults = await readClientReportDefaults(engagement.clientId);
+        retentionUntil = retentionUntilFromPolicy(defaults.retentionPolicy);
+      } catch {
+        retentionUntil = undefined;
+      }
+    }
+    if (
+      input.classification === "client_visible" &&
+      !actor.clientIds &&
+      !actor.canViewRestricted
+    )
+      throw new EvidenceScopeError(
+        "Client-visible evidence requires restricted-evidence permission",
+      );
+
+    const [duplicate] = await db
+      .select({ id: evidence.id })
       .from(evidence)
       .where(
         and(
-          eq(evidence.id, input.replaceEvidenceId),
           eq(evidence.organisationId, actor.organisationId),
           eq(evidence.engagementId, input.engagementId),
+          eq(evidence.sha256, sha256),
           isNull(evidence.deletedAt),
         ),
       )
       .limit(1);
-    if (!parent) throw new EvidenceScopeError();
-    parentId = parent.parentId ?? parent.id;
-    const [latest] = await db
-      .select({ version: evidence.version })
-      .from(evidence)
-      .where(
-        and(
-          eq(evidence.organisationId, actor.organisationId),
-          eq(evidence.parentId, parentId),
-          isNull(evidence.deletedAt),
-        ),
-      )
-      .orderBy(desc(evidence.version))
-      .limit(1);
-    version = Math.max(parent.version, latest?.version ?? 0) + 1;
-  }
+    if (duplicate && !input.allowDuplicate && !input.replaceEvidenceId) {
+      throw new EvidenceDuplicateError(duplicate.id);
+    }
+
+    let parentId: string | null = null;
+    let version = 1;
+    if (input.replaceEvidenceId) {
+      const [parent] = await db
+        .select({
+          id: evidence.id,
+          parentId: evidence.parentId,
+          version: evidence.version,
+        })
+        .from(evidence)
+        .where(
+          and(
+            eq(evidence.id, input.replaceEvidenceId),
+            eq(evidence.organisationId, actor.organisationId),
+            eq(evidence.engagementId, input.engagementId),
+            isNull(evidence.deletedAt),
+          ),
+        )
+        .limit(1);
+      if (!parent) throw new EvidenceScopeError();
+      parentId = parent.parentId ?? parent.id;
+      const [latest] = await db
+        .select({ version: evidence.version })
+        .from(evidence)
+        .where(
+          and(
+            eq(evidence.organisationId, actor.organisationId),
+            eq(evidence.parentId, parentId),
+            isNull(evidence.deletedAt),
+          ),
+        )
+        .orderBy(desc(evidence.version))
+        .limit(1);
+      version = Math.max(parent.version, latest?.version ?? 0) + 1;
+    }
+    return { engagement, retentionUntil, parentId, version };
+  });
+  const { engagement, retentionUntil, parentId, version } = prepared;
 
   // Without a scanner the scan job can only ever record "unavailable", so set
   // it now; otherwise the upload would read as "pending" (and be withheld)
@@ -236,7 +244,7 @@ export async function uploadEvidence(
     expectedSize: input.bytes.byteLength,
   });
   try {
-    return await db.transaction(async (tx) => {
+    return await withTenant(actor.organisationId, async (tx) => {
       const [row] = await tx
         .insert(evidence)
         .values({
@@ -522,7 +530,7 @@ export async function createEvidenceAnnotation(
     },
     provider,
   );
-  await db.transaction(async (tx) => {
+  await withTenant(actor.organisationId, async (tx) => {
     await tx.insert(evidenceAnnotations).values({
       organisationId: actor.organisationId,
       sourceEvidenceId: source.id,

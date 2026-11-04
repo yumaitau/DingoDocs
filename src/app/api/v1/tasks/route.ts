@@ -3,7 +3,11 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/db";
 import { tasks } from "@/db/schema";
-import { apiReadContext, apiWriteContext } from "@/lib/api/authentication";
+import {
+  apiReadContext,
+  apiWriteContext,
+  runInOrganisation,
+} from "@/lib/api/authentication";
 import { apiError } from "@/lib/api/responses";
 import { jsonWithLimit } from "@/lib/security/request-body";
 import { engagementVisibility } from "@/lib/permissions/access";
@@ -41,19 +45,21 @@ export async function GET(request: Request) {
         : query.sort === "priority"
           ? tasks.priority
           : tasks.createdAt;
-    const [data, count] = await Promise.all([
-      db
-        .select()
-        .from(tasks)
-        .where(where)
-        .orderBy(query.order === "asc" ? asc(column) : desc(column))
-        .limit(query.pageSize)
-        .offset((query.page - 1) * query.pageSize),
-      db
-        .select({ total: sql<number>`count(*)::int` })
-        .from(tasks)
-        .where(where),
-    ]);
+    const [data, count] = await runInOrganisation(context, () =>
+      Promise.all([
+        db
+          .select()
+          .from(tasks)
+          .where(where)
+          .orderBy(query.order === "asc" ? asc(column) : desc(column))
+          .limit(query.pageSize)
+          .offset((query.page - 1) * query.pageSize),
+        db
+          .select({ total: sql<number>`count(*)::int` })
+          .from(tasks)
+          .where(where),
+      ]),
+    );
     return NextResponse.json({
       data,
       pagination: {
@@ -93,22 +99,24 @@ export async function POST(request: Request) {
       "finding:create",
       { engagementId: input.engagementId },
     );
-    if (!principal.userId)
-      throw new Error("API key does not have an attributable owner");
+    const userId = principal.userId;
+    if (!userId) throw new Error("API key does not have an attributable owner");
     const dueAt = input.dueAt ? new Date(input.dueAt) : undefined;
     if (dueAt && Number.isNaN(dueAt.getTime()))
       throw new Error("dueAt is not a valid timestamp");
-    const task = await createWorkspaceTask(
-      { organisationId: principal.organisationId, userId: principal.userId },
-      {
-        engagementId: input.engagementId,
-        title: input.title,
-        description: input.description,
-        priority: input.priority,
-        assigneeId: input.assigneeId,
-        dueAt,
-        assetIds: input.assetIds,
-      },
+    const task = await runInOrganisation(principal, () =>
+      createWorkspaceTask(
+        { organisationId: principal.organisationId, userId },
+        {
+          engagementId: input.engagementId,
+          title: input.title,
+          description: input.description,
+          priority: input.priority,
+          assigneeId: input.assigneeId,
+          dueAt,
+          assetIds: input.assetIds,
+        },
+      ),
     );
     return NextResponse.json({ data: task, requestId }, { status: 201 });
   } catch (error) {

@@ -3,6 +3,7 @@ import { apiError } from "@/lib/api/responses";
 import {
   requireOrganisationContext,
   rolesForOperation,
+  runInOrganisation,
 } from "@/lib/permissions/require";
 import { previewContentType } from "@/lib/security/upload";
 import { storage } from "@/lib/storage";
@@ -36,20 +37,25 @@ async function handlePreview(context: { params: Promise<{ id: string }> }) {
   const { id } = await context.params;
   z.string().uuid().parse(id);
   const organisation = await requireOrganisationContext();
-  const locator = await getEvidenceLocator(organisation.organisationId, id);
-  const roles = await rolesForOperation({
-    userId: organisation.userId,
-    organisationId: organisation.organisationId,
-    engagementId: locator.engagementId,
+  // Authorisation and the audit row run scoped; the storage read happens
+  // after the tenant transaction commits.
+  const row = await runInOrganisation(organisation, async () => {
+    const locator = await getEvidenceLocator(organisation.organisationId, id);
+    const roles = await rolesForOperation({
+      userId: organisation.userId,
+      organisationId: organisation.organisationId,
+      engagementId: locator.engagementId,
+    });
+    if (!roles.length) throw new EvidenceScopeError();
+    const actor = await scopedEvidenceActor({
+      organisationId: organisation.organisationId,
+      userId: organisation.userId,
+      roles,
+    });
+    const row = await getEvidenceForAccess(actor, id);
+    await auditEvidenceDownload(actor, row, "evidence.previewed");
+    return row;
   });
-  if (!roles.length) throw new EvidenceScopeError();
-  const actor = await scopedEvidenceActor({
-    organisationId: organisation.organisationId,
-    userId: organisation.userId,
-    roles,
-  });
-  const row = await getEvidenceForAccess(actor, id);
-  await auditEvidenceDownload(actor, row, "evidence.previewed");
   return new Response(await storage().get(row.storageKey), {
     headers: {
       "content-type": previewContentType(row.mediaType),

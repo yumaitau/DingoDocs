@@ -3,7 +3,11 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/db";
 import { notes } from "@/db/schema";
-import { apiReadContext, apiWriteContext } from "@/lib/api/authentication";
+import {
+  apiReadContext,
+  apiWriteContext,
+  runInOrganisation,
+} from "@/lib/api/authentication";
 import { apiError } from "@/lib/api/responses";
 import { jsonWithLimit } from "@/lib/security/request-body";
 import { assertActorEngagementAccess } from "@/lib/permissions/require";
@@ -27,26 +31,28 @@ export async function GET(
     const { id } = await context.params;
     z.string().uuid().parse(id);
     const principal = await apiReadContext(request, "engagements:read");
-    await assertActorEngagementAccess(principal, id);
-    const rows = await db
-      .select()
-      .from(notes)
-      .where(
-        and(
-          eq(notes.organisationId, principal.organisationId),
-          eq(notes.engagementId, id),
-          visibleToAuthor(
-            notes.visibility,
-            notes.authorId,
-            "serviceAccountId" in principal && principal.serviceAccountId
-              ? undefined
-              : principal.userId,
+    const rows = await runInOrganisation(principal, async () => {
+      await assertActorEngagementAccess(principal, id);
+      return db
+        .select()
+        .from(notes)
+        .where(
+          and(
+            eq(notes.organisationId, principal.organisationId),
+            eq(notes.engagementId, id),
+            visibleToAuthor(
+              notes.visibility,
+              notes.authorId,
+              "serviceAccountId" in principal && principal.serviceAccountId
+                ? undefined
+                : principal.userId,
+            ),
+            isNull(notes.deletedAt),
           ),
-          isNull(notes.deletedAt),
-        ),
-      )
-      .orderBy(desc(notes.createdAt))
-      .limit(100);
+        )
+        .orderBy(desc(notes.createdAt))
+        .limit(100);
+    });
     return NextResponse.json({ data: rows, requestId });
   } catch (error) {
     return apiError(error, requestId);
@@ -71,10 +77,13 @@ export async function POST(
     );
     if (!principal.userId)
       throw new Error("API key does not have an attributable owner");
+    const userId = principal.userId;
     const input = createSchema.parse(await jsonWithLimit(request));
-    const note = await createWorkspaceNote(
-      { organisationId: principal.organisationId, userId: principal.userId },
-      { engagementId: id, ...input },
+    const note = await runInOrganisation(principal, () =>
+      createWorkspaceNote(
+        { organisationId: principal.organisationId, userId },
+        { engagementId: id, ...input },
+      ),
     );
     return NextResponse.json({ data: note, requestId }, { status: 201 });
   } catch (error) {

@@ -6,6 +6,7 @@ import {
   scimError,
   ScimRequestError,
 } from "@/server/services/scim";
+import { runInOrganisation } from "@/lib/permissions/require";
 
 export const runtime = "nodejs";
 
@@ -15,11 +16,13 @@ export async function GET(request: Request) {
     const params = new URL(request.url).searchParams;
     const startIndex = params.get("startIndex");
     const count = params.get("count");
-    const body = await listScimUsers(context.organisationId, {
-      filter: params.get("filter"),
-      startIndex: startIndex ? Number(startIndex) : undefined,
-      count: count ? Number(count) : undefined,
-    });
+    const body = await runInOrganisation(context, () =>
+      listScimUsers(context.organisationId, {
+        filter: params.get("filter"),
+        startIndex: startIndex ? Number(startIndex) : undefined,
+        count: count ? Number(count) : undefined,
+      }),
+    );
     return Response.json(body, {
       headers: { "content-type": "application/scim+json" },
     });
@@ -44,11 +47,14 @@ export async function POST(request: Request) {
       password?: string;
     };
     if (!payload.userName) return scimError(400, "userName is required");
-    const resource = await createScimUser(context.organisationId, {
-      userName: payload.userName,
-      name: payload.name?.formatted,
-      active: payload.active,
-    });
+    const userName = payload.userName;
+    const resource = await runInOrganisation(context, () =>
+      createScimUser(context.organisationId, {
+        userName,
+        name: payload.name?.formatted,
+        active: payload.active,
+      }),
+    );
     // Never echo password even if supplied.
     return Response.json(resource, {
       status: 201,
