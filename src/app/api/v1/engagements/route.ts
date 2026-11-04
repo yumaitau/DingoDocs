@@ -5,6 +5,7 @@ import { db } from "@/db";
 import { clients, engagementMembers, engagements } from "@/db/schema";
 import { apiReadContext, apiWriteContext } from "@/lib/api/authentication";
 import { apiError } from "@/lib/api/responses";
+import { jsonWithLimit } from "@/lib/security/request-body";
 import { engagementVisibility } from "@/lib/permissions/access";
 
 const querySchema = z.object({
@@ -90,7 +91,7 @@ export async function POST(request: Request) {
       "engagements:write",
       "engagement:create",
     );
-    const input = createSchema.parse(await request.json());
+    const input = createSchema.parse(await jsonWithLimit(request));
     const [client] = await db
       .select({ id: clients.id })
       .from(clients)

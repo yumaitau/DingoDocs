@@ -57,6 +57,53 @@ const findingWriteUp = z.object({
   assetIds: z.array(z.string().uuid()).max(100).optional(),
 });
 
+/**
+ * Workflow targets an agent may request. Everything else (review outcomes,
+ * approval, publication, closure, risk acceptance) is a human decision.
+ * Finding targets are those findingTransitionPermission maps to
+ * finding:create; report targets are those the report transition route maps
+ * to finding:create. protocol.test.ts checks both against the REST mappings.
+ *
+ * The REST layer is the security boundary (service keys are denied
+ * finding:approve and report:publish there); this is defence in depth so
+ * agents never attempt a release decision, whatever key they hold.
+ */
+export const agentFindingTransitionTargets = [
+  "draft",
+  "in_progress",
+  "ready_for_review",
+  "remediation_in_progress",
+  "ready_for_retest",
+] as const;
+export const agentReportTransitionTargets = [
+  "draft",
+  "internal_review",
+] as const;
+
+export const humanDecisionMessage =
+  "Approval and publication are human decisions; use the DingoDocs UI";
+
+export class HumanDecisionRequiredError extends Error {
+  constructor(status: string) {
+    super(
+      `${humanDecisionMessage} (status "${status}" is not available to agents)`,
+    );
+    this.name = "HumanDecisionRequiredError";
+  }
+}
+
+const agentTransitionTargets: Record<string, readonly string[]> = {
+  transition_finding: agentFindingTransitionTargets,
+  transition_report: agentReportTransitionTargets,
+};
+
+/** Throws when a transition tool is asked for a human-only target. */
+export function assertAgentTransitionTarget(toolName: string, status: unknown) {
+  const allowed = agentTransitionTargets[toolName];
+  if (allowed && typeof status === "string" && !allowed.includes(status))
+    throw new HumanDecisionRequiredError(status);
+}
+
 export type McpToolDefinition = {
   name: string;
   title: string;
@@ -492,7 +539,7 @@ export const mcpTools: McpToolDefinition[] = [
     name: "transition_report",
     title: "Transition a report",
     description:
-      "Move a report to another workflow status. Publishing, superseding and archival require report:publish; review gates require finding:approve. Service-account keys cannot approve or publish (403); a human must.",
+      "Move a report between authoring states: back to draft, or submit it for internal review. Review outcomes, approval and publication are human decisions made in the DingoDocs UI and are rejected here.",
     requiredScopes: ["findings:write"],
     annotations: {
       readOnlyHint: false,
@@ -501,27 +548,19 @@ export const mcpTools: McpToolDefinition[] = [
     },
     inputSchema: z.object({
       reportId: z.string().uuid(),
-      status: z.enum([
-        "draft",
-        "internal_review",
-        "changes_requested",
-        "qa_approved",
-        "client_review",
-        "approved",
-        "published",
-        "superseded",
-        "archived",
-      ]),
+      status: z.enum(agentReportTransitionTargets),
     }),
-    call: (api, input) =>
-      api.transitionReport(String(input.reportId), String(input.status)),
+    call: async (api, input) => {
+      assertAgentTransitionTarget("transition_report", input.status);
+      return api.transitionReport(String(input.reportId), String(input.status));
+    },
   },
   {
     name: "export_report",
     title: "Export a report",
     description:
-      "Return export metadata for a report format (key, media type, download path). Queues generation when the export is missing. Does not return file bytes.",
-    requiredScopes: ["reports:read"],
+      "Return export metadata for a report format (render status, media type, download path). Queues generation when the export is missing. Needs a personal key whose owner holds data:export; service-account keys are denied. Does not return file bytes.",
+    requiredScopes: ["findings:write"],
     annotations: {
       readOnlyHint: false,
       destructiveHint: false,
@@ -583,7 +622,7 @@ export const mcpTools: McpToolDefinition[] = [
     name: "transition_finding",
     title: "Transition a finding",
     description:
-      "Move a finding to another workflow status with an optional reason. Review, approval, publish and closure statuses require finding:approve; service-account keys cannot approve or publish (403), so agents stay on drafts. Does not delete findings.",
+      "Move a finding between authoring states with an optional reason: draft, in progress, ready for review, remediation in progress or ready for retest. Review outcomes, approval, publication and closure are human decisions made in the DingoDocs UI and are rejected here. Does not delete findings.",
     requiredScopes: ["findings:write"],
     annotations: {
       readOnlyHint: false,
@@ -592,29 +631,16 @@ export const mcpTools: McpToolDefinition[] = [
     },
     inputSchema: z.object({
       findingId: z.string().uuid(),
-      status: z.enum([
-        "draft",
-        "in_progress",
-        "ready_for_review",
-        "changes_requested",
-        "peer_reviewed",
-        "qa_approved",
-        "published",
-        "remediation_in_progress",
-        "ready_for_retest",
-        "retested",
-        "resolved",
-        "risk_accepted",
-        "closed",
-      ]),
+      status: z.enum(agentFindingTransitionTargets),
       reason: z.string().trim().max(4_000).optional(),
     }),
-    call: (api, input) => {
+    call: async (api, input) => {
       const { findingId, status, reason } = input as {
         findingId: string;
         status: string;
         reason?: string;
       };
+      assertAgentTransitionTarget("transition_finding", status);
       return api.transitionFinding(findingId, { status, reason });
     },
   },

@@ -2,6 +2,24 @@ import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { deleteAuditEventsForOrganisations } from "@/server/testing/delete-audit-events";
 
+// The services fetch through the DNS-pinned undici agent; keep the URL checks
+// but route the request to the per-test fetch stub.
+vi.mock("@/lib/security/outbound-url", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("@/lib/security/outbound-url")>();
+  return {
+    ...actual,
+    outboundFetch: async (
+      url: string,
+      init: RequestInit,
+      options?: Parameters<typeof actual.assertPublicHttpUrl>[1],
+    ) => {
+      await actual.assertPublicHttpUrl(url, options);
+      return fetch(url, { ...init, redirect: "error" });
+    },
+  };
+});
+
 const testUrl = process.env.TEST_DATABASE_URL;
 const run = testUrl ? describe : describe.skip;
 
@@ -109,7 +127,8 @@ run("webhook network failures and retention purge ordering", () => {
       status: "retrying",
       responseStatus: null,
     });
-    expect(after?.lastError).toContain("fetch failed");
+    // Only a generic category is stored, never the raw error.
+    expect(after?.lastError).toBe("Connection failed");
     expect(after?.nextAttemptAt).toBeInstanceOf(Date);
   });
 

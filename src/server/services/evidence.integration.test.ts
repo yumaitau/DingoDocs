@@ -361,6 +361,61 @@ run("secure evidence lifecycle with PostgreSQL and local storage", () => {
     expect(annotations[0]).toMatchObject({ sourceEvidenceId: sourceId });
   });
 
+  it("withholds evidence awaiting a configured scan but not when no scanner exists", async () => {
+    const unscanned = await modules.uploadEvidence(
+      actor,
+      {
+        engagementId: ids.engagementA,
+        filename: "no-scanner.txt",
+        mediaType: "text/plain",
+        bytes: new TextEncoder().encode(`no scanner ${randomUUID()}`),
+        classification: "internal",
+      },
+      provider,
+    );
+    expect(unscanned.malwareScanStatus).toBe("unavailable");
+    await expect(
+      modules.getEvidenceForAccess(actor, unscanned.id),
+    ).resolves.toMatchObject({ id: unscanned.id });
+
+    process.env.MALWARE_SCAN_URL = "https://scanner.test/scan";
+    try {
+      const pending = await modules.uploadEvidence(
+        actor,
+        {
+          engagementId: ids.engagementA,
+          filename: "pending.txt",
+          mediaType: "text/plain",
+          bytes: new TextEncoder().encode(`pending ${randomUUID()}`),
+          classification: "internal",
+        },
+        provider,
+      );
+      expect(pending.malwareScanStatus).toBe("pending");
+      await expect(
+        modules.getEvidenceForAccess(actor, pending.id),
+      ).rejects.toThrow("awaiting a malware scan");
+      const listed = await modules.db
+        .select({ id: modules.evidence.id })
+        .from(modules.evidence)
+        .where(
+          modules.and(
+            modules.eq(modules.evidence.engagementId, ids.engagementA),
+            modules.evidenceAccessCondition({
+              userId: randomUUID(),
+              canViewRestricted: true,
+            }),
+          ),
+        );
+      expect(listed.map((row) => row.id)).toContain(unscanned.id);
+      expect(listed.map((row) => row.id)).not.toContain(pending.id);
+      // The source is restricted to a named viewer this user is not.
+      expect(listed.map((row) => row.id)).not.toContain(sourceId);
+    } finally {
+      delete process.env.MALWARE_SCAN_URL;
+    }
+  });
+
   it("quarantines infected evidence through the scan hook", async () => {
     process.env.MALWARE_SCAN_URL = "https://scanner.test/scan";
     vi.stubGlobal(

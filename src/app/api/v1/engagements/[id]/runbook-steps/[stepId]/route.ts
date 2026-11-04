@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { apiWriteContext } from "@/lib/api/authentication";
 import { apiError } from "@/lib/api/responses";
+import { optionalJsonWithLimit } from "@/lib/security/request-body";
 import { assertActorEngagementAccess } from "@/lib/permissions/require";
 import { updateEngagementRunbookStep } from "@/server/services/runbooks";
 
@@ -39,7 +40,7 @@ export async function POST(
     if (!principal.userId)
       throw new Error("API key does not have an attributable owner");
     await assertActorEngagementAccess(principal, id);
-    const input = bodySchema.parse(await request.json().catch(() => ({})));
+    const input = bodySchema.parse(await optionalJsonWithLimit(request));
     const step = await updateEngagementRunbookStep(
       { organisationId: principal.organisationId, userId: principal.userId },
       {

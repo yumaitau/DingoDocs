@@ -4,7 +4,7 @@ import { AppShell } from "@/components/app-shell";
 import { RadixPointerEventsReset } from "@/components/radix-pointer-events-reset";
 import { isAccountSecurityPath } from "@/lib/auth/mfa-policy";
 import { getSession } from "@/lib/auth/session";
-import { resolveActiveOrganisation } from "@/lib/auth/active-organisation";
+import { resolvePageOrganisation } from "@/lib/auth/active-organisation";
 import { guardOrganisationMfa } from "@/lib/permissions/require";
 
 export default async function ProtectedLayout({
@@ -14,7 +14,10 @@ export default async function ProtectedLayout({
 }) {
   const session = await getSession();
   if (!session) redirect("/sign-in");
-  const organisation = await resolveActiveOrganisation(session.user.id);
+  const organisation = await resolvePageOrganisation(
+    session.user.id,
+    session.session.createdAt,
+  );
   if (!organisation) redirect("/onboarding");
   const mfa = await guardOrganisationMfa({
     userId: session.user.id,

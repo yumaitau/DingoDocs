@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { apiWriteContext } from "@/lib/api/authentication";
+import { apiReadContext, apiWriteContext } from "@/lib/api/authentication";
 import { apiError } from "@/lib/api/responses";
+import { jsonWithLimit } from "@/lib/security/request-body";
 import { assertActorEngagementAccess } from "@/lib/permissions/require";
 import { createFindingFromTemplate } from "@/server/services/findings";
 
@@ -15,7 +16,10 @@ const bodySchema = z.object({
 export async function POST(request: Request) {
   const requestId = request.headers.get("x-request-id");
   try {
-    const input = bodySchema.parse(await request.json());
+    // Authenticate before reading the body; the permission check needs the
+    // engagement named in it.
+    await apiReadContext(request, "findings:write");
+    const input = bodySchema.parse(await jsonWithLimit(request));
     const context = await apiWriteContext(
       request,
       "findings:write",

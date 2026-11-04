@@ -149,6 +149,140 @@ run("account security and retention with PostgreSQL", () => {
     ).toHaveLength(1);
   });
 
+  it("keeps findings and engagements whose evidence is under legal hold", async () => {
+    const actor = { organisationId: ids.organisation, userId: ids.actor };
+    const expired = new Date(Date.now() - 60_000);
+    const heldEngagement = randomUUID();
+    const freeEngagement = randomUUID();
+    const linkedFinding = randomUUID();
+    const sameEngagementFinding = randomUUID();
+    const freeFinding = randomUUID();
+    const heldEvidence = randomUUID();
+    await modules.db.insert(modules.engagements).values([
+      {
+        id: heldEngagement,
+        organisationId: ids.organisation,
+        clientId: ids.client,
+        name: "Held engagement",
+        reference: `HOLD-${heldEngagement.slice(0, 8)}`,
+        type: "Web",
+        retainUntil: expired,
+      },
+      {
+        id: freeEngagement,
+        organisationId: ids.organisation,
+        clientId: ids.client,
+        name: "Expired engagement",
+        reference: `FREE-${freeEngagement.slice(0, 8)}`,
+        type: "Web",
+        retainUntil: expired,
+      },
+    ]);
+    await modules.db.insert(modules.findings).values([
+      {
+        id: linkedFinding,
+        organisationId: ids.organisation,
+        engagementId: ids.engagement,
+        identifier: "HOLD-LINKED",
+        title: "Linked to held evidence",
+        severity: "low",
+        retainUntil: expired,
+      },
+      {
+        id: sameEngagementFinding,
+        organisationId: ids.organisation,
+        engagementId: heldEngagement,
+        identifier: "HOLD-ENG",
+        title: "In an engagement with held evidence",
+        severity: "low",
+        retainUntil: expired,
+      },
+      {
+        id: freeFinding,
+        organisationId: ids.organisation,
+        engagementId: freeEngagement,
+        identifier: "FREE-1",
+        title: "No hold",
+        severity: "low",
+        retainUntil: expired,
+      },
+    ]);
+    await modules.db.insert(modules.evidence).values({
+      id: heldEvidence,
+      organisationId: ids.organisation,
+      clientId: ids.client,
+      engagementId: heldEngagement,
+      originalFilename: "held.txt",
+      storageProvider: "test",
+      storageKey: `retention/${heldEvidence}`,
+      mediaType: "text/plain",
+      sizeBytes: 4,
+      sha256: "b".repeat(64),
+      uploadedBy: ids.actor,
+    });
+    await modules.db.insert(modules.evidenceFindings).values({
+      organisationId: ids.organisation,
+      evidenceId: heldEvidence,
+      findingId: linkedFinding,
+    });
+    const hold = await modules.placeLegalHold(actor, {
+      evidenceId: heldEvidence,
+      reason: "Litigation preservation",
+    });
+
+    await modules.applyRetention(ids.organisation);
+    const deletedState = async () => {
+      const findingRows = await modules.db
+        .select({
+          id: modules.findings.id,
+          deletedAt: modules.findings.deletedAt,
+        })
+        .from(modules.findings)
+        .where(
+          modules.inArray(modules.findings.id, [
+            linkedFinding,
+            sameEngagementFinding,
+            freeFinding,
+          ]),
+        );
+      const engagementRows = await modules.db
+        .select({
+          id: modules.engagements.id,
+          deletedAt: modules.engagements.deletedAt,
+        })
+        .from(modules.engagements)
+        .where(
+          modules.inArray(modules.engagements.id, [
+            heldEngagement,
+            freeEngagement,
+          ]),
+        );
+      return Object.fromEntries(
+        [...findingRows, ...engagementRows].map((row) => [
+          row.id,
+          row.deletedAt !== null,
+        ]),
+      );
+    };
+    expect(await deletedState()).toEqual({
+      [linkedFinding]: false,
+      [sameEngagementFinding]: false,
+      [freeFinding]: true,
+      [heldEngagement]: false,
+      [freeEngagement]: true,
+    });
+
+    await modules.releaseLegalHold(actor, hold.id);
+    await modules.applyRetention(ids.organisation);
+    expect(await deletedState()).toEqual({
+      [linkedFinding]: true,
+      [sameEngagementFinding]: true,
+      [freeFinding]: true,
+      [heldEngagement]: true,
+      [freeEngagement]: true,
+    });
+  });
+
   it("does not grant membership when an invitation is revoked before consumption", async () => {
     const token = randomUUID() + randomUUID();
     const [invitation] = await modules.db

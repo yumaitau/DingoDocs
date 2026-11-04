@@ -20,7 +20,9 @@ export function SignInForm({ providers }: { providers: PublicAuthProvider[] }) {
   const [error, setError] = useState(() =>
     search.get("error") === SECOND_FACTOR_REQUIRED_ERROR
       ? SECOND_FACTOR_REQUIRED_MESSAGE
-      : "",
+      : search.get("error") === "session_revoked"
+        ? "An administrator signed you out of this organisation. Sign in again to continue."
+        : "",
   );
   const [pending, setPending] = useState(false);
   const [magicSent, setMagicSent] = useState(false);

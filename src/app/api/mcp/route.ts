@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { bearerToken, requireApiBearer } from "@/lib/api/authentication";
 import { apiError } from "@/lib/api/responses";
+import { jsonWithLimit } from "@/lib/security/request-body";
 import { DingoDocsApiClient } from "@/mcp/client";
 import {
   handleMcpJsonRpc,
@@ -29,7 +30,7 @@ export async function POST(request: Request) {
     const token = bearerToken(request);
     if (!token) throw new Error("Bearer API key is required");
     const api = DingoDocsApiClient.fromRequest(request, token);
-    const payload = (await request.json()) as McpJsonRpcRequest;
+    const payload = (await jsonWithLimit(request)) as McpJsonRpcRequest;
     const response = await handleMcpJsonRpc(payload, api, principal, {
       allowFilePath: false,
     });

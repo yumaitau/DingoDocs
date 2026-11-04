@@ -1,10 +1,12 @@
-import { and, eq, isNull, lte, notExists, sql } from "drizzle-orm";
+import { and, eq, exists, isNull, lte, not, notExists, sql } from "drizzle-orm";
+import type { AnyPgColumn } from "drizzle-orm/pg-core";
 import { db } from "@/db";
 import {
   auditEvents,
   backgroundJobs,
   engagements,
   evidence,
+  evidenceFindings,
   evidenceLegalHolds,
   findings,
   organisations,
@@ -195,6 +197,33 @@ export async function applyRetention(
   const cutoff = asOf;
   const softDeleted = { findings: 0, reports: 0, engagements: 0 };
 
+  // A legal hold preserves the evidence and the records it substantiates:
+  // findings linked to held evidence, and any engagement holding it.
+  const heldEvidence = (evidenceId: AnyPgColumn) =>
+    db
+      .select({ id: evidenceLegalHolds.id })
+      .from(evidenceLegalHolds)
+      .where(
+        and(
+          eq(evidenceLegalHolds.organisationId, organisationId),
+          eq(evidenceLegalHolds.evidenceId, evidenceId),
+          isNull(evidenceLegalHolds.releasedAt),
+        ),
+      );
+  const engagementHasHold = (engagementId: AnyPgColumn) =>
+    exists(
+      db
+        .select({ id: evidence.id })
+        .from(evidence)
+        .where(
+          and(
+            eq(evidence.organisationId, organisationId),
+            eq(evidence.engagementId, engagementId),
+            exists(heldEvidence(evidence.id)),
+          ),
+        ),
+    );
+
   const expiredFindings = await db
     .update(findings)
     .set({ deletedAt: cutoff, updatedAt: cutoff })
@@ -203,6 +232,19 @@ export async function applyRetention(
         eq(findings.organisationId, organisationId),
         isNull(findings.deletedAt),
         lte(findings.retainUntil, cutoff),
+        notExists(
+          db
+            .select({ id: evidenceFindings.evidenceId })
+            .from(evidenceFindings)
+            .where(
+              and(
+                eq(evidenceFindings.organisationId, organisationId),
+                eq(evidenceFindings.findingId, findings.id),
+                exists(heldEvidence(evidenceFindings.evidenceId)),
+              ),
+            ),
+        ),
+        not(engagementHasHold(findings.engagementId)),
       ),
     )
     .returning({ id: findings.id });
@@ -230,6 +272,7 @@ export async function applyRetention(
         eq(engagements.organisationId, organisationId),
         isNull(engagements.deletedAt),
         lte(engagements.retainUntil, cutoff),
+        not(engagementHasHold(engagements.id)),
       ),
     )
     .returning({ id: engagements.id });

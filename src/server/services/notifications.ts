@@ -18,9 +18,12 @@ import {
 } from "@/lib/integrations/crypto";
 import { notificationProviders } from "@/lib/integrations/constants";
 import { isSafeInternalPath } from "@/lib/security/internal-path";
+import { structuredLog } from "@/lib/observability/logger";
 import {
   assertPublicHttpUrl,
-  outboundFetchInit,
+  OutboundHttpError,
+  outboundErrorCategory,
+  outboundFetch,
 } from "@/lib/security/outbound-url";
 
 export { notificationProviders } from "@/lib/integrations/constants";
@@ -184,12 +187,19 @@ export async function deliverNotificationJob(deliveryId: string) {
       })
       .where(eq(notificationDeliveries.id, deliveryId));
   } catch (error) {
+    // Store only a generic category so the delivery log cannot be used to
+    // probe internal ports; the detail stays in the server log.
+    structuredLog("warn", "notification.delivery_failed", {
+      deliveryId,
+      errorType: error instanceof Error ? error.name : "UnknownError",
+      errorMessage: error instanceof Error ? error.message : undefined,
+    });
     await db
       .update(notificationDeliveries)
       .set({
         status: delivery.attempts + 1 >= 5 ? "failed" : "retrying",
         attempts: delivery.attempts + 1,
-        lastError: error instanceof Error ? error.name : "UnknownError",
+        lastError: outboundErrorCategory(error),
       })
       .where(eq(notificationDeliveries.id, deliveryId));
     throw error;
@@ -264,16 +274,19 @@ async function providerSend(
               title: message.title,
               actionUrl: message.actionUrl,
             };
-  await assertPublicHttpUrl(configuration.url!, {
-    allowHttp: process.env.NODE_ENV !== "production",
-  });
-  const response = await fetch(configuration.url!, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(body),
-    signal: AbortSignal.timeout(10_000),
-    ...outboundFetchInit,
-  });
+  const response = await outboundFetch(
+    configuration.url!,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(10_000),
+    },
+    { allowHttp: process.env.NODE_ENV !== "production" },
+  );
   if (!response.ok)
-    throw new Error(`Notification provider returned HTTP ${response.status}`);
+    throw new OutboundHttpError(
+      response.status,
+      `Notification provider returned HTTP ${response.status}`,
+    );
 }

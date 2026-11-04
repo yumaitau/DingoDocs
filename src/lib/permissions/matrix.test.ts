@@ -7,6 +7,8 @@ import {
   permissionMatrix,
   permissions,
   roles,
+  serviceAccountHasPermission,
+  serviceAccountPermissions,
 } from "./matrix";
 
 describe("permission matrix", () => {
@@ -61,5 +63,28 @@ describe("permission matrix", () => {
         engagementId: "eng-1",
       }),
     ).toEqual(["organisation_owner"]);
+  });
+
+  it("limits service accounts to an explicit authoring allow-list", () => {
+    expect([...serviceAccountPermissions].sort()).toEqual([
+      "evidence:upload",
+      "finding:create",
+    ]);
+    for (const permission of serviceAccountPermissions)
+      expect(permissions).toContain(permission);
+    for (const permission of [
+      "finding:approve",
+      "report:publish",
+      "scope:manage",
+      "data:export",
+      "engagement:create",
+      "engagement:edit",
+      "template:manage",
+      "integration:configure",
+      "user:manage",
+      "organisation:export",
+    ] as const)
+      expect(serviceAccountHasPermission(permission)).toBe(false);
+    expect(serviceAccountHasPermission("finding:create")).toBe(true);
   });
 });

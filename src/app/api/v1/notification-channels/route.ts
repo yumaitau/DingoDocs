@@ -4,21 +4,24 @@ import { z } from "zod";
 import { db } from "@/db";
 import { notificationChannels } from "@/db/schema";
 import {
+  apiReadContextWithPermission,
   apiWriteContext,
-  authenticateApiRequest,
 } from "@/lib/api/authentication";
 import { apiError } from "@/lib/api/responses";
-import { requirePermission } from "@/lib/permissions/require";
+import { jsonWithLimit } from "@/lib/security/request-body";
 import { notificationProviders } from "@/lib/integrations/constants";
 import { createNotificationChannel } from "@/server/services/notifications";
 
 export async function GET(request: Request) {
   const requestId = request.headers.get("x-request-id");
   try {
-    // API keys are gated by scope; session callers need integration:configure.
-    const context =
-      (await authenticateApiRequest(request, "notifications:manage")) ??
-      (await requirePermission("integration:configure"));
+    // Listing integrations is an administrative read: personal keys need an
+    // owner holding integration:configure, and service keys are denied.
+    const context = await apiReadContextWithPermission(
+      request,
+      "notifications:manage",
+      "integration:configure",
+    );
     const data = await db
       .select({
         id: notificationChannels.id,
@@ -68,7 +71,6 @@ const createSchema = z
 export async function POST(request: Request) {
   const requestId = request.headers.get("x-request-id");
   try {
-    const input = createSchema.parse(await request.json());
     const principal = await apiWriteContext(
       request,
       "notifications:manage",
@@ -76,6 +78,7 @@ export async function POST(request: Request) {
     );
     if (!principal.userId)
       throw new Error("API key does not have an attributable owner");
+    const input = createSchema.parse(await jsonWithLimit(request));
     const channel = await createNotificationChannel(
       { organisationId: principal.organisationId, userId: principal.userId },
       {

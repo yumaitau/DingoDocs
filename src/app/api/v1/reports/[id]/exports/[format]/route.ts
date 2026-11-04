@@ -62,16 +62,22 @@ export async function POST(
       }
     }
     const provider = storage();
+    const extension = format === "markdown" ? "md" : format;
+    const filename =
+      examName ??
+      `${safeName(workspace.report.title)}-v${workspace.current.version}.${extension}`;
     const signed =
       !examName && provider.createDownloadUrl
-        ? await provider.createDownloadUrl(result.key, 120)
+        ? await provider.createDownloadUrl(result.key, 120, {
+            filename,
+            contentType: result.mediaType,
+          })
         : null;
     if (signed) return Response.redirect(signed, 303);
-    const extension = format === "markdown" ? "md" : format;
     return new Response(await provider.get(result.key), {
       headers: {
         "content-type": result.mediaType,
-        "content-disposition": `attachment; filename="${examName ?? `${safeName(workspace.report.title)}-v${workspace.current.version}.${extension}`}"`,
+        "content-disposition": `attachment; filename="${filename}"`,
         "cache-control": "private, no-store",
         "x-content-type-options": "nosniff",
       },

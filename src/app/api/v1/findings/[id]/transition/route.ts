@@ -5,6 +5,7 @@ import { db } from "@/db";
 import { findings } from "@/db/schema";
 import { apiReadContext, apiWriteContext } from "@/lib/api/authentication";
 import { apiError, apiNotFound } from "@/lib/api/responses";
+import { jsonWithLimit } from "@/lib/security/request-body";
 import { engagementVisibility } from "@/lib/permissions/access";
 import {
   findingTransitionPermission,
@@ -55,7 +56,7 @@ export async function POST(
       .limit(1);
     if (!existing) return apiNotFound(requestId, "Finding was not found");
 
-    const input = bodySchema.parse(await request.json());
+    const input = bodySchema.parse(await jsonWithLimit(request));
     // Approval, publication and closure targets need finding:approve, which
     // service-account keys never hold.
     const permission = findingTransitionPermission(input.status);

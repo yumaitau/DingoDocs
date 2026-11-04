@@ -21,7 +21,9 @@ import {
 import { aiConfirmation, aiProviders } from "@/lib/integrations/constants";
 import {
   assertPublicHttpUrl,
+  outboundFetch,
   outboundFetchInit,
+  type OutboundRequestInit,
 } from "@/lib/security/outbound-url";
 import { storage } from "@/lib/storage";
 
@@ -146,6 +148,25 @@ export async function providerBaseUrl(
     allowLoopback,
   });
   return url.replace(/\/$/, "");
+}
+
+/**
+ * Sends a provider request with the same trust rules as providerBaseUrl: the
+ * operator's Ollama origin is fetched directly (it may be a private host),
+ * everything else goes through the DNS-pinned outbound fetch.
+ */
+async function providerFetch(
+  provider: (typeof aiProviders)[number],
+  url: string,
+  init: OutboundRequestInit & { signal: AbortSignal },
+) {
+  if (provider === "ollama" && isOperatorOllamaOrigin(url))
+    return fetch(url, { ...(init as RequestInit), ...outboundFetchInit });
+  const development = process.env.NODE_ENV !== "production";
+  return outboundFetch(url, init, {
+    allowHttp: development,
+    allowLoopback: provider === "ollama" && development,
+  });
 }
 
 function isOperatorOllamaOrigin(value: string) {
@@ -476,16 +497,19 @@ async function callProvider(input: {
           input: input.prompt,
           store: false,
         };
-    const response = await fetch(`${input.baseUrl}/responses`, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        authorization: `Bearer ${input.apiKey}`,
+    const response = await providerFetch(
+      input.provider,
+      `${input.baseUrl}/responses`,
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${input.apiKey}`,
+        },
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(60_000),
       },
-      body: JSON.stringify(body),
-      signal: AbortSignal.timeout(60_000),
-      ...outboundFetchInit,
-    });
+    );
     const data = (await checkedJson(response)) as {
       output_text?: string;
       output?: Array<{ content?: Array<{ type?: string; text?: string }> }>;
@@ -512,21 +536,24 @@ async function callProvider(input: {
           { type: "text", text: input.prompt },
         ]
       : input.prompt;
-    const response = await fetch(`${input.baseUrl}/messages`, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "x-api-key": input.apiKey!,
-        "anthropic-version": "2023-06-01",
+    const response = await providerFetch(
+      input.provider,
+      `${input.baseUrl}/messages`,
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "x-api-key": input.apiKey!,
+          "anthropic-version": "2023-06-01",
+        },
+        body: JSON.stringify({
+          model: input.model,
+          max_tokens: 2_000,
+          messages: [{ role: "user", content }],
+        }),
+        signal: AbortSignal.timeout(60_000),
       },
-      body: JSON.stringify({
-        model: input.model,
-        max_tokens: 2_000,
-        messages: [{ role: "user", content }],
-      }),
-      signal: AbortSignal.timeout(60_000),
-      ...outboundFetchInit,
-    });
+    );
     const data = (await checkedJson(response)) as {
       content?: Array<{ type?: string; text?: string }>;
     };
@@ -536,17 +563,20 @@ async function callProvider(input: {
   }
   if (input.image)
     throw new Error("Vision caption is not supported for Ollama");
-  const response = await fetch(`${input.baseUrl}/api/chat`, {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({
-      model: input.model,
-      stream: false,
-      messages: [{ role: "user", content: input.prompt }],
-    }),
-    signal: AbortSignal.timeout(60_000),
-    ...outboundFetchInit,
-  });
+  const response = await providerFetch(
+    input.provider,
+    `${input.baseUrl}/api/chat`,
+    {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        model: input.model,
+        stream: false,
+        messages: [{ role: "user", content: input.prompt }],
+      }),
+      signal: AbortSignal.timeout(60_000),
+    },
+  );
   const data = (await checkedJson(response)) as {
     message?: { content?: string };
   };

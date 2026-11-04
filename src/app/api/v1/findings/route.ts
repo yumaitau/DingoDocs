@@ -6,6 +6,7 @@ import { findings } from "@/db/schema";
 import { createFindingInput } from "@/lib/api/finding-input";
 import { apiReadContext, apiWriteContext } from "@/lib/api/authentication";
 import { apiError } from "@/lib/api/responses";
+import { jsonWithLimit } from "@/lib/security/request-body";
 import { engagementVisibility } from "@/lib/permissions/access";
 import { assertActorEngagementAccess } from "@/lib/permissions/require";
 import { createFindingDraft } from "@/server/services/findings";
@@ -91,7 +92,10 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   const requestId = request.headers.get("x-request-id");
   try {
-    const input = createFindingInput.parse(await request.json());
+    // Authenticate before reading the body; the permission check needs the
+    // engagement named in it.
+    await apiReadContext(request, "findings:write");
+    const input = createFindingInput.parse(await jsonWithLimit(request));
     const context = await apiWriteContext(
       request,
       "findings:write",

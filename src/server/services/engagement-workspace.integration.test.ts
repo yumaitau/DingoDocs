@@ -12,10 +12,13 @@ run("engagement workspace with PostgreSQL", () => {
     actor: randomUUID(),
     consultant: randomUUID(),
     outsider: randomUUID(),
+    approver: randomUUID(),
     client: randomUUID(),
     engagement: randomUUID(),
+    archived: randomUUID(),
   };
   const actor = { organisationId: ids.orgA, userId: ids.actor };
+  const approver = { organisationId: ids.orgA, userId: ids.approver };
   let modules: Awaited<ReturnType<typeof load>>;
 
   beforeAll(async () => {
@@ -38,6 +41,12 @@ run("engagement workspace with PostgreSQL", () => {
         id: ids.outsider,
         name: "Other Tenant User",
         email: `${ids.outsider}@test.invalid`,
+        emailVerified: true,
+      },
+      {
+        id: ids.approver,
+        name: "Scope Approver",
+        email: `${ids.approver}@test.invalid`,
         emailVerified: true,
       },
     ]);
@@ -64,21 +73,39 @@ run("engagement workspace with PostgreSQL", () => {
         role: "organisation_owner",
         joinedAt: new Date(),
       },
+      {
+        organisationId: ids.orgA,
+        userId: ids.approver,
+        role: "organisation_administrator",
+        joinedAt: new Date(),
+      },
     ]);
     await modules.db.insert(modules.clients).values({
       id: ids.client,
       organisationId: ids.orgA,
       name: "Workspace Client",
     });
-    await modules.db.insert(modules.engagements).values({
-      id: ids.engagement,
-      organisationId: ids.orgA,
-      clientId: ids.client,
-      name: "Workspace Test",
-      reference: `TEST-${ids.engagement.slice(0, 8)}`,
-      type: "Web Application Assessment",
-      status: "scoping",
-    });
+    await modules.db.insert(modules.engagements).values([
+      {
+        id: ids.engagement,
+        organisationId: ids.orgA,
+        clientId: ids.client,
+        name: "Workspace Test",
+        reference: `TEST-${ids.engagement.slice(0, 8)}`,
+        type: "Web Application Assessment",
+        status: "scoping",
+      },
+      {
+        id: ids.archived,
+        organisationId: ids.orgA,
+        clientId: ids.client,
+        name: "Archived Workspace",
+        reference: `ARCH-${ids.archived.slice(0, 8)}`,
+        type: "Web Application Assessment",
+        status: "archived",
+        archivedAt: new Date(),
+      },
+    ]);
     await modules.db.insert(modules.engagementMembers).values({
       organisationId: ids.orgA,
       engagementId: ids.engagement,
@@ -103,6 +130,7 @@ run("engagement workspace with PostgreSQL", () => {
           ids.actor,
           ids.consultant,
           ids.outsider,
+          ids.approver,
         ]),
       );
     await modules.sqlClient.end();
@@ -121,7 +149,19 @@ run("engagement workspace with PostgreSQL", () => {
       value: "portal.workspace.test",
       scopeStatus: "in_scope",
     });
-    await modules.approveScopeVersion(actor, {
+    await expect(
+      modules.approveScopeVersion(actor, {
+        engagementId: ids.engagement,
+        scopeVersionId: first.id,
+      }),
+    ).rejects.toThrow("someone other than its author");
+    await expect(
+      modules.approveScopeVersion(
+        { organisationId: ids.orgA, userId: ids.consultant },
+        { engagementId: ids.engagement, scopeVersionId: first.id },
+      ),
+    ).rejects.toThrow("engagement:edit");
+    await modules.approveScopeVersion(approver, {
       engagementId: ids.engagement,
       scopeVersionId: first.id,
     });
@@ -284,6 +324,7 @@ run("engagement workspace with PostgreSQL", () => {
         name: "Notes test",
         kind: "personal",
         scopes: ["engagements:read"],
+        expiresAt: new Date(Date.now() + 86_400_000),
       });
       const response = await GET(
         new Request(
@@ -302,6 +343,61 @@ run("engagement workspace with PostgreSQL", () => {
         body.data.some((note: { id: string }) => note.id === privateNote.id),
       ).toBe(owner.userId === actor.userId);
     }
+  });
+
+  it("stops service principals releasing timeline entries to the client", async () => {
+    await expect(
+      modules.createTimelineEntry(
+        { ...actor, serviceAccountId: randomUUID() },
+        {
+          engagementId: ids.engagement,
+          occurredAt: new Date(),
+          phase: "testing",
+          description: "Agent entry",
+          clientVisible: true,
+        },
+      ),
+    ).rejects.toThrow("service accounts cannot make timeline entries");
+
+    const { createApiCredential } = await import("@/lib/api/authentication");
+    const { POST } =
+      await import("@/app/api/v1/engagements/[id]/timeline/route");
+    const key = await createApiCredential(actor, {
+      name: "Timeline agent",
+      kind: "service",
+      serviceAccountName: "Timeline agent",
+      scopes: ["notes:write"],
+      expiresAt: new Date(Date.now() + 86_400_000),
+    });
+    const post = (clientVisible: boolean) =>
+      POST(
+        new Request(
+          `https://test.invalid/api/v1/engagements/${ids.engagement}/timeline`,
+          {
+            method: "POST",
+            headers: {
+              authorization: `Bearer ${key.plaintext}`,
+              "content-type": "application/json",
+            },
+            body: JSON.stringify({
+              phase: "testing",
+              description: "Agent timeline entry",
+              clientVisible,
+            }),
+          },
+        ),
+        { params: Promise.resolve({ id: ids.engagement }) },
+      );
+    const denied = await post(true);
+    expect(denied.status).toBe(403);
+    await expect(denied.json()).resolves.toMatchObject({
+      error: { code: "service_account_forbidden" },
+    });
+    const allowed = await post(false);
+    expect(allowed.status).toBe(201);
+    await expect(allowed.json()).resolves.toMatchObject({
+      data: { clientVisible: false },
+    });
   });
 
   it("persists linked work records and audited status transitions", async () => {
@@ -383,6 +479,134 @@ run("engagement workspace with PostgreSQL", () => {
       fromStatus: "scoping",
       toStatus: "scheduled",
     });
+  });
+
+  it("keeps archived engagements readable but rejects new content", async () => {
+    const { EngagementReadOnlyError } = await import("./engagement-guards");
+    const writes = [
+      () =>
+        modules.createWorkspaceNote(actor, {
+          engagementId: ids.archived,
+          title: "Late note",
+          body: "Should not be written",
+          kind: "note",
+        }),
+      () =>
+        modules.createWorkspaceTask(actor, {
+          engagementId: ids.archived,
+          title: "Late task",
+        }),
+      () =>
+        modules.createTimelineEntry(actor, {
+          engagementId: ids.archived,
+          occurredAt: new Date(),
+          phase: "Testing",
+          description: "Late entry",
+        }),
+      () =>
+        modules.createScopeDraft(actor, {
+          engagementId: ids.archived,
+          changeSummary: "Late scope",
+        }),
+    ];
+    for (const write of writes)
+      await expect(write()).rejects.toBeInstanceOf(EngagementReadOnlyError);
+    const {
+      addFindingComment,
+      bulkUpdateFindings,
+      createFindingDraft,
+      transitionFinding,
+    } = await import("./findings");
+    await expect(
+      createFindingDraft(actor, {
+        engagementId: ids.archived,
+        identifier: "LATE-1",
+        title: "Late finding",
+        severity: "low",
+      }),
+    ).rejects.toBeInstanceOf(EngagementReadOnlyError);
+    const [archivedFinding] = await modules.db
+      .insert(modules.findings)
+      .values({
+        organisationId: ids.orgA,
+        engagementId: ids.archived,
+        identifier: "ARCH-1",
+        title: "Archived finding",
+        status: "published",
+        severity: "low",
+      })
+      .returning();
+    const [rules] = await modules.db
+      .insert(modules.rulesOfEngagement)
+      .values({
+        organisationId: ids.orgA,
+        engagementId: ids.archived,
+        version: 1,
+        createdBy: ids.actor,
+      })
+      .returning();
+    const findingWrites = [
+      () =>
+        transitionFinding(actor, {
+          findingId: archivedFinding!.id,
+          toStatus: "closed",
+        }),
+      () =>
+        addFindingComment(actor, {
+          findingId: archivedFinding!.id,
+          body: "Late comment",
+          visibility: "team",
+        }),
+      () =>
+        bulkUpdateFindings(actor, {
+          ids: [archivedFinding!.id],
+          status: "closed",
+        }),
+      () =>
+        modules.approveRules(approver, {
+          engagementId: ids.archived,
+          rulesId: rules!.id,
+        }),
+      () =>
+        modules.acknowledgeRules(actor, {
+          engagementId: ids.archived,
+          rulesId: rules!.id,
+        }),
+    ];
+    for (const write of findingWrites)
+      await expect(write()).rejects.toBeInstanceOf(EngagementReadOnlyError);
+    const [unchanged] = await modules.db
+      .select({ status: modules.findings.status })
+      .from(modules.findings)
+      .where(modules.eq(modules.findings.id, archivedFinding!.id));
+    expect(unchanged?.status).toBe("published");
+    const { uploadEvidence } = await import("./evidence");
+    const provider = {
+      name: "test",
+      put: async () => {
+        throw new Error("storage must not be reached");
+      },
+      get: async () => new ReadableStream<Uint8Array>(),
+      delete: async () => undefined,
+      exists: async () => false,
+      healthCheck: async () => undefined,
+    };
+    await expect(
+      uploadEvidence(
+        { ...actor, canViewRestricted: true },
+        {
+          engagementId: ids.archived,
+          filename: "late.txt",
+          mediaType: "text/plain",
+          bytes: new TextEncoder().encode("late evidence"),
+          classification: "internal",
+        },
+        provider,
+      ),
+    ).rejects.toBeInstanceOf(EngagementReadOnlyError);
+    await expect(
+      modules.getEngagementWorkspace(actor, ids.archived),
+    ).resolves.toMatchObject({ engagement: { id: ids.archived } });
   });
 });
 

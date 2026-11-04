@@ -3,7 +3,10 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
-import { importAdapterNames } from "@/lib/imports/adapters";
+import {
+  importAdapterNames,
+  maxScannerImportBytes,
+} from "@/lib/imports/adapters";
 import {
   requireInternalOrganisationContext,
   requirePermission,
@@ -48,6 +51,9 @@ export async function previewScannerImportAction(formData: FormData) {
   const engagementId = id.parse(formData.get("engagementId"));
   const context = await requirePermission("finding:create", { engagementId });
   const file = z.instanceof(File).parse(formData.get("file"));
+  // Same cap as the API route: parsing cost grows with the source size.
+  if (file.size > maxScannerImportBytes)
+    throw new Error("Scanner import must be 2 MB or smaller");
   const bytes = new Uint8Array(await file.arrayBuffer());
   const result = await previewScannerImport(context, {
     engagementId,

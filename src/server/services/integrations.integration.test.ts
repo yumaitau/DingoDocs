@@ -2,6 +2,24 @@ import { randomUUID } from "node:crypto";
 import { deleteAuditEventsForOrganisations } from "@/server/testing/delete-audit-events";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
+// The services fetch through the DNS-pinned undici agent; keep the URL checks
+// but route the request to the per-test fetch stub.
+vi.mock("@/lib/security/outbound-url", async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import("@/lib/security/outbound-url")>();
+  return {
+    ...actual,
+    outboundFetch: async (
+      url: string,
+      init: RequestInit,
+      options?: Parameters<typeof actual.assertPublicHttpUrl>[1],
+    ) => {
+      await actual.assertPublicHttpUrl(url, options);
+      return fetch(url, { ...init, redirect: "error" });
+    },
+  };
+});
+
 const testUrl = process.env.TEST_DATABASE_URL;
 const run = testUrl ? describe : describe.skip;
 
@@ -75,6 +93,7 @@ run("integration automation with PostgreSQL", () => {
       name: "Automation PAT",
       kind: "personal",
       scopes: ["engagements:read"],
+      expiresAt: new Date(Date.now() + 86_400_000),
     });
     expect(personal.plaintext).toMatch(/^dd_pat_/);
     const [stored] = await modules.db
@@ -105,6 +124,7 @@ run("integration automation with PostgreSQL", () => {
       kind: "service",
       serviceAccountName: "CI publisher",
       scopes: ["reports:read"],
+      expiresAt: new Date(Date.now() + 86_400_000),
     });
     expect(service.plaintext).toMatch(/^dd_svc_/);
     await expect(
@@ -129,12 +149,14 @@ run("integration automation with PostgreSQL", () => {
       name: "Demotion test",
       kind: "personal",
       scopes: ["findings:write"],
+      expiresAt: new Date(Date.now() + 86_400_000),
     });
     const service = await modules.createApiCredential(actor, {
       name: "Independent service",
       kind: "service",
       serviceAccountName: "Test service",
       scopes: ["findings:write"],
+      expiresAt: new Date(Date.now() + 86_400_000),
     });
     await modules.db
       .update(modules.organisationMembers)

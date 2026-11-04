@@ -12,6 +12,7 @@ import {
   tasks,
 } from "@/db/schema";
 import { refreshEngagementHealth } from "@/server/services/engagement-health";
+import { assertEngagementWritable } from "./engagement-guards";
 
 export type RunbookActor = { organisationId: string; userId: string };
 export type RunbookStepStatus =
@@ -167,7 +168,11 @@ export async function applyRunbookTemplate(
 ) {
   const applied = await db.transaction(async (tx) => {
     const [engagement] = await tx
-      .select({ id: engagements.id })
+      .select({
+        id: engagements.id,
+        status: engagements.status,
+        archivedAt: engagements.archivedAt,
+      })
       .from(engagements)
       .where(
         and(
@@ -178,6 +183,7 @@ export async function applyRunbookTemplate(
       )
       .limit(1);
     if (!engagement) throw new RunbookScopeError("Engagement is unavailable");
+    assertEngagementWritable(engagement);
     const [template] = await tx
       .select()
       .from(runbookTemplates)

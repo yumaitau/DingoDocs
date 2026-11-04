@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { MAX_LAYOUT_LENGTH } from "@/lib/reports/layout";
+import { reportTransitionPermission } from "@/lib/reports/transition-permission";
 import type { ReportTemplateDefinition } from "@/db/schema";
 import {
   requireInternalOrganisationContext,
@@ -128,16 +129,9 @@ export async function transitionReportAction(
     organisation.organisationId,
     reportId,
   );
-  const permission = ["published", "archived"].includes(input.toStatus)
-    ? "report:publish"
-    : [
-          "changes_requested",
-          "qa_approved",
-          "client_review",
-          "approved",
-        ].includes(input.toStatus)
-      ? "finding:approve"
-      : "finding:create";
+  // Shared with the REST route so superseded/archived/published all need
+  // report:publish on both paths.
+  const permission = reportTransitionPermission(input.toStatus);
   const context = await requirePermission(permission, {
     engagementId: workspace.report.engagementId,
   });

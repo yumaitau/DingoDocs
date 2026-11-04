@@ -11,7 +11,7 @@ import {
 } from "@/lib/integrations/crypto";
 import {
   assertPublicHttpUrl,
-  outboundFetchInit,
+  outboundFetch,
 } from "@/lib/security/outbound-url";
 import { transitionFinding } from "./findings";
 
@@ -135,15 +135,13 @@ export async function saveJiraConnection(
 
 export async function testJiraConnection(actor: IntegrationActor) {
   const config = await loadJiraConfig(actor.organisationId);
-  const url = await assertPublicHttpUrl(`${config.baseUrl}/rest/api/3/myself`);
-  const response = await fetch(url, {
+  const response = await outboundFetch(`${config.baseUrl}/rest/api/3/myself`, {
     method: "GET",
     headers: {
       authorization: basicAuth(config.email, config.apiToken),
       accept: "application/json",
     },
     signal: AbortSignal.timeout(10_000),
-    ...outboundFetchInit,
   });
   if (!response.ok)
     throw new Error(`Jira connection test failed (HTTP ${response.status})`);
@@ -202,8 +200,7 @@ export async function pushFindingToJira(
     .filter(Boolean)
     .join("\n");
 
-  const url = await assertPublicHttpUrl(`${config.baseUrl}/rest/api/3/issue`);
-  const response = await fetch(url, {
+  const response = await outboundFetch(`${config.baseUrl}/rest/api/3/issue`, {
     method: "POST",
     headers: {
       authorization: basicAuth(config.email, config.apiToken),
@@ -228,7 +225,6 @@ export async function pushFindingToJira(
       },
     }),
     signal: AbortSignal.timeout(15_000),
-    ...outboundFetchInit,
   });
   if (!response.ok) {
     const detail = await response.text().catch(() => "");
@@ -288,18 +284,17 @@ export async function pullJiraStatus(
   if (typeof jiraKey !== "string" || !jiraKey)
     throw new Error("Finding has no jiraKey in sourceProvenance");
 
-  const url = await assertPublicHttpUrl(
+  const response = await outboundFetch(
     `${config.baseUrl}/rest/api/3/issue/${encodeURIComponent(jiraKey)}?fields=status`,
-  );
-  const response = await fetch(url, {
-    method: "GET",
-    headers: {
-      authorization: basicAuth(config.email, config.apiToken),
-      accept: "application/json",
+    {
+      method: "GET",
+      headers: {
+        authorization: basicAuth(config.email, config.apiToken),
+        accept: "application/json",
+      },
+      signal: AbortSignal.timeout(10_000),
     },
-    signal: AbortSignal.timeout(10_000),
-    ...outboundFetchInit,
-  });
+  );
   if (!response.ok)
     throw new Error(`Jira get issue failed (HTTP ${response.status})`);
   const body = (await response.json()) as {

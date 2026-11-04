@@ -262,6 +262,136 @@ run("scanner re-import and organisation export safety", () => {
     expect(rows).toHaveLength(1);
   });
 
+  it("imports bundle findings as drafts and never overwrites reviewed work", async () => {
+    const publishedId = randomUUID();
+    const newId = randomUUID();
+    await modules.db.insert(modules.findings).values({
+      id: publishedId,
+      organisationId: ids.org,
+      engagementId: ids.engagement,
+      identifier: "PUB-1",
+      title: "Published finding",
+      status: "published",
+      severity: "critical",
+      clientVisible: true,
+      publishedAt: new Date(),
+      approvedVersion: 1,
+    });
+    const bundle = {
+      organisation: { id: ids.org },
+      clients: [{ id: ids.client, name: "Live Client" }],
+      engagements: [
+        {
+          id: ids.engagement,
+          clientId: ids.client,
+          name: "Live Engagement",
+          reference: `LIVE-${ids.engagement.slice(0, 8)}`,
+          type: "Web",
+        },
+      ],
+      findings: [
+        {
+          id: ids.liveFinding,
+          engagementId: ids.engagement,
+          identifier: "LIVE-1",
+          title: "Live finding (imported edit)",
+          status: "published",
+          severity: "medium",
+        },
+        {
+          id: publishedId,
+          engagementId: ids.engagement,
+          identifier: "PUB-1",
+          title: "Tampered published finding",
+          status: "draft",
+          severity: "low",
+        },
+        {
+          id: newId,
+          engagementId: ids.engagement,
+          identifier: "NEW-1",
+          title: "Smuggled published finding",
+          status: "published",
+          severity: "high",
+          clientVisible: true,
+          publishedAt: new Date().toISOString(),
+          approvedVersion: 3,
+        },
+      ],
+    };
+    const counts = await modules.importOrganisationBundle(admin, bundle);
+    expect(counts).toMatchObject({ findings: 2, findingsSkipped: 1 });
+
+    // Ids not already in the organisation are remapped, so find the new
+    // finding by identifier.
+    const rows = await modules.db
+      .select()
+      .from(modules.findings)
+      .where(
+        modules.and(
+          modules.eq(modules.findings.engagementId, ids.engagement),
+          modules.inArray(modules.findings.identifier, [
+            "LIVE-1",
+            "PUB-1",
+            "NEW-1",
+          ]),
+        ),
+      );
+    const byIdentifier = Object.fromEntries(
+      rows.map((row) => [row.identifier, row]),
+    );
+    const created = byIdentifier["NEW-1"]!;
+    const byId = {
+      [ids.liveFinding]: byIdentifier["LIVE-1"],
+      [publishedId]: byIdentifier["PUB-1"],
+      [newId]: created,
+    };
+    expect(byId[publishedId]).toMatchObject({
+      title: "Published finding",
+      status: "published",
+      severity: "critical",
+      clientVisible: true,
+      version: 1,
+    });
+    expect(byId[newId]).toMatchObject({
+      status: "draft",
+      clientVisible: false,
+      publishedAt: null,
+      approvedVersion: null,
+    });
+    expect(byId[ids.liveFinding]).toMatchObject({
+      title: "Live finding (imported edit)",
+      status: "draft",
+      version: 2,
+    });
+
+    const [snapshot] = await modules.db
+      .select()
+      .from(modules.findingVersions)
+      .where(modules.eq(modules.findingVersions.findingId, ids.liveFinding));
+    expect(snapshot).toMatchObject({ version: 1 });
+    expect(snapshot?.snapshot).toMatchObject({ title: "Live finding" });
+    const audits = await modules.db
+      .select()
+      .from(modules.auditEvents)
+      .where(
+        modules.and(
+          modules.eq(modules.auditEvents.organisationId, ids.org),
+          modules.inArray(modules.auditEvents.targetId, [
+            ids.liveFinding,
+            publishedId,
+            created.id,
+          ]),
+        ),
+      );
+    expect(
+      Object.fromEntries(audits.map((row) => [row.targetId, row.action])),
+    ).toEqual({
+      [ids.liveFinding]: "finding.import_updated",
+      [created.id]: "finding.imported",
+    });
+  });
+
   it("exports without secrets, private notes/comments, or soft-deleted rows", async () => {
     const { payload, json } = await modules.exportOrganisation(
       admin,

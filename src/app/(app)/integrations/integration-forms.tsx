@@ -2,6 +2,11 @@
 
 import { useActionState } from "react";
 import { Button } from "@/components/ui/button";
+import {
+  apiKeyDateBounds,
+  defaultApiKeyLifetimeDays,
+  maxApiKeyLifetimeDays,
+} from "@/lib/api/key-lifetime";
 import { apiScopes } from "@/lib/api/scopes";
 import {
   aiConfirmation,
@@ -44,6 +49,7 @@ function Result({ state }: { state: SecretActionState }) {
 
 export function ApiKeyForm() {
   const [state, action, pending] = useActionState(createApiKeyAction, initial);
+  const expiryBounds = apiKeyDateBounds();
   return (
     <form action={action} className="space-y-3">
       <div className="grid gap-3 sm:grid-cols-2">
@@ -62,12 +68,21 @@ export function ApiKeyForm() {
           name="serviceAccountName"
           placeholder="Service account name (if applicable)"
         />
-        <input
-          className={field}
-          name="expiresAt"
-          type="date"
-          aria-label="Expiry date"
-        />
+        <div>
+          <input
+            className={field}
+            name="expiresAt"
+            type="date"
+            min={expiryBounds.min}
+            max={expiryBounds.max}
+            aria-label="Expiry date"
+            aria-describedby="api-key-expiry-hint"
+          />
+          <p id="api-key-expiry-hint" className="mt-1 text-xs text-slate-600">
+            Optional. Defaults to {defaultApiKeyLifetimeDays} days; the maximum
+            is {maxApiKeyLifetimeDays} days.
+          </p>
+        </div>
       </div>
       <fieldset>
         <legend className="text-sm font-medium">Scopes</legend>

@@ -28,6 +28,7 @@ import {
   type RiskMatrixDefinition,
 } from "@/db/schema";
 import { storage } from "@/lib/storage";
+import { assertEngagementWritable } from "./engagement-guards";
 import type { StorageProvider } from "@/lib/storage/types";
 import {
   parseReportSections,
@@ -247,6 +248,7 @@ export async function createReport(
     actor.organisationId,
     input.engagementId,
   );
+  assertEngagementWritable(engagement);
   if (template.clientId && template.clientId !== engagement.clientId)
     throw new ReportScopeError("Template belongs to another client");
   const defaults = await readClientReportDefaults(engagement.clientId).catch(

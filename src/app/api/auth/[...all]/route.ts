@@ -3,8 +3,13 @@ import { and, desc, eq, gte } from "drizzle-orm";
 import { NextResponse } from "next/server";
 import { toNextJsHandler } from "better-auth/next-js";
 import { db } from "@/db";
-import { auditEvents, loginAttempts } from "@/db/schema";
+import { loginAttempts } from "@/db/schema";
 import { auth } from "@/lib/auth/auth";
+import {
+  insertAuthenticationAudit,
+  userIdForEmail,
+} from "@/lib/auth/authentication-audit";
+import { emailIdentifier } from "@/lib/auth/sign-in-identifier";
 
 const handlers = toNextJsHandler(auth.handler);
 const lockoutWindowMs = 15 * 60 * 1_000;
@@ -18,18 +23,6 @@ function requestIp(request: Request) {
 
 function identifierHash(identifier: string) {
   return createHash("sha256").update(identifier).digest("hex");
-}
-
-async function emailIdentifier(request: Request) {
-  if (!request.url.includes("/sign-in/email")) return undefined;
-  try {
-    const body = (await request.clone().json()) as { email?: unknown };
-    return typeof body.email === "string"
-      ? body.email.trim().toLowerCase().slice(0, 320)
-      : undefined;
-  } catch {
-    return undefined;
-  }
 }
 
 async function isLocked(identifier: string) {
@@ -52,23 +45,57 @@ async function isLocked(identifier: string) {
 
 async function auditAuthentication(
   request: Request,
-  input: { action: string; identifier?: string; status: number },
+  input: {
+    action: string;
+    identifier?: string;
+    userId?: string | null;
+    status: number;
+  },
 ) {
-  await db.insert(auditEvents).values({
-    action: input.action,
-    targetType: "authentication",
-    targetId: input.identifier
-      ? identifierHash(input.identifier).slice(0, 24)
-      : undefined,
-    ipAddress: requestIp(request),
-    userAgent: request.headers.get("user-agent"),
-    requestId: request.headers.get("x-request-id"),
-    metadata: { status: input.status },
-  });
+  const userId =
+    input.userId ??
+    (input.identifier ? await userIdForEmail(input.identifier) : undefined);
+  await insertAuthenticationAudit(
+    {
+      action: input.action,
+      targetType: "authentication",
+      targetId: input.identifier
+        ? identifierHash(input.identifier).slice(0, 24)
+        : undefined,
+      ipAddress: requestIp(request),
+      userAgent: request.headers.get("user-agent"),
+      requestId: request.headers.get("x-request-id"),
+      metadata: { status: input.status },
+    },
+    userId,
+  );
+}
+
+async function sessionUserId(request: Request) {
+  try {
+    const session = await auth.api.getSession({
+      headers: request.headers,
+      query: { disableRefresh: true },
+    });
+    return session?.user.id ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function isMfaPath(pathname: string) {
+  return pathname.includes("two-factor") || pathname.includes("backup-code");
 }
 
 export async function POST(request: Request) {
   const identifier = await emailIdentifier(request);
+  if (identifier === null) {
+    // An email sign-in whose identifier cannot be read would skip the lockout.
+    return NextResponse.json(
+      { message: "Send the sign-in email as JSON or form data." },
+      { status: 400 },
+    );
+  }
   if (identifier && (await isLocked(identifier))) {
     await auditAuthentication(request, {
       action: "authentication.locked_out",
@@ -81,8 +108,11 @@ export async function POST(request: Request) {
     );
   }
 
-  const response = await handlers.POST(request);
   const pathname = new URL(request.url).pathname;
+  // Resolve before forwarding: MFA enrolment rotates the session it arrived on.
+  const mfaUserId =
+    !identifier && isMfaPath(pathname) ? await sessionUserId(request) : null;
+  const response = await handlers.POST(request);
   if (identifier) {
     const succeeded = response.status < 400;
     const credentialFailure = [400, 401].includes(response.status);
@@ -101,12 +131,10 @@ export async function POST(request: Request) {
       identifier,
       status: response.status,
     });
-  } else if (
-    response.ok &&
-    (pathname.includes("two-factor") || pathname.includes("backup-code"))
-  ) {
+  } else if (response.ok && isMfaPath(pathname)) {
     await auditAuthentication(request, {
       action: `authentication.mfa.${pathname.split("/").at(-1) ?? "changed"}`,
+      userId: mfaUserId,
       status: response.status,
     });
   }

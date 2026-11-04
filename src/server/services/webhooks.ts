@@ -18,10 +18,11 @@ import {
   decryptIntegrationSecret,
   encryptIntegrationSecret,
 } from "@/lib/integrations/crypto";
-import { redactSensitive } from "@/lib/observability/logger";
+import { redactSensitive, structuredLog } from "@/lib/observability/logger";
 import {
   assertPublicHttpUrl,
-  outboundFetchInit,
+  outboundErrorCategory,
+  outboundFetch,
 } from "@/lib/security/outbound-url";
 
 export type IntegrationActor = { organisationId: string; userId: string };
@@ -244,28 +245,32 @@ export async function deliverWebhookJob(deliveryId: string) {
   };
   let response: Response;
   try {
-    await assertWebhookUrl(record.url);
-    response = await fetch(record.url, {
-      method: "POST",
-      headers: {
-        "content-type": "application/json",
-        "user-agent": "DingoDocs-Webhooks/1.0",
-        "x-dingodocs-event-id": record.eventId,
-        "x-dingodocs-timestamp": String(timestamp),
-        ...signatureHeaders,
+    response = await outboundFetch(
+      record.url,
+      {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "user-agent": "DingoDocs-Webhooks/1.0",
+          "x-dingodocs-event-id": record.eventId,
+          "x-dingodocs-timestamp": String(timestamp),
+          ...signatureHeaders,
+        },
+        body,
+        signal: AbortSignal.timeout(10_000),
       },
-      body,
-      signal: AbortSignal.timeout(10_000),
-      ...outboundFetchInit,
-    });
+      webhookUrlOptions(),
+    );
   } catch (error) {
     // Network failure (timeout, DNS, refused): record it like a non-2xx.
-    await recordAttempt({
-      error:
-        error instanceof Error
-          ? `${error.name}: ${error.message}`
-          : "Webhook request failed",
+    // Store only a generic category: the raw error would tell a tenant
+    // whether an internal port refused or timed out.
+    structuredLog("warn", "webhook.delivery_failed", {
+      deliveryId,
+      errorType: error instanceof Error ? error.name : "UnknownError",
+      errorMessage: error instanceof Error ? error.message : undefined,
     });
+    await recordAttempt({ error: outboundErrorCategory(error) });
     throw error;
   }
   await recordAttempt({ status: response.status });

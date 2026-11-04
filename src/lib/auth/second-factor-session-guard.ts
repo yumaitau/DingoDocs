@@ -3,13 +3,26 @@ export const SECOND_FACTOR_REQUIRED_MESSAGE =
   "This account uses an authenticator app. Sign in with your password and code.";
 
 /**
- * Better Auth endpoints that create a session from email possession alone.
- * The twoFactor plugin only intercepts password sign-in, so these would
- * otherwise hand a full session to accounts that have a second factor.
+ * Better Auth endpoints (ctx.path route templates) that may create a session
+ * for a TOTP-enrolled account. Everything else, such as magic links,
+ * verify-email auto sign-in and OAuth callbacks that implicitly link a
+ * matching verified email, proves only email or IdP possession and is
+ * refused. Allow-listed so a new session-creating endpoint fails closed.
  */
-export const EMAIL_ONLY_SESSION_PATHS: ReadonlySet<string> = new Set([
-  "/magic-link/verify",
-  "/verify-email",
+export const SECOND_FACTOR_SESSION_PATHS: ReadonlySet<string> = new Set([
+  // The twoFactor plugin's after-hook swaps this session for a TOTP challenge.
+  "/sign-in/email",
+  "/two-factor/verify-totp",
+  "/two-factor/verify-backup-code",
+  "/two-factor/verify-otp",
+  // Passkey assertion is itself phishing-resistant multi-factor sign-in.
+  "/passkey/verify-authentication",
+  // Rotations of a session the user already holds.
+  "/two-factor/enable",
+  "/two-factor/disable",
+  "/passkey/verify-registration",
+  "/change-password",
+  "/admin/impersonate-user",
 ]);
 
 type SessionCreateContext = {
@@ -35,8 +48,10 @@ export function createSecondFactorSessionGuard(
     session: { userId: string },
     context: SessionCreateContext | undefined,
   ) => {
-    const path = context?.path;
-    if (!path || !EMAIL_ONLY_SESSION_PATHS.has(path)) return;
+    // No endpoint context means trusted server code created the session.
+    if (!context) return;
+    const path = context.path;
+    if (path && SECOND_FACTOR_SESSION_PATHS.has(path)) return;
     if (!(await isTwoFactorEnabled(session.userId))) return;
     const destination = secondFactorRequiredUrl(context?.context?.baseURL);
     // ctx.redirect returns a 302 APIError carrying the Location header.

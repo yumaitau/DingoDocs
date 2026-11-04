@@ -5,6 +5,7 @@ import { db } from "@/db";
 import { assets } from "@/db/schema";
 import { apiReadContext, apiWriteContext } from "@/lib/api/authentication";
 import { apiError } from "@/lib/api/responses";
+import { jsonWithLimit } from "@/lib/security/request-body";
 import { assertActorEngagementAccess } from "@/lib/permissions/require";
 import { createAsset } from "@/server/services/engagement-workspace";
 
@@ -63,7 +64,7 @@ export async function POST(
     );
     if (!principal.userId)
       throw new Error("API key does not have an attributable owner");
-    const input = createSchema.parse(await request.json());
+    const input = createSchema.parse(await jsonWithLimit(request));
     const asset = await createAsset(
       { organisationId: principal.organisationId, userId: principal.userId },
       { engagementId: id, ...input },

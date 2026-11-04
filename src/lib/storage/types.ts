@@ -13,12 +13,23 @@ export type PutObjectInput = {
   expectedSize?: number;
 };
 
+export type DownloadUrlOptions = {
+  /** Name offered to the browser; the download is always an attachment. */
+  filename?: string;
+  /** Stored media type; only passive image types are served as-is. */
+  contentType?: string;
+};
+
 export interface StorageProvider {
   readonly name: string;
   put(input: PutObjectInput): Promise<StoredObject>;
   get(key: string): Promise<ReadableStream<Uint8Array>>;
   delete(key: string): Promise<void>;
   exists(key: string): Promise<boolean>;
-  createDownloadUrl?(key: string, expiresInSeconds: number): Promise<string>;
+  createDownloadUrl?(
+    key: string,
+    expiresInSeconds: number,
+    options?: DownloadUrlOptions,
+  ): Promise<string>;
   healthCheck(): Promise<void>;
 }

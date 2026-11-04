@@ -366,6 +366,7 @@ run("review, publication and retest guards with PostgreSQL", () => {
       kind: "service",
       serviceAccountName: "Scanner agent",
       scopes: ["findings:write"],
+      expiresAt: new Date(Date.now() + 86_400_000),
     });
     const request = () =>
       new Request("http://localhost/api/v1/findings", {

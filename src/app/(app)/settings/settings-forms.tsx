@@ -2,11 +2,13 @@
 
 import { useActionState } from "react";
 import { Button } from "@/components/ui/button";
+import { MFA_MODES } from "@/lib/auth/mfa-modes";
 import {
   addScimDomainAction,
   createScimTokenAction,
   removeScimDomainAction,
   saveJiraConnectionAction,
+  saveMfaPolicyAction,
   saveSsoPolicyAction,
   testJiraConnectionAction,
   verifyScimDomainAction,
@@ -235,6 +237,58 @@ export function ScimDomainsForm({ domains }: { domains: ScimDomainView[] }) {
       </form>
       <Result state={state} />
     </div>
+  );
+}
+
+const mfaModeLabels: Record<(typeof MFA_MODES)[number], string> = {
+  optional: "Optional",
+  admin_required: "Required for administrators",
+  all_users_required: "Required for everyone",
+};
+
+export function MfaPolicyForm({
+  mfaMode,
+  mfaGracePeriodDays,
+}: {
+  mfaMode?: string;
+  mfaGracePeriodDays?: number;
+}) {
+  const [state, action, pending] = useActionState(saveMfaPolicyAction, initial);
+  const current = MFA_MODES.find((mode) => mode === mfaMode) ?? "optional";
+  return (
+    <form action={action} className="space-y-3">
+      <label className="block text-sm font-medium">
+        Requirement
+        <select
+          className={`${field} mt-1`}
+          name="mfaMode"
+          defaultValue={current}
+        >
+          {MFA_MODES.map((mode) => (
+            <option key={mode} value={mode}>
+              {mfaModeLabels[mode]}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className="block text-sm font-medium">
+        Grace period (days)
+        <input
+          className={`${field} mt-1`}
+          name="mfaGracePeriodDays"
+          type="number"
+          min={0}
+          max={30}
+          step={1}
+          required
+          defaultValue={mfaGracePeriodDays ?? 0}
+        />
+      </label>
+      <Button disabled={pending}>
+        {pending ? "Saving…" : "Save MFA requirement"}
+      </Button>
+      <Result state={state} />
+    </form>
   );
 }
 

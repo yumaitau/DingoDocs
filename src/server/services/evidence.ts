@@ -1,7 +1,17 @@
 import "server-only";
 
 import { createHash } from "node:crypto";
-import { and, desc, eq, isNull, ne, or, sql } from "drizzle-orm";
+import {
+  and,
+  desc,
+  eq,
+  isNull,
+  ne,
+  notInArray,
+  or,
+  sql,
+  type SQL,
+} from "drizzle-orm";
 import sharp from "sharp";
 import { db } from "@/db";
 import {
@@ -32,6 +42,7 @@ import {
   readClientReportDefaults,
   retentionUntilFromPolicy,
 } from "./client-defaults";
+import { assertEngagementWritable } from "./engagement-guards";
 
 export type EvidenceActor = {
   organisationId: string;
@@ -111,7 +122,12 @@ export async function uploadEvidence(
   const sha256 = createHash("sha256").update(input.bytes).digest("hex");
 
   const [engagement] = await db
-    .select({ id: engagements.id, clientId: engagements.clientId })
+    .select({
+      id: engagements.id,
+      clientId: engagements.clientId,
+      status: engagements.status,
+      archivedAt: engagements.archivedAt,
+    })
     .from(engagements)
     .where(
       and(
@@ -123,6 +139,7 @@ export async function uploadEvidence(
     .limit(1);
   if (!engagement) throw new EvidenceScopeError();
   assertActorScope(actor, engagement.clientId, input.engagementId);
+  assertEngagementWritable(engagement);
 
   let retentionUntil = input.retentionUntil;
   if (!retentionUntil) {
@@ -194,6 +211,13 @@ export async function uploadEvidence(
     version = Math.max(parent.version, latest?.version ?? 0) + 1;
   }
 
+  // Without a scanner the scan job can only ever record "unavailable", so set
+  // it now; otherwise the upload would read as "pending" (and be withheld)
+  // until the job runner gets to it. With a scanner configured the row stays
+  // "pending" until scanEvidenceJob reports. That job retries with backoff
+  // up to its max attempts; a dead-lettered scan leaves the evidence pending,
+  // which fails closed until an operator re-queues it.
+  const scannerConfigured = Boolean(process.env.MALWARE_SCAN_URL);
   const storageKey = `${actor.organisationId}/${engagement.clientId}/${input.engagementId}/${upload.storageKey}`;
   const stored = await provider.put({
     key: storageKey,
@@ -225,7 +249,10 @@ export async function uploadEvidence(
           retentionUntil,
           encryptionMetadata: stored.encryptionMetadata ?? {},
           version,
-          malwareScanStatus: "pending",
+          malwareScanStatus: scannerConfigured ? "pending" : "unavailable",
+          malwareScanResult: scannerConfigured
+            ? {}
+            : { engine: "not-configured", scannedAt: new Date().toISOString() },
         })
         .returning();
       if (!row) throw new Error("Unable to persist evidence");
@@ -315,7 +342,52 @@ export async function getEvidenceForAccess(
   if (row.quarantinedAt || row.malwareScanStatus === "infected") {
     throw new EvidenceScopeError("Evidence is quarantined");
   }
+  // "pending" means a scanner is configured but has not reported yet, so the
+  // file is withheld until it does. "unavailable" (no scanner configured) is
+  // allowed: uploads are signature- and type-validated, and blocking would
+  // make evidence unusable on deployments without a scanner.
+  if (row.malwareScanStatus === "pending") {
+    throw new EvidenceScopeError("Evidence is awaiting a malware scan");
+  }
   return row;
+}
+
+/** Scan states that withhold evidence from every viewer (see getEvidenceForAccess). */
+export const blockedMalwareScanStatuses = ["infected", "pending"] as const;
+
+/**
+ * SQL form of the row-level rules in getEvidenceForAccess, for list and
+ * search queries. Engagement and client scoping stay with the caller.
+ *
+ * - `userId` omitted (no single viewer, e.g. a rendered client report):
+ *   evidence restricted to named users is excluded outright.
+ * - `clientVisibleOnly`: client portal viewers see client_visible only.
+ */
+export function evidenceAccessCondition(viewer: {
+  userId?: string;
+  canViewRestricted?: boolean;
+  clientVisibleOnly?: boolean;
+}): SQL {
+  const namedUsers = sql`${evidence.restrictions}->'userIds'`;
+  const namedUserCount = sql`(case when jsonb_typeof(${namedUsers}) = 'array' then jsonb_array_length(${namedUsers}) else 0 end)`;
+  return and(
+    isNull(evidence.deletedAt),
+    isNull(evidence.quarantinedAt),
+    notInArray(evidence.malwareScanStatus, [...blockedMalwareScanStatuses]),
+    viewer.clientVisibleOnly
+      ? eq(evidence.classification, "client_visible")
+      : undefined,
+    viewer.canViewRestricted
+      ? undefined
+      : ne(evidence.classification, "restricted"),
+    viewer.userId
+      ? or(
+          sql`${namedUserCount} = 0`,
+          sql`${namedUsers} ? ${viewer.userId}`,
+          eq(evidence.uploadedBy, viewer.userId),
+        )
+      : sql`${namedUserCount} = 0`,
+  )!;
 }
 
 export async function scopedEvidenceActor(input: {

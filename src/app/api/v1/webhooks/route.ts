@@ -4,20 +4,23 @@ import { z } from "zod";
 import { db } from "@/db";
 import { webhooks } from "@/db/schema";
 import {
+  apiReadContextWithPermission,
   apiWriteContext,
-  authenticateApiRequest,
 } from "@/lib/api/authentication";
 import { apiError } from "@/lib/api/responses";
-import { requirePermission } from "@/lib/permissions/require";
+import { jsonWithLimit } from "@/lib/security/request-body";
 import { createWebhook } from "@/server/services/webhooks";
 
 export async function GET(request: Request) {
   const requestId = request.headers.get("x-request-id");
   try {
-    // API keys are gated by scope; session callers need integration:configure.
-    const context =
-      (await authenticateApiRequest(request, "webhooks:manage")) ??
-      (await requirePermission("integration:configure"));
+    // Listing integrations is an administrative read: personal keys need an
+    // owner holding integration:configure, and service keys are denied.
+    const context = await apiReadContextWithPermission(
+      request,
+      "webhooks:manage",
+      "integration:configure",
+    );
     const data = await db
       .select({
         id: webhooks.id,
@@ -47,7 +50,6 @@ const createSchema = z.object({
 export async function POST(request: Request) {
   const requestId = request.headers.get("x-request-id");
   try {
-    const input = createSchema.parse(await request.json());
     const principal = await apiWriteContext(
       request,
       "webhooks:manage",
@@ -55,6 +57,7 @@ export async function POST(request: Request) {
     );
     if (!principal.userId)
       throw new Error("API key does not have an attributable owner");
+    const input = createSchema.parse(await jsonWithLimit(request));
     const webhook = await createWebhook(
       { organisationId: principal.organisationId, userId: principal.userId },
       input,

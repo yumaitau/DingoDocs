@@ -3,7 +3,8 @@ import { NextResponse, type NextRequest } from "next/server";
 import {
   PATHNAME_HEADER,
   PATHNAME_SIGNATURE_HEADER,
-  signPathname,
+  REQUEST_METHOD_HEADER,
+  signRequest,
 } from "@/lib/auth/pathname-signature";
 
 const publicPaths = [
@@ -29,10 +30,13 @@ export default function proxy(request: NextRequest) {
   const requestId = request.headers.get("x-request-id") ?? crypto.randomUUID();
   const forwardedHeaders = new Headers(request.headers);
   forwardedHeaders.set("x-request-id", requestId);
+  const method = request.method.toUpperCase();
   forwardedHeaders.set(PATHNAME_HEADER, pathname);
+  forwardedHeaders.set(REQUEST_METHOD_HEADER, method);
   // Signed so server code can tell a proxy-set pathname from a client-sent
-  // one; API routes skip the proxy and would otherwise trust the client.
-  const signature = signPathname(pathname);
+  // one; API routes skip the proxy and would otherwise trust the client. The
+  // method is bound too: a no-JS server action is a POST without next-action.
+  const signature = signRequest({ method, pathname });
   if (signature) forwardedHeaders.set(PATHNAME_SIGNATURE_HEADER, signature);
   else forwardedHeaders.delete(PATHNAME_SIGNATURE_HEADER);
   const response = NextResponse.next({

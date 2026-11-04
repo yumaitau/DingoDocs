@@ -5,6 +5,7 @@ import { findings } from "@/db/schema";
 import { linkFindingEvidenceInput } from "@/lib/api/finding-input";
 import { apiReadContext, apiWriteContext } from "@/lib/api/authentication";
 import { apiError, apiNotFound } from "@/lib/api/responses";
+import { jsonWithLimit } from "@/lib/security/request-body";
 import { engagementVisibility } from "@/lib/permissions/access";
 import { linkFindingEvidence } from "@/server/services/findings";
 
@@ -16,8 +17,8 @@ export async function POST(
   try {
     const { id } = await context.params;
     z.string().uuid().parse(id);
-    const input = linkFindingEvidenceInput.parse(await request.json());
     const reader = await apiReadContext(request, "findings:write");
+    const input = linkFindingEvidenceInput.parse(await jsonWithLimit(request));
     const [locator] = await db
       .select({ engagementId: findings.engagementId })
       .from(findings)

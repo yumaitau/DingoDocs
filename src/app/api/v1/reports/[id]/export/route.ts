@@ -5,6 +5,7 @@ import { db } from "@/db";
 import { reports } from "@/db/schema";
 import { apiReadContext, apiWriteContext } from "@/lib/api/authentication";
 import { apiError, apiNotFound } from "@/lib/api/responses";
+import { jsonWithLimit } from "@/lib/security/request-body";
 import { engagementVisibility } from "@/lib/permissions/access";
 import {
   getReportExport,
@@ -31,7 +32,10 @@ export async function POST(
   try {
     const { id } = await context.params;
     z.string().uuid().parse(id);
-    const principal = await apiReadContext(request, "reports:read");
+    // Export queues generation and releases report content, so it needs a
+    // write scope (as report transitions do) and data:export, which
+    // service-account keys never hold.
+    const principal = await apiReadContext(request, "findings:write");
     const [existing] = await db
       .select({ engagementId: reports.engagementId })
       .from(reports)
@@ -47,14 +51,14 @@ export async function POST(
 
     const writer = await apiWriteContext(
       request,
-      "reports:read",
+      "findings:write",
       "data:export",
       { engagementId: existing.engagementId },
     );
     if (!writer.userId)
       throw new Error("API key does not have an attributable owner");
 
-    const input = bodySchema.parse(await request.json());
+    const input = bodySchema.parse(await jsonWithLimit(request));
     const actor = {
       organisationId: writer.organisationId,
       userId: writer.userId,
@@ -70,7 +74,6 @@ export async function POST(
           version: workspace.current.version,
           format: input.format,
           renderStatus: "queued",
-          key: null,
           mediaType: null,
           downloadPath: `/api/v1/reports/${id}/exports/${input.format}`,
         },
@@ -89,7 +92,6 @@ export async function POST(
         version: result.version.version,
         format: input.format,
         renderStatus: result.version.renderStatus,
-        key: result.key,
         mediaType: result.mediaType,
         downloadPath: `/api/v1/reports/${id}/exports/${input.format}`,
       },

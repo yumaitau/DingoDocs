@@ -1,13 +1,14 @@
 import { redirect } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { getSession } from "@/lib/auth/session";
-import { resolveActiveOrganisation } from "@/lib/auth/active-organisation";
+import { resolvePageOrganisation } from "@/lib/auth/active-organisation";
 import { createOrganisation } from "@/server/actions/organisations";
 
 export default async function OnboardingPage() {
   const session = await getSession();
   if (!session) redirect("/sign-in");
-  if (await resolveActiveOrganisation(session.user.id)) redirect("/dashboard");
+  if (await resolvePageOrganisation(session.user.id, session.session.createdAt))
+    redirect("/dashboard");
 
   return (
     <main className="grid min-h-screen place-items-center bg-background px-5 py-10">

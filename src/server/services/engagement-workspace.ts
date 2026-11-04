@@ -24,10 +24,15 @@ import { canGrantRole, roleRank, type Role } from "@/lib/permissions/matrix";
 import { EngagementAccessError } from "@/lib/permissions/access";
 import {
   assertEngagementAccess,
+  PermissionDeniedError,
   requireActorPermission,
 } from "@/lib/permissions/require";
 import { visibleToAuthor } from "@/lib/permissions/visibility";
 import { refreshEngagementHealth } from "@/server/services/engagement-health";
+import {
+  assertEngagementWritable,
+  WorkspaceTransitionError,
+} from "./engagement-guards";
 
 export type WorkspaceActor = {
   organisationId: string;
@@ -67,12 +72,7 @@ export class WorkspaceScopeError extends Error {
   }
 }
 
-export class WorkspaceTransitionError extends Error {
-  constructor(message: string) {
-    super(message);
-    this.name = "WorkspaceTransitionError";
-  }
-}
+export { WorkspaceTransitionError };
 
 export async function createScopeDraft(
   actor: WorkspaceActor,
@@ -264,6 +264,11 @@ export async function approveScopeVersion(
   actor: WorkspaceActor,
   input: { engagementId: string; scopeVersionId: string },
 ) {
+  // Approval is an engagement-level sign-off (engagement:edit), not a scope
+  // edit, and must come from someone other than the draft's author.
+  await requireActorPermission(actor, "engagement:edit", {
+    engagementId: input.engagementId,
+  });
   return db.transaction(async (tx) => {
     const version = await requireDraftScope(
       tx,
@@ -271,6 +276,10 @@ export async function approveScopeVersion(
       input.engagementId,
       input.scopeVersionId,
     );
+    if (version.createdBy === actor.userId)
+      throw new WorkspaceTransitionError(
+        "Scope must be approved by someone other than its author",
+      );
     const items = await tx
       .select({ id: scopeItems.id })
       .from(scopeItems)
@@ -429,6 +438,7 @@ export async function approveRules(
   input: { engagementId: string; rulesId: string },
 ) {
   return db.transaction(async (tx) => {
+    await requireEngagement(tx, actor, input.engagementId);
     const [rules] = await tx
       .update(rulesOfEngagement)
       .set({ approvedAt: new Date() })
@@ -459,6 +469,7 @@ export async function acknowledgeRules(
   input: { engagementId: string; rulesId: string },
 ) {
   return db.transaction(async (tx) => {
+    await requireEngagement(tx, actor, input.engagementId);
     const [rules] = await tx
       .select({ id: rulesOfEngagement.id })
       .from(rulesOfEngagement)
@@ -663,7 +674,7 @@ export function parseAttackMappings(value: string | undefined) {
 }
 
 export async function createTimelineEntry(
-  actor: WorkspaceActor,
+  actor: WorkspaceActor & { serviceAccountId?: string | null },
   input: {
     engagementId: string;
     occurredAt: Date;
@@ -675,6 +686,13 @@ export async function createTimelineEntry(
   },
 ) {
   return db.transaction(async (tx) => {
+    // Client release is a human decision; service principals author internal
+    // entries only, whichever user created their key.
+    if (input.clientVisible && actor.serviceAccountId)
+      throw new PermissionDeniedError(
+        "finding:approve",
+        "service accounts cannot make timeline entries client visible",
+      );
     await requireEngagement(tx, actor, input.engagementId);
     if (input.clientVisible)
       await requireActorPermission(actor, "finding:approve", {
@@ -835,7 +853,9 @@ export async function transitionEngagement(
   input: { engagementId: string; toStatus: EngagementStatus; reason?: string },
 ) {
   const updated = await db.transaction(async (tx) => {
-    const engagement = await requireEngagement(tx, actor, input.engagementId);
+    const engagement = await requireEngagement(tx, actor, input.engagementId, {
+      allowReadOnly: true,
+    });
     if (!transitionGraph[engagement.status].includes(input.toStatus)) {
       throw new WorkspaceTransitionError(
         `Cannot transition engagement from ${engagement.status} to ${input.toStatus}`,
@@ -1078,10 +1098,16 @@ export async function getEngagementWorkspace(
 
 type Transaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
 
+/**
+ * Every caller writes under the engagement, so archived or cancelled
+ * engagements are rejected unless `allowReadOnly` is set (status transitions,
+ * which must still be able to reopen or archive a cancelled engagement).
+ */
 async function requireEngagement(
   tx: Transaction,
   actor: WorkspaceActor,
   engagementId: string,
+  options: { allowReadOnly?: boolean } = {},
 ) {
   await assertEngagementAccess({ ...actor, engagementId });
   const [engagement] = await tx
@@ -1096,6 +1122,7 @@ async function requireEngagement(
     )
     .limit(1);
   if (!engagement) throw new WorkspaceScopeError();
+  if (!options.allowReadOnly) assertEngagementWritable(engagement);
   return engagement;
 }
 

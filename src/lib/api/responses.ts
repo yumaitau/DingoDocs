@@ -6,6 +6,10 @@ import { EngagementAccessError } from "@/lib/permissions/access";
 import { PermissionDeniedError } from "@/lib/permissions/require";
 import { ApiAuthenticationError } from "@/lib/api/authentication";
 import { structuredLog } from "@/lib/observability/logger";
+import {
+  InvalidJsonBodyError,
+  RequestBodyTooLargeError,
+} from "@/lib/security/request-body";
 import { ExchangeScopeError } from "@/server/services/data-exchange";
 import {
   WorkspaceScopeError,
@@ -35,6 +39,22 @@ export function apiError(error: unknown, incomingRequestId?: string | null) {
         requestId,
       },
       { status: 400 },
+    );
+  if (error instanceof InvalidJsonBodyError)
+    return NextResponse.json(
+      {
+        error: { code: "invalid_json", message: error.message },
+        requestId,
+      },
+      { status: 400 },
+    );
+  if (error instanceof RequestBodyTooLargeError)
+    return NextResponse.json(
+      {
+        error: { code: "payload_too_large", message: error.message },
+        requestId,
+      },
+      { status: 413 },
     );
   if (error instanceof AuthenticationRequiredError)
     return NextResponse.json(

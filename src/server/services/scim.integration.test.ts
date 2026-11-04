@@ -171,8 +171,14 @@ run("SCIM provisioning with PostgreSQL", () => {
       { op: "Replace", path: "active", value: "False" },
     ]);
     expect(deactivated?.active).toBe(false);
-    expect((await membership(ids.orgA, ids.shared)).deletedAt).not.toBeNull();
+    const deactivatedRow = await membership(ids.orgA, ids.shared);
+    expect(deactivatedRow.deletedAt).not.toBeNull();
+    // Sessions are revoked for this tenant only.
+    expect(deactivatedRow.sessionsRevokedAt).toEqual(deactivatedRow.deletedAt);
     expect((await membership(ids.orgB, ids.shared)).deletedAt).toBeNull();
+    expect(
+      (await membership(ids.orgB, ids.shared)).sessionsRevokedAt,
+    ).toBeNull();
     expect((await user(ids.shared)).disabledAt).toBeNull();
     expect((await modules.getScimUser(ids.orgB, ids.shared))?.active).toBe(
       true,
