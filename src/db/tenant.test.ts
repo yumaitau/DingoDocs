@@ -42,6 +42,8 @@ vi.mock("./index", async () => {
       const scope = storage.getStore();
       return scope?.active ? scope : undefined;
     },
+    withSystemDb: <T>(fn: () => T) => storage.exit(fn),
+    TenantScopeEndedError: class extends Error {},
   };
 });
 

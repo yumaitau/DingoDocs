@@ -1,4 +1,4 @@
-import { and, eq, gt, lt, sql } from "drizzle-orm";
+import { and, eq, gt, sql } from "drizzle-orm";
 import type { CacheItem, CacheProvider } from "@node-saml/node-saml";
 import { db } from "@/db";
 import { verificationTokens } from "@/db/schema";
@@ -80,31 +80,25 @@ export function createSamlRequestCache(organisationId: string): CacheProvider {
 }
 
 /**
- * Records an assertion ID until it expires. Returns false when the ID was
- * already recorded (a replay). Serialised per ID with an advisory lock,
- * because verification_tokens.identifier has no unique index.
+ * Records an assertion ID as used, insert-if-absent. Returns false when any
+ * tombstone for the ID exists, expired or not (a replay); an existing row is
+ * never deleted or replaced here. `expiresAt` must be at or after the last
+ * moment checkSignedAssertion would accept the assertion, so once the row is
+ * old enough for Better Auth's expired-verification sweep to remove it, the
+ * assertion itself is rejected as expired. Serialised per ID with an
+ * advisory lock, because verification_tokens.identifier has no unique index.
  */
 export async function reserveSamlAssertionId(
   organisationId: string,
   assertionId: string,
   expiresAt: Date,
 ) {
+  if (expiresAt.getTime() <= Date.now()) return false;
   const identifier = `saml-assertion:${organisationId}:${assertionId}`;
   return db.transaction(async (tx) => {
     await tx.execute(
       sql`select pg_advisory_xact_lock(hashtext(${identifier}))`,
     );
-    // Expired tombstones can be replaced: node-saml has already rejected an
-    // assertion past its NotOnOrAfter (plus clock skew).
-    await tx
-      .delete(verificationTokens)
-      .where(
-        and(
-          eq(verificationTokens.identifier, identifier),
-          eq(verificationTokens.purpose, ASSERTION_PURPOSE),
-          lt(verificationTokens.expiresAt, new Date()),
-        ),
-      );
     const [existing] = await tx
       .select({ id: verificationTokens.id })
       .from(verificationTokens)

@@ -225,14 +225,50 @@ run("tenant row-level security with PostgreSQL", () => {
     expect(ids).toEqual([findingA]);
   });
 
-  it("falls back to the owner connection after the scope ends", async () => {
-    let escaped: (() => Promise<string[]>) | undefined;
+  // A continuation registered inside the scope keeps the (ended) scope in its
+  // AsyncLocalStorage context; the gate releases it after the scope commits.
+  const deferInsideScope = async <T>(work: () => Promise<T>) => {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => (release = resolve));
+    let deferred!: Promise<T>;
     await modules.withTenant(orgA, async () => {
-      escaped = () => unfilteredFindingIds();
+      deferred = gate.then(work);
     });
-    // A callback created in the scope but run later (timers, after()) must
-    // not use the released transaction.
-    expect(await escaped!()).toEqual([findingA, findingB].sort());
+    release();
+    return deferred;
+  };
+
+  it("refuses db use from deferred work after the scope ends", async () => {
+    // Falling back to the owner connection here would bypass RLS.
+    await expect(
+      deferInsideScope(() => unfilteredFindingIds()),
+    ).rejects.toBeInstanceOf(modules.TenantScopeEndedError);
+    await expect(
+      deferInsideScope(() => unfilteredFindingIds()),
+    ).rejects.toThrow(
+      "Tenant scope has ended; open a new withTenant scope for deferred work",
+    );
+  });
+
+  it("lets deferred work open a fresh tenant scope explicitly", async () => {
+    expect(
+      await deferInsideScope(() =>
+        modules.withTenant(orgA, () => unfilteredFindingIds()),
+      ),
+    ).toEqual([findingA]);
+    // The fresh scope is independent of the ended one, so it may name any
+    // organisation the deferred work was authorised for.
+    expect(
+      await deferInsideScope(() =>
+        modules.withTenant(orgB, () => unfilteredFindingIds()),
+      ),
+    ).toEqual([findingB]);
+    // The deliberate system escape hatch clears the ended scope.
+    expect(
+      await deferInsideScope(() =>
+        modules.withSystemDb(() => unfilteredFindingIds()),
+      ),
+    ).toEqual([findingA, findingB].sort());
   });
 
   it("scopes /api/v1 handlers to the API key's organisation", async () => {

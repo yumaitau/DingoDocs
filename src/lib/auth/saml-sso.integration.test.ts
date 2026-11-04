@@ -444,6 +444,109 @@ run("per-organisation SAML SSO", () => {
     );
   });
 
+  // node-saml 5.1.0 accepts these (Conditions with an audience but no times,
+  // bearer confirmation expired); the ACS must reject them itself.
+  it("rejects an expired bearer assertion even with IdP-initiated sign-in allowed", async () => {
+    const before = await sessionCount(ids.member);
+    const hourAgo = Date.now() - 60 * 60_000;
+    const reviewerCase = await postAcs(
+      slugs.idpInitOrg,
+      buildSamlResponse(idp, {
+        audience: spUrls(slugs.idpInitOrg).entityId,
+        acsUrl: spUrls(slugs.idpInitOrg).acsUrl,
+        nameID: "member-idp-init",
+        attributes: { email: emails.member },
+        issuedAt: new Date(hourAgo - 60 * 60_000),
+        bearerNotOnOrAfter: new Date(hourAgo),
+        conditionsWithoutTimes: true,
+      }),
+    );
+    expectSsoFailure(reviewerCase);
+    const freshButExpired = await postAcs(
+      slugs.idpInitOrg,
+      buildSamlResponse(idp, {
+        audience: spUrls(slugs.idpInitOrg).entityId,
+        acsUrl: spUrls(slugs.idpInitOrg).acsUrl,
+        nameID: "member-idp-init",
+        attributes: { email: emails.member },
+        issuedAt: new Date(Date.now() - 3 * 60_000),
+        bearerNotOnOrAfter: new Date(Date.now() - 2 * 60_000),
+        conditionsWithoutTimes: true,
+      }),
+    );
+    expectSsoFailure(freshButExpired);
+    expect(await sessionCount(ids.member)).toBe(before);
+    const reasons = await rejectionReasons(ids.idpInitOrg);
+    expect(reasons).toContain("assertion_too_old");
+    expect(reasons).toContain("bearer_expired");
+  });
+
+  it("rejects an assertion whose bearer Recipient is another ACS", async () => {
+    const response = await postAcs(
+      slugs.idpInitOrg,
+      buildSamlResponse(idp, {
+        audience: spUrls(slugs.idpInitOrg).entityId,
+        acsUrl: spUrls(slugs.idpInitOrg).acsUrl,
+        recipient: spUrls(slugs.org).acsUrl,
+        nameID: "member-idp-init",
+        attributes: { email: emails.member },
+      }),
+    );
+    expectSsoFailure(response);
+    expect(await rejectionReasons(ids.idpInitOrg)).toContain(
+      "recipient_mismatch",
+    );
+  });
+
+  it("rejects an assertion issued more than five minutes ago", async () => {
+    const before = await sessionCount(ids.member);
+    const response = await postAcs(
+      slugs.idpInitOrg,
+      buildSamlResponse(idp, {
+        audience: spUrls(slugs.idpInitOrg).entityId,
+        acsUrl: spUrls(slugs.idpInitOrg).acsUrl,
+        nameID: "member-idp-init",
+        attributes: { email: emails.member },
+        issuedAt: new Date(Date.now() - 10 * 60_000),
+        // Still inside every NotOnOrAfter: only the age limit rejects it.
+        notOnOrAfter: new Date(Date.now() + 10 * 60_000),
+      }),
+    );
+    expectSsoFailure(response);
+    expect(await sessionCount(ids.member)).toBe(before);
+    expect((await rejectionReasons(ids.idpInitOrg)).join()).toMatch(/too old/);
+  });
+
+  it("rejects a resubmitted assertion even after its tombstone has expired", async () => {
+    const assertionId = `_replay${ids.idpInitOrg.replaceAll("-", "")}`;
+    const samlResponse = buildSamlResponse(idp, {
+      audience: spUrls(slugs.idpInitOrg).entityId,
+      acsUrl: spUrls(slugs.idpInitOrg).acsUrl,
+      nameID: "member-idp-init",
+      attributes: { email: emails.member },
+      assertionId,
+    });
+    const first = await postAcs(slugs.idpInitOrg, samlResponse);
+    expect(sessionCookie(first)).toBeTruthy();
+    const identifier = `saml-assertion:${ids.idpInitOrg}:${assertionId}`;
+    // Simulate the tombstone outliving its original expiry.
+    await modules.sqlClient`
+      update verification_tokens
+      set expires_at = now() - interval '1 hour'
+      where identifier = ${identifier}`;
+    const before = await sessionCount(ids.member);
+    const replay = await postAcs(slugs.idpInitOrg, samlResponse);
+    expectSsoFailure(replay);
+    expect(await sessionCount(ids.member)).toBe(before);
+    // The existing tombstone is kept, never deleted and re-inserted.
+    const rows = await modules.sqlClient<{ expired: boolean }[]>`
+      select expires_at < now() as expired from verification_tokens
+      where identifier = ${identifier}`;
+    expect(rows).toEqual([{ expired: true }]);
+    const reasons = await rejectionReasons(ids.idpInitOrg);
+    expect(reasons.filter((r) => r === "replayed_assertion").length).toBe(2);
+  });
+
   it("rejects an unsolicited response (no InResponseTo) by default", async () => {
     const response = await postAcs(
       slugs.org,

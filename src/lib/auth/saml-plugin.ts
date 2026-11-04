@@ -10,7 +10,7 @@ import {
   SAML_REQUEST_TTL_MS,
 } from "@/lib/auth/saml-cache";
 import {
-  assertionReplayKey,
+  checkSignedAssertion,
   createSamlClient,
   newSamlRequestId,
   SAML_REQUEST_COOKIE,
@@ -273,13 +273,22 @@ export const samlSso = () =>
             path: acsCookiePath(ctx, organisation.slug),
             maxAge: 0,
           });
-          const replayKey = assertionReplayKey(profile);
-          if (!replayKey) throw await reject("missing_assertion_id");
+          // node-saml skips timestamps it doesn't find; enforce them on the
+          // signed assertion before anything is reserved or resolved.
+          const assertion = await checkSignedAssertion({
+            assertionXml: profile.getAssertionXml?.(),
+            acsUrl: samlServiceProviderUrls(
+              ctx.context.baseURL,
+              organisation.slug,
+            ).acsUrl,
+            inResponseTo,
+          });
+          if (!assertion.ok) throw await reject(assertion.reason);
           if (
             !(await reserveSamlAssertionId(
               organisation.id,
-              replayKey.id,
-              replayKey.expiresAt,
+              assertion.id,
+              assertion.replayUntil,
             ))
           )
             throw await reject("replayed_assertion");

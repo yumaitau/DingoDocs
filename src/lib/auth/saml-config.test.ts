@@ -3,7 +3,7 @@ import { ValidateInResponseTo, type Profile } from "@node-saml/node-saml";
 import { createTestIdp } from "@/test/saml-idp";
 import { samlServiceProviderUrls } from "./saml-paths";
 import {
-  assertionReplayKey,
+  checkSignedAssertion,
   createSamlClient,
   idpCertificates,
   samlIdentity,
@@ -184,33 +184,158 @@ describe("SAML identity mapping", () => {
       samlIdentity(withGroups, { ...sso, groupsAttribute: "groups" }).groups,
     ).toEqual(["Eng", "Ops"]);
   });
+});
 
-  it("derives the replay key from the assertion ID and latest NotOnOrAfter", () => {
-    const key = assertionReplayKey(
-      profile({
-        getAssertion: () => ({
-          Assertion: {
-            $: { ID: "_a1" },
-            Conditions: [{ $: { NotOnOrAfter: "2030-01-01T00:00:00Z" } }],
-            Subject: [
-              {
-                SubjectConfirmation: [
-                  {
-                    SubjectConfirmationData: [
-                      { $: { NotOnOrAfter: "2030-01-01T00:05:00Z" } },
-                    ],
-                  },
-                ],
-              },
-            ],
-          },
-        }),
+describe("signed assertion checks", () => {
+  const acsUrl = "https://app.example/api/auth/sso/saml/acme-1/acs";
+  const now = Date.parse("2030-01-01T00:00:00Z");
+  const at = (offsetMs: number) => new Date(now + offsetMs).toISOString();
+  const bearer = (attributes: string) =>
+    `<saml:SubjectConfirmation Method="urn:oasis:names:tc:SAML:2.0:cm:bearer"><saml:SubjectConfirmationData ${attributes}/></saml:SubjectConfirmation>`;
+  const assertion = (input: {
+    issued?: number;
+    confirmations?: string;
+    conditions?: string;
+  }) =>
+    `<saml:Assertion xmlns:saml="urn:oasis:names:tc:SAML:2.0:assertion" ID="_a1" Version="2.0" IssueInstant="${at(input.issued ?? 0)}">` +
+    `<saml:Issuer>https://idp.example/metadata</saml:Issuer>` +
+    `<saml:Subject><saml:NameID>subject-1</saml:NameID>${
+      input.confirmations ??
+      bearer(`NotOnOrAfter="${at(5 * 60_000)}" Recipient="${acsUrl}"`)
+    }</saml:Subject>` +
+    (input.conditions ?? "") +
+    `</saml:Assertion>`;
+  const check = (xml: string, inResponseTo?: string) =>
+    checkSignedAssertion({ assertionXml: xml, acsUrl, inResponseTo, now });
+
+  it("accepts a fresh bearer assertion and sets the replay deadline", async () => {
+    const result = await check(
+      assertion({
+        conditions: `<saml:Conditions NotOnOrAfter="${at(10 * 60_000)}"/>`,
       }),
     );
-    expect(key?.id).toBe("_a1");
-    expect(key?.expiresAt.toISOString()).toBe("2030-01-01T00:06:00.000Z");
+    expect(result).toEqual({
+      ok: true,
+      id: "_a1",
+      // max(conditions 10m, bearer 5m, issue + 5m) + 60s skew
+      replayUntil: new Date(now + 11 * 60_000),
+    });
+  });
+
+  it("rejects the reviewer's case: no condition times, bearer expired an hour ago", async () => {
+    const result = await check(
+      assertion({
+        issued: -2 * 60 * 60_000,
+        conditions:
+          "<saml:Conditions><saml:AudienceRestriction><saml:Audience>x</saml:Audience></saml:AudienceRestriction></saml:Conditions>",
+        confirmations: bearer(
+          `NotOnOrAfter="${at(-60 * 60_000)}" Recipient="${acsUrl}"`,
+        ),
+      }),
+    );
+    expect(result).toEqual({ ok: false, reason: "assertion_too_old" });
+  });
+
+  it.each([
+    [
+      "an expired bearer",
+      {
+        confirmations: bearer(
+          `NotOnOrAfter="${at(-61_000)}" Recipient="${acsUrl}"`,
+        ),
+      },
+      "bearer_expired",
+    ],
+    [
+      "a bearer with no expiry",
+      { confirmations: bearer(`Recipient="${acsUrl}"`) },
+      "bearer_without_expiry",
+    ],
+    [
+      "a non-bearer confirmation only",
+      {
+        confirmations: `<saml:SubjectConfirmation Method="urn:oasis:names:tc:SAML:2.0:cm:holder-of-key"><saml:SubjectConfirmationData NotOnOrAfter="${at(60_000)}" Recipient="${acsUrl}"/></saml:SubjectConfirmation>`,
+      },
+      "missing_bearer_confirmation",
+    ],
+    [
+      "a wrong Recipient",
+      {
+        confirmations: bearer(
+          `NotOnOrAfter="${at(60_000)}" Recipient="https://evil.example/acs"`,
+        ),
+      },
+      "recipient_mismatch",
+    ],
+    [
+      "expired conditions",
+      { conditions: `<saml:Conditions NotOnOrAfter="${at(-61_000)}"/>` },
+      "conditions_expired",
+    ],
+    [
+      "not-yet-valid conditions",
+      { conditions: `<saml:Conditions NotBefore="${at(2 * 60_000)}"/>` },
+      "conditions_not_yet_valid",
+    ],
+    ["an old IssueInstant", { issued: -6 * 60_000 - 1 }, "assertion_too_old"],
+    [
+      "a future IssueInstant",
+      { issued: 2 * 60_000 },
+      "issue_instant_in_future",
+    ],
+  ])("rejects %s", async (_label, input, reason) => {
+    expect(await check(assertion(input))).toEqual({ ok: false, reason });
+  });
+
+  it("allows 60 seconds of clock skew", async () => {
+    const result = await check(
+      assertion({
+        confirmations: bearer(
+          `NotOnOrAfter="${at(-30_000)}" Recipient="${acsUrl}"`,
+        ),
+      }),
+    );
+    expect(result.ok).toBe(true);
+  });
+
+  it("requires the signed confirmation to answer the response's InResponseTo", async () => {
+    const answering = bearer(
+      `NotOnOrAfter="${at(60_000)}" Recipient="${acsUrl}" InResponseTo="_req1"`,
+    );
     expect(
-      assertionReplayKey(profile({ getAssertion: () => ({ Assertion: {} }) })),
-    ).toBe(undefined);
+      (await check(assertion({ confirmations: answering }), "_req1")).ok,
+    ).toBe(true);
+    expect(
+      await check(assertion({ confirmations: answering }), "_req2"),
+    ).toEqual({
+      ok: false,
+      reason: "in_response_to_mismatch",
+    });
+    expect(await check(assertion({}), "_req1")).toEqual({
+      ok: false,
+      reason: "in_response_to_mismatch",
+    });
+    expect(await check(assertion({ confirmations: answering }))).toEqual({
+      ok: false,
+      reason: "in_response_to_unexpected",
+    });
+  });
+
+  it("rejects missing, malformed or non-SAML assertion XML", async () => {
+    expect(
+      await check(
+        assertion({}).replaceAll(
+          "urn:oasis:names:tc:SAML:2.0:assertion",
+          "urn:x",
+        ),
+      ),
+    ).toEqual({ ok: false, reason: "missing_assertion" });
+    expect(await check("<not-xml")).toEqual({
+      ok: false,
+      reason: "unparseable_assertion",
+    });
+    expect(
+      await checkSignedAssertion({ assertionXml: undefined, acsUrl, now }),
+    ).toEqual({ ok: false, reason: "missing_assertion" });
   });
 });

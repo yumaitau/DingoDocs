@@ -5,6 +5,9 @@ import {
   type CacheProvider,
   type Profile,
 } from "@node-saml/node-saml";
+// node-saml has no exports map; this is the same hardened xmldom parser it
+// uses itself (errors on malformed XML).
+import { parseDomFromString } from "@node-saml/node-saml/lib/xml";
 import type { SecurityPolicy } from "@/db/schema";
 import { safeInternalPath } from "@/lib/security/internal-path";
 import { samlServiceProviderUrls } from "./saml-paths";
@@ -16,6 +19,8 @@ export type SamlSsoPolicy = NonNullable<SecurityPolicy["sso"]> & {
 };
 
 export const SAML_CLOCK_SKEW_MS = 60_000;
+/** An assertion is only accepted within this long of its IssueInstant. */
+export const SAML_MAX_ASSERTION_AGE_MS = 5 * 60 * 1_000;
 const RELAY_STATE_TTL_MS = 15 * 60 * 1_000;
 const MAX_RELAY_CALLBACK_LENGTH = 512;
 
@@ -77,6 +82,9 @@ export function createSamlClient(input: {
       : ValidateInResponseTo.always,
     requestIdExpirationPeriodMs: 10 * 60 * 1_000,
     acceptedClockSkewMs: SAML_CLOCK_SKEW_MS,
+    // node-saml caps NotOnOrAfter at IssueInstant + this, where present.
+    // checkSignedAssertion enforces it even when no NotOnOrAfter exists.
+    maxAssertionAgeMs: SAML_MAX_ASSERTION_AGE_MS,
     cacheProvider: input.cacheProvider,
     // Let the IdP choose its NameID format and authentication context;
     // requesting specific ones breaks common Entra and Okta setups.
@@ -211,32 +219,139 @@ export function samlIdentity(profile: Profile, sso: SamlSsoPolicy) {
   };
 }
 
-type XmlJs = { $?: Record<string, string> } & Record<string, unknown>;
+const SAML_ASSERTION_NS = "urn:oasis:names:tc:SAML:2.0:assertion";
+const BEARER_METHOD = "urn:oasis:names:tc:SAML:2.0:cm:bearer";
+
+function children(parent: Element, localName: string) {
+  const found: Element[] = [];
+  for (let node = parent.firstChild; node; node = node.nextSibling)
+    if (
+      node.nodeType === 1 &&
+      (node as Element).localName === localName &&
+      (node as Element).namespaceURI === SAML_ASSERTION_NS
+    )
+      found.push(node as Element);
+  return found;
+}
+
+/** A timestamp attribute: undefined when absent, NaN when malformed. */
+function instant(element: Element, name: string) {
+  const value = element.getAttribute(name);
+  return value ? Date.parse(value) : undefined;
+}
+
+export type SignedAssertionCheck =
+  { ok: true; id: string; replayUntil: Date } | { ok: false; reason: string };
 
 /**
- * Assertion ID and the latest NotOnOrAfter from the signed assertion, for the
- * replay tombstone. Undefined when either is missing.
+ * Checks node-saml leaves to its options, or skips when they are absent, on
+ * the signed assertion only. `assertionXml` must be profile.getAssertionXml(),
+ * which node-saml builds from the verified signature reference, never the raw
+ * response, so wrapped (unsigned) elements cannot influence the result.
+ *
+ * Requires an IssueInstant within the maximum age, Conditions times when
+ * present, and a bearer SubjectConfirmation addressed to this ACS that is
+ * unexpired and, when the response carries an InResponseTo, answers it in
+ * the signed SubjectConfirmationData.
+ * Returns the replay deadline: the latest validity time plus clock skew.
  */
-export function assertionReplayKey(profile: Profile) {
-  const parsed = profile.getAssertion?.() as { Assertion?: XmlJs } | undefined;
-  const assertion = parsed?.Assertion;
-  const id = assertion?.$?.ID;
-  const times: number[] = [];
-  const conditions = (assertion?.Conditions as XmlJs[] | undefined)?.[0];
-  if (conditions?.$?.NotOnOrAfter)
-    times.push(Date.parse(conditions.$.NotOnOrAfter));
-  for (const subject of (assertion?.Subject as XmlJs[] | undefined) ?? [])
-    for (const confirmation of (subject.SubjectConfirmation as
-      XmlJs[] | undefined) ?? [])
-      for (const data of (confirmation.SubjectConfirmationData as
-        XmlJs[] | undefined) ?? [])
-        if (data.$?.NotOnOrAfter) times.push(Date.parse(data.$.NotOnOrAfter));
-  const valid = times.filter((time) => Number.isFinite(time));
-  if (!id || !valid.length) return undefined;
-  return {
-    id,
-    expiresAt: new Date(Math.max(...valid) + SAML_CLOCK_SKEW_MS),
-  };
+export async function checkSignedAssertion(input: {
+  assertionXml: string | undefined;
+  acsUrl: string;
+  inResponseTo?: string;
+  now?: number;
+}): Promise<SignedAssertionCheck> {
+  const now = input.now ?? Date.now();
+  const skew = SAML_CLOCK_SKEW_MS;
+  if (!input.assertionXml) return { ok: false, reason: "missing_assertion" };
+  let assertion: Element;
+  try {
+    assertion = (await parseDomFromString(input.assertionXml)).documentElement;
+  } catch {
+    return { ok: false, reason: "unparseable_assertion" };
+  }
+  if (
+    assertion.localName !== "Assertion" ||
+    assertion.namespaceURI !== SAML_ASSERTION_NS
+  )
+    return { ok: false, reason: "missing_assertion" };
+  const id = assertion.getAttribute("ID");
+  if (!id) return { ok: false, reason: "missing_assertion_id" };
+
+  const issued = instant(assertion, "IssueInstant");
+  if (issued === undefined || Number.isNaN(issued))
+    return { ok: false, reason: "missing_issue_instant" };
+  if (issued > now + skew)
+    return { ok: false, reason: "issue_instant_in_future" };
+  const maxAgeDeadline = issued + SAML_MAX_ASSERTION_AGE_MS;
+  if (now - skew >= maxAgeDeadline)
+    return { ok: false, reason: "assertion_too_old" };
+  const deadlines = [maxAgeDeadline];
+
+  const conditions = children(assertion, "Conditions");
+  if (conditions.length > 1)
+    return { ok: false, reason: "multiple_conditions" };
+  if (conditions[0]) {
+    const notBefore = instant(conditions[0], "NotBefore");
+    const notOnOrAfter = instant(conditions[0], "NotOnOrAfter");
+    if (Number.isNaN(notBefore) || Number.isNaN(notOnOrAfter))
+      return { ok: false, reason: "malformed_conditions" };
+    if (notBefore !== undefined && now + skew < notBefore)
+      return { ok: false, reason: "conditions_not_yet_valid" };
+    if (notOnOrAfter !== undefined) {
+      if (now - skew >= notOnOrAfter)
+        return { ok: false, reason: "conditions_expired" };
+      deadlines.push(notOnOrAfter);
+    }
+  }
+
+  // At least one bearer confirmation must satisfy every requirement.
+  let bearerDeadline: number | undefined;
+  let rejection = "missing_bearer_confirmation";
+  for (const subject of children(assertion, "Subject"))
+    for (const confirmation of children(subject, "SubjectConfirmation")) {
+      if (confirmation.getAttribute("Method") !== BEARER_METHOD) continue;
+      for (const data of children(confirmation, "SubjectConfirmationData")) {
+        const notBefore = instant(data, "NotBefore");
+        const notOnOrAfter = instant(data, "NotOnOrAfter");
+        if (notOnOrAfter === undefined || Number.isNaN(notOnOrAfter)) {
+          rejection = "bearer_without_expiry";
+          continue;
+        }
+        if (now - skew >= notOnOrAfter) {
+          rejection = "bearer_expired";
+          continue;
+        }
+        if (Number.isNaN(notBefore) || (notBefore && now + skew < notBefore)) {
+          rejection = "bearer_not_yet_valid";
+          continue;
+        }
+        if (data.getAttribute("Recipient") !== input.acsUrl) {
+          rejection = "recipient_mismatch";
+          continue;
+        }
+        // Response/@InResponseTo sits outside an assertion-only signature, so
+        // the signed confirmation must answer the same request (SAML
+        // profiles 4.1.4.2). Otherwise an unsolicited assertion could be
+        // wrapped in a response that claims an attacker's request ID.
+        const answers = data.getAttribute("InResponseTo");
+        if (input.inResponseTo && answers !== input.inResponseTo) {
+          rejection = "in_response_to_mismatch";
+          continue;
+        }
+        if (!input.inResponseTo && answers) {
+          rejection = "in_response_to_unexpected";
+          continue;
+        }
+        bearerDeadline = Math.max(bearerDeadline ?? 0, notOnOrAfter);
+      }
+    }
+  if (bearerDeadline === undefined) return { ok: false, reason: rejection };
+  deadlines.push(bearerDeadline);
+
+  const replayUntil = Math.max(...deadlines) + skew;
+  if (replayUntil <= now) return { ok: false, reason: "assertion_expired" };
+  return { ok: true, id, replayUntil: new Date(replayUntil) };
 }
 
 /** Better Auth base URL as configured in auth.ts (`<origin>/api/auth`). */

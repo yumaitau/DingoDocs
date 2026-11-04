@@ -4,9 +4,12 @@ import {
   activeTenantScope,
   db,
   tenantScopeStorage,
+  withSystemDb,
   type DatabaseTransaction,
   type TenantScope,
 } from "./index";
+
+export { TenantScopeEndedError, withSystemDb } from "./index";
 
 /** NOLOGIN role created by migration 0016; subject to tenant_isolation. */
 export const TENANT_ROLE = "dingodocs_tenant";
@@ -30,7 +33,9 @@ let roleCheck: Promise<boolean> | undefined;
  * and isolation rests on the application's tenant predicates.
  */
 export function tenantRoleAvailable() {
-  roleCheck ??= checkTenantRole().catch((error: unknown) => {
+  // System path: reads pg_roles only (no RLS) and must work even when first
+  // called from deferred work whose tenant scope has ended.
+  roleCheck ??= withSystemDb(checkTenantRole).catch((error: unknown) => {
     // Retry on the next call; a transient error must not disable RLS.
     roleCheck = undefined;
     throw error;
@@ -87,6 +92,11 @@ export function resetTenantRoleCheck() {
  * Nested calls for the same organisation run in a savepoint of the open
  * transaction; a call for a different organisation throws rather than
  * widening access.
+ *
+ * Deferred work (a timer, after(), or an un-awaited promise started inside a
+ * scope) cannot use `db` once that scope ends: it throws
+ * TenantScopeEndedError. Such work must call withTenant(organisationId, ...)
+ * again; that opens a fresh, independent tenant transaction.
  */
 export async function withTenant<T>(
   organisationId: string,
@@ -101,22 +111,27 @@ export async function withTenant<T>(
     return db.transaction(fn);
   }
   const enforce = await tenantRoleAvailable();
-  return db.transaction(async (tx) => {
-    // set_config('role', ..., true) is SET LOCAL ROLE; one round trip sets
-    // both. Both revert when the transaction ends, so a pooled connection
-    // never carries the tenant role or organisation into the next request.
-    await tx.execute(
-      enforce
-        ? sql`select set_config('role', ${TENANT_ROLE}, true), set_config('app.organisation_id', ${organisationId}, true)`
-        : sql`select set_config('app.organisation_id', ${organisationId}, true)`,
-    );
-    const scope: TenantScope = { organisationId, tx, active: true };
-    try {
-      return await tenantScopeStorage.run(scope, () => fn(tx));
-    } finally {
-      scope.active = false;
-    }
-  });
+  // Begin on the owner connection with no scope in context: when called from
+  // deferred work, the context still holds the ended scope and `db` would
+  // throw. The transaction is restricted to the tenant role immediately.
+  return withSystemDb(() =>
+    db.transaction(async (tx) => {
+      // set_config('role', ..., true) is SET LOCAL ROLE; one round trip sets
+      // both. Both revert when the transaction ends, so a pooled connection
+      // never carries the tenant role or organisation into the next request.
+      await tx.execute(
+        enforce
+          ? sql`select set_config('role', ${TENANT_ROLE}, true), set_config('app.organisation_id', ${organisationId}, true)`
+          : sql`select set_config('app.organisation_id', ${organisationId}, true)`,
+      );
+      const scope: TenantScope = { organisationId, tx, active: true };
+      try {
+        return await tenantScopeStorage.run(scope, () => fn(tx));
+      } finally {
+        scope.active = false;
+      }
+    }),
+  );
 }
 
 /** The organisation of the active tenant scope, if any. */

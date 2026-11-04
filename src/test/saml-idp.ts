@@ -136,18 +136,32 @@ export type TestAssertion = {
   issuer?: string;
   assertionId?: string;
   notOnOrAfter?: Date;
+  /** Bearer SubjectConfirmationData NotOnOrAfter (default: notOnOrAfter). */
+  bearerNotOnOrAfter?: Date;
+  /** Omit NotBefore/NotOnOrAfter from Conditions, keeping the audience. */
+  conditionsWithoutTimes?: boolean;
+  /** IssueInstant of the response and assertion (default: now). */
+  issuedAt?: Date;
+  /** SubjectConfirmationData Recipient (default: acsUrl). */
+  recipient?: string;
   /** Sign with a different key than the one the SP trusts. */
   signingKey?: string;
 };
 
 /** Base64 SAMLResponse with a signed assertion, as an IdP would POST it. */
 export function buildSamlResponse(idp: TestIdp, input: TestAssertion) {
-  const now = new Date();
+  const now = input.issuedAt ?? new Date();
   const instant = now.toISOString();
   const notBefore = new Date(now.getTime() - 30_000).toISOString();
   const notOnOrAfter = (
     input.notOnOrAfter ?? new Date(now.getTime() + 5 * 60_000)
   ).toISOString();
+  const bearerNotOnOrAfter = (
+    input.bearerNotOnOrAfter ?? new Date(notOnOrAfter)
+  ).toISOString();
+  const conditionTimes = input.conditionsWithoutTimes
+    ? ""
+    : ` NotBefore="${notBefore}" NotOnOrAfter="${notOnOrAfter}"`;
   const issuer = escapeXml(input.issuer ?? idp.entityId);
   const inResponseTo = input.inResponseTo
     ? ` InResponseTo="${escapeXml(input.inResponseTo)}"`
@@ -175,8 +189,8 @@ export function buildSamlResponse(idp: TestIdp, input: TestAssertion) {
     `<saml:Assertion ID="${assertionId}" Version="2.0" IssueInstant="${instant}">` +
     `<saml:Issuer>${issuer}</saml:Issuer>` +
     `<saml:Subject><saml:NameID Format="urn:oasis:names:tc:SAML:2.0:nameid-format:persistent">${escapeXml(input.nameID)}</saml:NameID>` +
-    `<saml:SubjectConfirmation Method="urn:oasis:names:tc:SAML:2.0:cm:bearer"><saml:SubjectConfirmationData NotOnOrAfter="${notOnOrAfter}" Recipient="${escapeXml(input.acsUrl)}"${inResponseTo}/></saml:SubjectConfirmation></saml:Subject>` +
-    `<saml:Conditions NotBefore="${notBefore}" NotOnOrAfter="${notOnOrAfter}"><saml:AudienceRestriction><saml:Audience>${escapeXml(input.audience)}</saml:Audience></saml:AudienceRestriction></saml:Conditions>` +
+    `<saml:SubjectConfirmation Method="urn:oasis:names:tc:SAML:2.0:cm:bearer"><saml:SubjectConfirmationData NotOnOrAfter="${bearerNotOnOrAfter}" Recipient="${escapeXml(input.recipient ?? input.acsUrl)}"${inResponseTo}/></saml:SubjectConfirmation></saml:Subject>` +
+    `<saml:Conditions${conditionTimes}><saml:AudienceRestriction><saml:Audience>${escapeXml(input.audience)}</saml:Audience></saml:AudienceRestriction></saml:Conditions>` +
     `<saml:AuthnStatement AuthnInstant="${instant}" SessionIndex="_s${randomBytes(8).toString("hex")}"><saml:AuthnContext><saml:AuthnContextClassRef>urn:oasis:names:tc:SAML:2.0:ac:classes:PasswordProtectedTransport</saml:AuthnContextClassRef></saml:AuthnContext></saml:AuthnStatement>` +
     (attributes
       ? `<saml:AttributeStatement>${attributes}</saml:AttributeStatement>`
