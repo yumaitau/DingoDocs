@@ -140,6 +140,53 @@ run("email-only sign-in for TOTP-enrolled accounts", () => {
     expect(setsSessionCookie(response)).toBe(true);
     expect(await sessionCount(ids.unverifiedPlain)).toBe(1);
   });
+
+  // An OAuth identity with a matching verified email is implicitly linked and
+  // handleOAuthUserInfo then calls createSession inside /callback/:id.
+  async function createSessionInOAuthCallback(userId: string) {
+    const authContext = await modules.auth.$context;
+    // Any handler call initialises Better Auth's shared endpoint storage.
+    await modules.auth.handler(new Request(`${base}/api/auth/ok`));
+    const storage = (
+      globalThis as unknown as Record<
+        symbol,
+        {
+          context: {
+            endpointContextAsyncStorage?: {
+              run: <T>(store: unknown, fn: () => T) => T;
+            };
+          };
+        }
+      >
+    )[Symbol.for("better-auth:global")]?.context.endpointContextAsyncStorage;
+    expect(storage).toBeTruthy();
+    return storage!.run(
+      {
+        path: "/callback/:id",
+        context: authContext,
+        redirect: (url: string) =>
+          Object.assign(new Error("FOUND"), { status: "FOUND", url }),
+      },
+      () => authContext.internalAdapter.createSession(userId),
+    );
+  }
+
+  it("an OAuth callback issues no session to a TOTP-enrolled user", async () => {
+    await expect(
+      createSessionInOAuthCallback(ids.enrolled),
+    ).rejects.toMatchObject({
+      url: expect.stringContaining("/sign-in?error=two_factor_required"),
+    });
+    expect(await sessionCount(ids.enrolled)).toBe(0);
+  });
+
+  it("an OAuth callback still signs in a user without TOTP", async () => {
+    const before = await sessionCount(ids.plain);
+    await expect(
+      createSessionInOAuthCallback(ids.plain),
+    ).resolves.toMatchObject({ userId: ids.plain });
+    expect(await sessionCount(ids.plain)).toBe(before + 1);
+  });
 });
 
 async function load() {

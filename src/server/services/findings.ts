@@ -46,11 +46,9 @@ import {
   type EpssResponse,
   type KevFeed,
 } from "@/lib/intel/exploit";
-import {
-  assertPublicHttpUrl,
-  outboundFetchInit,
-} from "@/lib/security/outbound-url";
+import { outboundFetch } from "@/lib/security/outbound-url";
 import { emitDomainEvent } from "./domain-events";
+import { assertEngagementWritable } from "./engagement-guards";
 import { findingScheduleDefaults } from "./finding-schedule";
 
 export type FindingActor = { organisationId: string; userId: string };
@@ -799,6 +797,8 @@ export async function bulkUpdateFindings(
       )
       .for("update");
     if (rows.length !== uniqueIds.length) throw new FindingScopeError();
+    for (const engagementId of new Set(rows.map((row) => row.engagementId)))
+      await requireEngagement(tx, actor.organisationId, engagementId);
     const updated: (typeof findings.$inferSelect)[] = [];
     const transitioned: (typeof findings.$inferSelect)[] = [];
     for (const finding of rows) {
@@ -880,14 +880,10 @@ export async function enrichFindingIntel(
     if (!cve)
       return { ok: false, error: "Finding CVE must match CVE-YYYY-NNNN" };
 
-    const [epssEndpoint, kevEndpoint] = await Promise.all([
-      assertPublicHttpUrl(epssUrl(cve)),
-      assertPublicHttpUrl(kevUrl),
-    ]);
     const signal = AbortSignal.timeout(8_000);
     const [epssResponse, kevResponse] = await Promise.all([
-      fetch(epssEndpoint, { signal, ...outboundFetchInit }),
-      fetch(kevEndpoint, { signal, ...outboundFetchInit }),
+      outboundFetch(epssUrl(cve), { signal }),
+      outboundFetch(kevUrl, { signal }),
     ]);
     if (!epssResponse.ok || !kevResponse.ok)
       return {
@@ -964,6 +960,8 @@ async function transitionFindingInTransaction(
     actor.organisationId,
     input.findingId,
   );
+  // Archived/cancelled engagements are read-only for every transition.
+  await requireEngagement(tx, actor.organisationId, finding.engagementId);
   const workflowDecision = assertFindingTransition({
     from: finding.status,
     to: input.toStatus,
@@ -1083,6 +1081,7 @@ export async function addFindingComment(
     actor.organisationId,
     input.findingId,
   );
+  await requireEngagement(db, actor.organisationId, finding.engagementId);
   const [comment] = await db
     .insert(comments)
     .values({
@@ -1123,6 +1122,7 @@ export async function linkFindingEvidence(
       actor.organisationId,
       input.findingId,
     );
+    await requireEngagement(tx, actor.organisationId, finding.engagementId);
     const ids = [...new Set(input.evidenceIds)];
     const rows = ids.length
       ? await tx
@@ -1312,13 +1312,19 @@ async function requireFinding(
   return finding;
 }
 
+/** Loads an engagement for a write; archived or cancelled ones are rejected. */
 async function requireEngagement(
   query: Queryable,
   organisationId: string,
   engagementId: string,
 ) {
   const [engagement] = await query
-    .select({ id: engagements.id, clientId: engagements.clientId })
+    .select({
+      id: engagements.id,
+      clientId: engagements.clientId,
+      status: engagements.status,
+      archivedAt: engagements.archivedAt,
+    })
     .from(engagements)
     .where(
       and(
@@ -1329,6 +1335,7 @@ async function requireEngagement(
     )
     .limit(1);
   if (!engagement) throw new FindingScopeError();
+  assertEngagementWritable(engagement);
   return engagement;
 }
 

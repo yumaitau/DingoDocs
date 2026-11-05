@@ -119,10 +119,32 @@ export function isEngagementBoundPermission(
   );
 }
 
+/**
+ * Service-account keys (CI, scanners, agents) are not people, so they get an
+ * explicit allow-list rather than a role. They author drafts, notes, timeline
+ * entries and evidence; anything that approves, publishes, releases to
+ * clients, approves scope, exports data, or administers the organisation or
+ * its integrations stays with a human. Scope approval (scope:manage) is
+ * deliberately excluded, which also keeps service keys out of task, runbook
+ * and time writes that are gated on it.
+ */
+export const serviceAccountPermissions: readonly Permission[] = [
+  "finding:create",
+  "evidence:upload",
+];
+
+export function serviceAccountHasPermission(permission: Permission) {
+  return serviceAccountPermissions.includes(permission);
+}
+
 export function canSeeAllEngagements(actor: {
   role?: string | null;
   serviceAccountId?: string | null;
 }) {
+  // Service accounts see every engagement in their organisation because CI
+  // ingest targets many engagements with one key. Per-engagement grants for
+  // service accounts are deferred; until then the allow-list above limits
+  // what they can do, not where.
   if (actor.serviceAccountId) return true;
   return Boolean(actor.role && isOrganisationWideRole(actor.role));
 }
@@ -168,6 +190,14 @@ export function assertPermissionMatrix() {
     throw new Error("Consultants must not publish reports");
   if (hasPermission("reviewer", "finding:create"))
     throw new Error("Reviewer independence guard failed");
+  for (const permission of [
+    "finding:approve",
+    "report:publish",
+    "scope:manage",
+    "data:export",
+  ] as const)
+    if (serviceAccountHasPermission(permission))
+      throw new Error(`Service accounts must not hold ${permission}`);
   if (canGrantRole("organisation_administrator", "organisation_owner"))
     throw new Error("Administrators must not grant owner");
   if (canGrantRole("organisation_owner", "platform_administrator"))

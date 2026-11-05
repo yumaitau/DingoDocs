@@ -74,6 +74,8 @@ export const organisationMembers = pgTable(
     role: organisationRoleEnum("role").notNull(),
     invitedBy: uuid("invited_by").references(() => users.id),
     joinedAt: timestamp("joined_at", { withTimezone: true }),
+    /** Sessions created at or before this instant are refused for this tenant. */
+    sessionsRevokedAt: timestamp("sessions_revoked_at", { withTimezone: true }),
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),

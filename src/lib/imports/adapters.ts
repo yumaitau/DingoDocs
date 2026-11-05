@@ -25,6 +25,8 @@ export const importAdapterNames = [
   "json",
 ] as const;
 export type ImportAdapterName = (typeof importAdapterNames)[number];
+/** Largest scanner source accepted by the API, MCP and UI import paths. */
+export const maxScannerImportBytes = 2_000_000;
 export type NormalizedImportItem = {
   externalId?: string;
   title: string;
@@ -700,7 +702,7 @@ function parseNessus(xml: string) {
           text(item, "cvss3_base_score") || text(item, "cvss_base_score"),
         ),
         references: blocks(item, "see_also")
-          .map((value) => decodeXml(value.replace(/<[^>]+>/g, "").trim()))
+          .map((value) => decodeXml(stripTags(value).trim()))
           .filter(Boolean),
       });
     }
@@ -856,30 +858,92 @@ function csvRows(source: string) {
   }
   return rows;
 }
+/**
+ * Linear scan for `<tag ...>content</tag>` elements, matching tag names
+ * case-insensitively. A lazy `[\s\S]*?` regex rescans the rest of the input
+ * for every unclosed opening tag, which is quadratic on hostile uploads; here
+ * a missing `>` or closing tag ends the scan, since no later element can
+ * close either.
+ */
+function* elements(xml: string, tag: string, needClose = true) {
+  // ASCII-only lowercasing keeps indexes aligned with the original string.
+  const lower = xml.replace(/[A-Z]+/g, (value) => value.toLowerCase());
+  const open = `<${tag.toLowerCase()}`;
+  const close = `</${tag.toLowerCase()}>`;
+  let cursor = 0;
+  while (cursor < lower.length) {
+    const start = lower.indexOf(open, cursor);
+    if (start === -1) return;
+    const next = xml[start + open.length];
+    // `<hostname>` is not `<host>`; `<host/>` has no content.
+    if (next !== ">" && !(next !== undefined && /\s/.test(next))) {
+      cursor = start + 1;
+      continue;
+    }
+    const openEnd = lower.indexOf(">", start + open.length);
+    if (openEnd === -1) return;
+    if (!needClose) {
+      yield { start, openEnd, closeStart: -1, end: openEnd + 1 };
+      cursor = openEnd + 1;
+      continue;
+    }
+    const closeStart = lower.indexOf(close, openEnd + 1);
+    if (closeStart === -1) return;
+    const end = closeStart + close.length;
+    yield { start, openEnd, closeStart, end };
+    cursor = end;
+  }
+}
 function blocks(xml: string, tag: string) {
-  return [
-    ...xml.matchAll(
-      new RegExp(`<${tag}(?:\\s[^>]*)?>[\\s\\S]*?<\\/${tag}>`, "gi"),
-    ),
-  ].map((match) => match[0]);
+  return Array.from(elements(xml, tag), (element) =>
+    xml.slice(element.start, element.end),
+  );
 }
 function firstTag(xml: string, tag: string) {
-  return xml.match(new RegExp(`<${tag}(?:\\s[^>]*)?>`, "i"))?.[0] ?? "";
+  for (const element of elements(xml, tag, false))
+    return xml.slice(element.start, element.end);
+  return "";
 }
 function text(xml: string, tag: string) {
-  const match = xml.match(
-    new RegExp(`<${tag}(?:\\s[^>]*)?>([\\s\\S]*?)<\\/${tag}>`, "i"),
-  );
-  if (!match) return "";
-  const plain = match[1]
-    .split(/(<!\[CDATA\[[\s\S]*?\]\]>)/g)
-    .map((part) =>
-      part.startsWith("<![CDATA[") && part.endsWith("]]>")
-        ? part.slice(9, -3)
-        : part.replace(/<[^>]+>/g, ""),
-    )
-    .join("");
+  let content: string | undefined;
+  for (const element of elements(xml, tag)) {
+    content = xml.slice(element.openEnd + 1, element.closeStart);
+    break;
+  }
+  if (content === undefined) return "";
+  // Unwrap CDATA sections and strip tags from the text around them.
+  let plain = "";
+  let cursor = 0;
+  while (cursor < content.length) {
+    const start = content.indexOf("<![CDATA[", cursor);
+    const end = start === -1 ? -1 : content.indexOf("]]>", start + 9);
+    if (end === -1) break;
+    plain += stripTags(content.slice(cursor, start));
+    plain += content.slice(start + 9, end);
+    cursor = end + 3;
+  }
+  plain += stripTags(content.slice(cursor));
   return decodeXml(plain.trim());
+}
+/** Same result as `replace(/<[^>]+>/g, "")`, without its quadratic backtracking. */
+function stripTags(value: string) {
+  let result = "";
+  let cursor = 0;
+  let search = 0;
+  while (search < value.length) {
+    const open = value.indexOf("<", search);
+    if (open === -1) break;
+    const close = value.indexOf(">", open + 1);
+    if (close === -1) break;
+    if (close === open + 1) {
+      // `<>` is not a tag; keep it.
+      search = open + 1;
+      continue;
+    }
+    result += value.slice(cursor, open);
+    cursor = search = close + 1;
+  }
+  return result + value.slice(cursor);
 }
 function attr(tag: string, name: string) {
   const match = tag.match(

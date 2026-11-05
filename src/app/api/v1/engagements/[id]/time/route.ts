@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { apiWriteContext } from "@/lib/api/authentication";
 import { apiError } from "@/lib/api/responses";
+import { jsonWithLimit } from "@/lib/security/request-body";
 import { assertActorEngagementAccess } from "@/lib/permissions/require";
 import { logWorkspaceTime } from "@/server/services/engagement-workspace";
 
@@ -30,7 +31,7 @@ export async function POST(
     if (!principal.userId)
       throw new Error("API key does not have an attributable owner");
     await assertActorEngagementAccess(principal, id);
-    const input = bodySchema.parse(await request.json());
+    const input = bodySchema.parse(await jsonWithLimit(request));
     const startedAt = new Date(input.startedAt);
     if (Number.isNaN(startedAt.getTime()))
       throw new Error("startedAt is not a valid timestamp");

@@ -9,7 +9,6 @@ import {
   organisationMembers,
   organisations,
   scimTokens,
-  sessions,
   users,
   type SecurityPolicy,
 } from "@/db/schema";
@@ -286,18 +285,13 @@ async function setScimMembershipActive(
           "Cannot deactivate the last organisation owner",
         );
     }
+    // Revoke this tenant's sessions only. sessionsRevokedAt survives a later
+    // reactivation, so pre-deactivation sessions stay dead for this tenant.
+    const deactivatedAt = new Date();
     await db
       .update(organisationMembers)
-      .set({ deletedAt: new Date() })
+      .set({ deletedAt: deactivatedAt, sessionsRevokedAt: deactivatedAt })
       .where(eq(organisationMembers.id, membership.id));
-    await db
-      .delete(sessions)
-      .where(
-        and(
-          eq(sessions.userId, userId),
-          eq(sessions.activeOrganisationId, organisationId),
-        ),
-      );
     await auditScim(organisationId, "scim.user.deactivated", userId);
   }
 }

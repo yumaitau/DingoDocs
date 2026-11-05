@@ -416,6 +416,7 @@ run("restricted client portal and retest lifecycle with PostgreSQL", () => {
       name: "Client key must not bypass portal policy",
       kind: "personal",
       scopes: ["findings:read"],
+      expiresAt: new Date(Date.now() + 86_400_000),
     });
     const error = await modules
       .authenticateApiRequest(
@@ -658,6 +659,246 @@ run("restricted client portal and retest lifecycle with PostgreSQL", () => {
     );
   });
 
+  it("refuses to complete a finished retest, reopen a closed finding, or assign a client", async () => {
+    await expect(
+      modules.completeRetest(testerActor, {
+        attemptId,
+        outcome: "fixed",
+        comparison: {},
+      }),
+    ).rejects.toBeInstanceOf(modules.WorkspaceTransitionError);
+    await expect(
+      modules.scheduleRetest(testerActor, {
+        attemptId,
+        assignedTo: ids.tester,
+        scheduledFor: new Date(),
+      }),
+    ).rejects.toBeInstanceOf(modules.WorkspaceTransitionError);
+
+    const closedId = randomUUID();
+    await modules.db.insert(modules.findings).values({
+      id: closedId,
+      organisationId: ids.orgA,
+      engagementId: ids.engagementA,
+      identifier: "F-CLOSED",
+      title: "Closed finding",
+      status: "closed",
+      severity: "low",
+      clientVisible: true,
+      publishedAt: new Date(),
+    });
+    const [closedAttempt] = await modules.db
+      .insert(modules.retestAttempts)
+      .values({
+        organisationId: ids.orgA,
+        findingId: closedId,
+        requestedBy: ids.clientUser,
+      })
+      .returning();
+    await expect(
+      modules.completeRetest(testerActor, {
+        attemptId: closedAttempt!.id,
+        outcome: "not_remediated",
+        comparison: {},
+      }),
+    ).rejects.toThrow("closed finding");
+    const [closed] = await modules.db
+      .select()
+      .from(modules.findings)
+      .where(modules.eq(modules.findings.id, closedId));
+    expect(closed).toMatchObject({ status: "closed", version: 1 });
+
+    const raceId = randomUUID();
+    await modules.db.insert(modules.findings).values({
+      id: raceId,
+      organisationId: ids.orgA,
+      engagementId: ids.engagementA,
+      identifier: "F-RACE",
+      title: "Raced retest finding",
+      status: "ready_for_retest",
+      severity: "medium",
+      clientVisible: true,
+      publishedAt: new Date(),
+    });
+    const [raceAttempt] = await modules.db
+      .insert(modules.retestAttempts)
+      .values({
+        organisationId: ids.orgA,
+        findingId: raceId,
+        requestedBy: ids.clientUser,
+      })
+      .returning();
+    await expect(
+      modules.scheduleRetest(testerActor, {
+        attemptId: raceAttempt!.id,
+        assignedTo: ids.clientUser,
+        scheduledFor: new Date(),
+      }),
+    ).rejects.toThrow("active internal members");
+    const complete = () =>
+      modules.completeRetest(testerActor, {
+        attemptId: raceAttempt!.id,
+        outcome: "fixed",
+        comparison: {},
+      });
+    const results = await Promise.allSettled([complete(), complete()]);
+    expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(1);
+    const rejected = results.find((r) => r.status === "rejected");
+    expect(rejected?.reason).toBeInstanceOf(modules.WorkspaceTransitionError);
+    const [raced] = await modules.db
+      .select()
+      .from(modules.findings)
+      .where(modules.eq(modules.findings.id, raceId));
+    expect(raced).toMatchObject({ status: "resolved", version: 2 });
+    const transitions = await modules.db
+      .select()
+      .from(modules.findingTransitions)
+      .where(modules.eq(modules.findingTransitions.findingId, raceId));
+    expect(transitions.map((row) => [row.fromStatus, row.toStatus])).toEqual(
+      expect.arrayContaining([
+        ["ready_for_retest", "retested"],
+        ["retested", "resolved"],
+      ]),
+    );
+    expect(transitions).toHaveLength(2);
+    expect(transitions.every((row) => row.overrideReason === null)).toBe(true);
+  });
+
+  it.each([
+    {
+      from: "published" as const,
+      outcome: "not_remediated" as const,
+      to: "retested",
+      path: [
+        ["published", "ready_for_retest"],
+        ["ready_for_retest", "retested"],
+      ],
+    },
+    {
+      from: "resolved" as const,
+      outcome: "fixed" as const,
+      to: "resolved",
+      path: [
+        ["resolved", "ready_for_retest"],
+        ["ready_for_retest", "retested"],
+        ["retested", "resolved"],
+      ],
+    },
+  ])(
+    "completes a retest on a $from finding through the legal workflow path",
+    async ({ from, outcome, to, path }) => {
+      const findingId = randomUUID();
+      await modules.db.insert(modules.findings).values({
+        id: findingId,
+        organisationId: ids.orgA,
+        engagementId: ids.engagementA,
+        identifier: `F-${from.toUpperCase()}`,
+        title: `Retest from ${from}`,
+        status: from,
+        severity: "medium",
+        clientVisible: true,
+        publishedAt: new Date(),
+      });
+      const [attempt] = await modules.db
+        .insert(modules.retestAttempts)
+        .values({
+          organisationId: ids.orgA,
+          findingId,
+          requestedBy: ids.clientUser,
+        })
+        .returning();
+      const completed = await modules.completeRetest(testerActor, {
+        attemptId: attempt!.id,
+        outcome,
+        comparison: {},
+      });
+      expect(completed.attempt).toMatchObject({ status: "completed", outcome });
+      expect(completed.finding).toMatchObject({ status: to, version: 2 });
+      const transitions = await modules.db
+        .select()
+        .from(modules.findingTransitions)
+        .where(modules.eq(modules.findingTransitions.findingId, findingId))
+        .orderBy(modules.asc(modules.findingTransitions.createdAt));
+      expect(
+        transitions.map((row) => [row.fromStatus, row.toStatus]).sort(),
+      ).toEqual([...path].sort());
+      expect(transitions.every((row) => row.overrideReason === null)).toBe(
+        true,
+      );
+    },
+  );
+
+  it("rejects portal writes on a cancelled engagement", async () => {
+    await modules.db
+      .update(modules.engagements)
+      .set({ status: "cancelled" })
+      .where(modules.eq(modules.engagements.id, ids.engagementA));
+    try {
+      const { EngagementReadOnlyError } = await import("./engagement-guards");
+      await expect(
+        modules.addPortalComment(clientActor, {
+          targetType: "finding",
+          targetId: ids.findingVisible,
+          body: "Late comment",
+        }),
+      ).rejects.toBeInstanceOf(EngagementReadOnlyError);
+      await expect(
+        modules.submitRemediationUpdate(clientActor, {
+          findingId: ids.findingVisible,
+          status: "in_progress",
+        }),
+      ).rejects.toBeInstanceOf(EngagementReadOnlyError);
+    } finally {
+      await modules.db
+        .update(modules.engagements)
+        .set({ status: "proposed" })
+        .where(modules.eq(modules.engagements.id, ids.engagementA));
+    }
+  });
+
+  it("hides named-user, infected and unscanned evidence from the portal", async () => {
+    const named = randomUUID();
+    const own = randomUUID();
+    const pending = randomUUID();
+    const infected = randomUUID();
+    await modules.db.insert(modules.evidence).values([
+      {
+        ...evidenceRow(named, "named.txt", "client_visible"),
+        restrictions: { userIds: [ids.tester] },
+      },
+      {
+        ...evidenceRow(own, "own.txt", "client_visible"),
+        restrictions: { userIds: [ids.clientUser] },
+      },
+      {
+        ...evidenceRow(pending, "pending.txt", "client_visible"),
+        malwareScanStatus: "pending",
+      },
+      {
+        ...evidenceRow(infected, "infected.txt", "client_visible"),
+        malwareScanStatus: "infected",
+      },
+    ]);
+    try {
+      const portal = await modules.getPortalEngagement(
+        clientActor,
+        ids.engagementA,
+      );
+      const visible = portal.evidence.map((item) => item.id);
+      expect(visible).toContain(ids.evidenceVisible);
+      expect(visible).toContain(own);
+      expect(visible).not.toContain(named);
+      expect(visible).not.toContain(pending);
+      expect(visible).not.toContain(infected);
+    } finally {
+      await modules.db
+        .delete(modules.evidence)
+        .where(
+          modules.inArray(modules.evidence.id, [named, own, pending, infected]),
+        );
+    }
+  });
+
   function evidenceRow(
     id: string,
     filename: string,
@@ -695,12 +936,22 @@ function reportDefinition(): ReportTemplateDefinition {
 }
 
 async function load() {
-  const [{ db, sqlClient }, schema, service, api, drizzle] = await Promise.all([
-    import("@/db"),
-    import("@/db/schema"),
-    import("./client-portal"),
-    import("@/lib/api/authentication"),
-    import("drizzle-orm"),
-  ]);
-  return { db, sqlClient, ...schema, ...service, ...api, ...drizzle };
+  const [{ db, sqlClient }, schema, service, api, drizzle, guards] =
+    await Promise.all([
+      import("@/db"),
+      import("@/db/schema"),
+      import("./client-portal"),
+      import("@/lib/api/authentication"),
+      import("drizzle-orm"),
+      import("./engagement-guards"),
+    ]);
+  return {
+    db,
+    sqlClient,
+    ...schema,
+    ...service,
+    ...api,
+    ...drizzle,
+    WorkspaceTransitionError: guards.WorkspaceTransitionError,
+  };
 }

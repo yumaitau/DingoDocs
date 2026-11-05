@@ -1,5 +1,10 @@
 import type { DingoDocsApiClient } from "./client";
-import { getMcpTool, mcpToolJsonSchema, mcpTools } from "./tools";
+import {
+  assertAgentTransitionTarget,
+  getMcpTool,
+  mcpToolJsonSchema,
+  mcpTools,
+} from "./tools";
 
 export const MCP_PROTOCOL_VERSION = "2024-11-05";
 export const MCP_SERVER_INFO = {
@@ -52,7 +57,7 @@ export async function handleMcpJsonRpc(
         capabilities: { tools: { listChanged: false } },
         serverInfo: MCP_SERVER_INFO,
         instructions:
-          "DingoDocs MCP is a facade over the tenant-scoped REST API. Scanner ingest creates draft findings, testing-journal notes, and timeline events. Findings are never auto-published.",
+          "DingoDocs MCP is a facade over the tenant-scoped REST API. Scanner ingest creates draft findings, testing-journal notes, and timeline events. Findings are never auto-published. Approval and publication are human decisions; use the DingoDocs UI.",
       });
     }
     if (request.method === "ping") return result(id, {});
@@ -98,6 +103,9 @@ export async function handleMcpJsonRpc(
             true,
           ),
         );
+      // Defence in depth: the REST API is the security boundary, but agents
+      // get a clear refusal for release decisions whatever key they hold.
+      assertAgentTransitionTarget(tool.name, rawArgs.status);
       const parsed = tool.inputSchema.safeParse(rawArgs);
       if (!parsed.success)
         return result(

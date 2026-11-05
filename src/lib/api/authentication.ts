@@ -10,8 +10,14 @@ import {
   serviceAccounts,
   users,
 } from "@/db/schema";
+import { assertApiKeyExpiry } from "@/lib/api/key-lifetime";
 import type { ApiScope } from "@/lib/api/scopes";
-import type { Permission, Role } from "@/lib/permissions/matrix";
+import {
+  permissions,
+  serviceAccountHasPermission,
+  type Permission,
+  type Role,
+} from "@/lib/permissions/matrix";
 import {
   requireInternalOrganisationContext,
   requirePermission,
@@ -19,6 +25,10 @@ import {
 } from "@/lib/permissions/require";
 
 export { apiScopes, type ApiScope } from "@/lib/api/scopes";
+export {
+  defaultApiKeyLifetimeDays,
+  maxApiKeyLifetimeDays,
+} from "@/lib/api/key-lifetime";
 
 export class ApiAuthenticationError extends Error {
   constructor(
@@ -152,14 +162,48 @@ export async function apiReadContext(request: Request, scope: ApiScope) {
 }
 
 /**
- * Approval and publication are human decisions. Service-account keys (CI,
- * scanners, agents) author drafts only, whatever scopes they carry.
+ * Service-account keys author drafts only, whatever scopes they carry. The
+ * allow-list lives in the permission matrix; this name is kept for callers
+ * and tests that check the human-only permissions.
  */
-export const serviceAccountDeniedPermissions: readonly Permission[] = [
-  "finding:approve",
-  "report:publish",
-];
+export const serviceAccountDeniedPermissions: readonly Permission[] =
+  permissions.filter((permission) => !serviceAccountHasPermission(permission));
 
+function serviceAccountForbidden(permission: Permission) {
+  return new ApiAuthenticationError(
+    permission === "finding:approve" || permission === "report:publish"
+      ? "Service account API keys cannot approve or publish; a human reviewer must complete this step"
+      : `Service account API keys cannot use ${permission}; a human must complete this step`,
+    403,
+    "service_account_forbidden",
+  );
+}
+
+async function authorisePrincipal(
+  principal: ApiPrincipal,
+  permission: Permission,
+  input?: { engagementId?: string },
+) {
+  if (principal.serviceAccountId) {
+    if (!serviceAccountHasPermission(permission))
+      throw serviceAccountForbidden(permission);
+    return;
+  }
+  if (!principal.userId)
+    throw new ApiAuthenticationError("API key owner is unavailable");
+  await requireActorPermission(
+    { ...principal, userId: principal.userId },
+    permission,
+    input,
+  );
+}
+
+/**
+ * Authenticates and checks a role permission. API keys need the scope and,
+ * for personal keys, an owner role holding the permission; service keys need
+ * the permission on their allow-list. Session callers need the permission
+ * directly.
+ */
 export async function apiWriteContext(
   request: Request,
   scope: ApiScope,
@@ -168,27 +212,15 @@ export async function apiWriteContext(
 ) {
   const principal = await authenticateApiRequest(request, scope);
   if (principal) {
-    if (principal.serviceAccountId) {
-      if (serviceAccountDeniedPermissions.includes(permission))
-        throw new ApiAuthenticationError(
-          "Service account API keys cannot approve or publish; a human reviewer must complete this step",
-          403,
-          "service_account_forbidden",
-        );
-    } else {
-      if (!principal.userId)
-        throw new ApiAuthenticationError("API key owner is unavailable");
-      await requireActorPermission(
-        { ...principal, userId: principal.userId },
-        permission,
-        input,
-      );
-    }
+    await authorisePrincipal(principal, permission, input);
     return principal;
   }
   await requireInternalOrganisationContext();
   return requirePermission(permission, input);
 }
+
+/** Read that is role-checked like a write, for administrative listings. */
+export const apiReadContextWithPermission = apiWriteContext;
 
 export async function createApiCredential(
   actor: { organisationId: string; userId: string },
@@ -197,9 +229,10 @@ export async function createApiCredential(
     kind: "personal" | "service";
     scopes: ApiScope[];
     serviceAccountName?: string;
-    expiresAt?: Date;
+    expiresAt: Date;
   },
 ) {
+  assertApiKeyExpiry(input.expiresAt);
   const prefix = input.kind === "personal" ? "dd_pat" : "dd_svc";
   const plaintext = `${prefix}_${randomBytes(32).toString("base64url")}`;
   return db.transaction(async (tx) => {

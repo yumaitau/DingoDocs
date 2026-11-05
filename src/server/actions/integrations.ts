@@ -6,6 +6,7 @@ import {
   createApiCredential,
   revokeApiCredential,
 } from "@/lib/api/authentication";
+import { apiKeyExpiryFromDate } from "@/lib/api/key-lifetime";
 import { apiScopes } from "@/lib/api/scopes";
 import {
   aiConfirmation,
@@ -36,6 +37,7 @@ export async function createApiKeyAction(
     const kind = z.enum(["personal", "service"]).parse(formData.get("kind"));
     const expires = z
       .string()
+      .date()
       .optional()
       .parse(formData.get("expiresAt") || undefined);
     const credential = await createApiCredential(actor, {
@@ -54,7 +56,7 @@ export async function createApiKeyAction(
         .array(z.enum(apiScopes))
         .min(1)
         .parse(formData.getAll("scopes")),
-      expiresAt: expires ? new Date(`${expires}T23:59:59.999Z`) : undefined,
+      expiresAt: apiKeyExpiryFromDate(expires),
     });
     revalidatePath("/integrations");
     return {

@@ -3,8 +3,13 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/db";
 import { timelineEvents } from "@/db/schema";
-import { apiReadContext, apiWriteContext } from "@/lib/api/authentication";
+import {
+  ApiAuthenticationError,
+  apiReadContext,
+  apiWriteContext,
+} from "@/lib/api/authentication";
 import { apiError } from "@/lib/api/responses";
+import { jsonWithLimit } from "@/lib/security/request-body";
 import { assertActorEngagementAccess } from "@/lib/permissions/require";
 import { createTimelineEntry } from "@/server/services/engagement-workspace";
 
@@ -62,9 +67,22 @@ export async function POST(
     );
     if (!principal.userId)
       throw new Error("API key does not have an attributable owner");
-    const input = createSchema.parse(await request.json());
+    const input = createSchema.parse(await jsonWithLimit(request));
+    const serviceAccountId =
+      "serviceAccountId" in principal ? principal.serviceAccountId : undefined;
+    // Releasing an entry to the client is a human decision.
+    if (input.clientVisible && serviceAccountId)
+      throw new ApiAuthenticationError(
+        "Service account API keys cannot make timeline entries client visible; a human reviewer must release them",
+        403,
+        "service_account_forbidden",
+      );
     const entry = await createTimelineEntry(
-      { organisationId: principal.organisationId, userId: principal.userId },
+      {
+        organisationId: principal.organisationId,
+        userId: principal.userId,
+        serviceAccountId,
+      },
       {
         engagementId: id,
         phase: input.phase,

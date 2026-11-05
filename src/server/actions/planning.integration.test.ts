@@ -9,7 +9,10 @@ vi.mock("next/headers", () => ({
 }));
 vi.mock("next/cache", () => ({ revalidatePath: vi.fn() }));
 vi.mock("@/lib/auth/session", () => ({
-  requireSession: async () => ({ user: { id: session.userId } }),
+  requireSession: async () => ({
+    user: { id: session.userId },
+    session: { createdAt: new Date() },
+  }),
 }));
 vi.mock("@/lib/auth/mfa-policy", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/auth/mfa-policy")>()),

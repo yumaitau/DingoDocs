@@ -8,10 +8,7 @@ import {
   decryptIntegrationSecret,
   encryptIntegrationSecret,
 } from "@/lib/integrations/crypto";
-import {
-  assertPublicHttpUrl,
-  outboundFetchInit,
-} from "@/lib/security/outbound-url";
+import { outboundFetch } from "@/lib/security/outbound-url";
 
 export type IntegrationActor = { organisationId: string; userId: string };
 
@@ -93,31 +90,30 @@ export async function createAzureDevOpsIssue(
   const base =
     config.baseUrl?.replace(/\/+$/, "") ??
     `https://dev.azure.com/${encodeURIComponent(config.organisation)}`;
-  const url = await assertPublicHttpUrl(
+  const response = await outboundFetch(
     `${base}/${encodeURIComponent(config.project)}/_apis/wit/workitems/$Issue?api-version=7.1`,
-  );
-  const response = await fetch(url, {
-    method: "POST",
-    headers: {
-      authorization: `Basic ${Buffer.from(`:${config.pat}`).toString("base64")}`,
-      "content-type": "application/json-patch+json",
-      accept: "application/json",
+    {
+      method: "POST",
+      headers: {
+        authorization: `Basic ${Buffer.from(`:${config.pat}`).toString("base64")}`,
+        "content-type": "application/json-patch+json",
+        accept: "application/json",
+      },
+      body: JSON.stringify([
+        {
+          op: "add",
+          path: "/fields/System.Title",
+          value: input.title.slice(0, 255),
+        },
+        {
+          op: "add",
+          path: "/fields/System.Description",
+          value: input.description.slice(0, 30_000),
+        },
+      ]),
+      signal: AbortSignal.timeout(15_000),
     },
-    body: JSON.stringify([
-      {
-        op: "add",
-        path: "/fields/System.Title",
-        value: input.title.slice(0, 255),
-      },
-      {
-        op: "add",
-        path: "/fields/System.Description",
-        value: input.description.slice(0, 30_000),
-      },
-    ]),
-    signal: AbortSignal.timeout(15_000),
-    ...outboundFetchInit,
-  });
+  );
   if (!response.ok)
     throw new Error(
       `Azure DevOps create issue failed (HTTP ${response.status})`,

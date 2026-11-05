@@ -8,10 +8,7 @@ import {
   decryptIntegrationSecret,
   encryptIntegrationSecret,
 } from "@/lib/integrations/crypto";
-import {
-  assertPublicHttpUrl,
-  outboundFetchInit,
-} from "@/lib/security/outbound-url";
+import { outboundFetch } from "@/lib/security/outbound-url";
 
 export type IntegrationActor = { organisationId: string; userId: string };
 
@@ -94,24 +91,23 @@ export async function createGitHubIssue(
     /\/+$/,
     "",
   );
-  const url = await assertPublicHttpUrl(
+  const response = await outboundFetch(
     `${apiBase}/repos/${encodeURIComponent(config.owner)}/${encodeURIComponent(config.repo)}/issues`,
-  );
-  const response = await fetch(url, {
-    method: "POST",
-    headers: {
-      authorization: `Bearer ${config.token}`,
-      accept: "application/vnd.github+json",
-      "content-type": "application/json",
-      "x-github-api-version": "2022-11-28",
+    {
+      method: "POST",
+      headers: {
+        authorization: `Bearer ${config.token}`,
+        accept: "application/vnd.github+json",
+        "content-type": "application/json",
+        "x-github-api-version": "2022-11-28",
+      },
+      body: JSON.stringify({
+        title: input.title.slice(0, 256),
+        body: input.body.slice(0, 65_000),
+      }),
+      signal: AbortSignal.timeout(15_000),
     },
-    body: JSON.stringify({
-      title: input.title.slice(0, 256),
-      body: input.body.slice(0, 65_000),
-    }),
-    signal: AbortSignal.timeout(15_000),
-    ...outboundFetchInit,
-  });
+  );
   if (!response.ok)
     throw new Error(`GitHub create issue failed (HTTP ${response.status})`);
   const body = (await response.json()) as {

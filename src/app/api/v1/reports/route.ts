@@ -5,6 +5,7 @@ import { db } from "@/db";
 import { reports } from "@/db/schema";
 import { apiReadContext, apiWriteContext } from "@/lib/api/authentication";
 import { apiError } from "@/lib/api/responses";
+import { jsonWithLimit } from "@/lib/security/request-body";
 import { engagementVisibility } from "@/lib/permissions/access";
 import { assertActorEngagementAccess } from "@/lib/permissions/require";
 import { createReport } from "@/server/services/reports";
@@ -80,7 +81,10 @@ const createSchema = z.object({
 export async function POST(request: Request) {
   const requestId = request.headers.get("x-request-id");
   try {
-    const input = createSchema.parse(await request.json());
+    // Authenticate before reading the body; the permission check needs the
+    // engagement named in it.
+    await apiReadContext(request, "findings:write");
+    const input = createSchema.parse(await jsonWithLimit(request));
     const principal = await apiWriteContext(
       request,
       "findings:write",

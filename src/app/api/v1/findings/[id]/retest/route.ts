@@ -5,6 +5,7 @@ import { db } from "@/db";
 import { findings } from "@/db/schema";
 import { apiReadContext, apiWriteContext } from "@/lib/api/authentication";
 import { apiError, apiNotFound } from "@/lib/api/responses";
+import { optionalJsonWithLimit } from "@/lib/security/request-body";
 import { engagementVisibility } from "@/lib/permissions/access";
 import { requestRetestForApi } from "@/server/services/retest-api";
 
@@ -44,7 +45,7 @@ export async function POST(
     if (!writer.userId)
       throw new Error("API key does not have an attributable owner");
 
-    const input = bodySchema.parse(await request.json().catch(() => ({})));
+    const input = bodySchema.parse(await optionalJsonWithLimit(request));
     const attempt = await requestRetestForApi(
       { organisationId: writer.organisationId, userId: writer.userId },
       id,

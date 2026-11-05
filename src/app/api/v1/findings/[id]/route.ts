@@ -5,6 +5,7 @@ import { findings } from "@/db/schema";
 import { patchFindingInput } from "@/lib/api/finding-input";
 import { apiReadContext, apiWriteContext } from "@/lib/api/authentication";
 import { apiError, apiNotFound } from "@/lib/api/responses";
+import { jsonWithLimit } from "@/lib/security/request-body";
 import { engagementVisibility } from "@/lib/permissions/access";
 import { patchFindingNarrative } from "@/server/services/findings";
 
@@ -66,7 +67,7 @@ export async function PATCH(
     );
     if (!writer.userId)
       throw new Error("API key does not have an attributable owner");
-    const input = patchFindingInput.parse(await request.json());
+    const input = patchFindingInput.parse(await jsonWithLimit(request));
     const updated = await patchFindingNarrative(
       { organisationId: writer.organisationId, userId: writer.userId },
       {

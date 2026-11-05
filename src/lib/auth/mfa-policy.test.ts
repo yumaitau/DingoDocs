@@ -9,8 +9,9 @@ import {
 import {
   PATHNAME_HEADER,
   PATHNAME_SIGNATURE_HEADER,
-  signPathname,
-  verifiedPathnameFromHeaders,
+  REQUEST_METHOD_HEADER,
+  signRequest,
+  verifiedRequestFromHeaders,
 } from "./pathname-signature";
 
 const now = new Date("2026-06-15T00:00:00.000Z");
@@ -169,6 +170,7 @@ describe("mfaAccessDecision", () => {
       mfaAccessDecision({
         blocked: true,
         pathname: "/account/security",
+        method: "GET",
         serverAction: false,
       }),
     ).toBe("allow");
@@ -176,6 +178,7 @@ describe("mfaAccessDecision", () => {
       mfaAccessDecision({
         blocked: true,
         pathname: "/account/security/devices",
+        method: "GET",
         serverAction: false,
       }),
     ).toBe("allow");
@@ -183,6 +186,7 @@ describe("mfaAccessDecision", () => {
       mfaAccessDecision({
         blocked: true,
         pathname: "/api/auth/two-factor/enable",
+        method: "GET",
         serverAction: false,
       }),
     ).toBe("allow");
@@ -193,6 +197,7 @@ describe("mfaAccessDecision", () => {
       mfaAccessDecision({
         blocked: true,
         pathname: "/api/v1/tasks",
+        method: "GET",
         serverAction: false,
       }),
     ).toBe("deny");
@@ -200,6 +205,7 @@ describe("mfaAccessDecision", () => {
       mfaAccessDecision({
         blocked: true,
         pathname: "/account/security",
+        method: "POST",
         serverAction: true,
       }),
     ).toBe("deny");
@@ -207,6 +213,7 @@ describe("mfaAccessDecision", () => {
       mfaAccessDecision({
         blocked: true,
         pathname: null,
+        method: "GET",
         serverAction: false,
       }),
     ).toBe("deny");
@@ -217,6 +224,7 @@ describe("mfaAccessDecision", () => {
       mfaAccessDecision({
         blocked: true,
         pathname: "/dashboard",
+        method: "GET",
         serverAction: false,
       }),
     ).toBe("redirect");
@@ -224,41 +232,123 @@ describe("mfaAccessDecision", () => {
       mfaAccessDecision({
         blocked: false,
         pathname: "/dashboard",
+        method: "GET",
         serverAction: false,
       }),
     ).toBe("allow");
   });
 });
 
-describe("mfaAccessDecision with proxy-signed pathnames", () => {
+describe("mfaAccessDecision without a next-action header", () => {
+  it("denies a no-JS form POST to the account security page", () => {
+    for (const method of ["POST", "PUT", "PATCH", "DELETE"]) {
+      expect(
+        mfaAccessDecision({
+          blocked: true,
+          pathname: "/account/security",
+          method,
+          serverAction: false,
+        }),
+      ).toBe("deny");
+    }
+  });
+
+  it("denies when the method is unknown", () => {
+    expect(
+      mfaAccessDecision({
+        blocked: true,
+        pathname: "/account/security",
+        method: null,
+        serverAction: false,
+      }),
+    ).toBe("deny");
+  });
+
+  it("still allows HEAD and auth API calls of any method", () => {
+    expect(
+      mfaAccessDecision({
+        blocked: true,
+        pathname: "/account/security",
+        method: "HEAD",
+        serverAction: false,
+      }),
+    ).toBe("allow");
+    expect(
+      mfaAccessDecision({
+        blocked: true,
+        pathname: "/api/auth/two-factor/verify-totp",
+        method: "POST",
+        serverAction: false,
+      }),
+    ).toBe("allow");
+  });
+});
+
+describe("mfaAccessDecision with proxy-signed requests", () => {
   const secret = "test-secret-at-least-32-characters-long";
+  const signed = (method: string, pathname: string) =>
+    signRequest({ method, pathname }, secret)!;
   // What guardOrganisationMfa feeds mfaAccessDecision for a request.
   function decideFor(headers: Record<string, string>) {
+    const request = verifiedRequestFromHeaders(new Headers(headers), secret);
     return mfaAccessDecision({
       blocked: true,
-      pathname: verifiedPathnameFromHeaders(new Headers(headers), secret),
+      pathname: request?.pathname ?? null,
+      method: request?.method ?? null,
       serverAction: false,
     });
   }
 
   it("denies an /api/v1 request that spoofs an exempt x-pathname", () => {
-    expect(decideFor({ [PATHNAME_HEADER]: "/account/security" })).toBe("deny");
-    expect(decideFor({ [PATHNAME_HEADER]: "/api/auth" })).toBe("deny");
     expect(
       decideFor({
+        [REQUEST_METHOD_HEADER]: "GET",
         [PATHNAME_HEADER]: "/account/security",
-        [PATHNAME_SIGNATURE_HEADER]: signPathname("/api/v1/tasks", secret)!,
+      }),
+    ).toBe("deny");
+    expect(
+      decideFor({
+        [REQUEST_METHOD_HEADER]: "GET",
+        [PATHNAME_HEADER]: "/api/auth",
+      }),
+    ).toBe("deny");
+    expect(
+      decideFor({
+        [REQUEST_METHOD_HEADER]: "GET",
+        [PATHNAME_HEADER]: "/account/security",
+        [PATHNAME_SIGNATURE_HEADER]: signed("GET", "/api/v1/tasks"),
       }),
     ).toBe("deny");
   });
 
-  it("still allows the account security page when the proxy signed it", () => {
+  it("still allows the account security page when the proxy signed a GET", () => {
     expect(
       decideFor({
+        [REQUEST_METHOD_HEADER]: "GET",
         [PATHNAME_HEADER]: "/account/security",
-        [PATHNAME_SIGNATURE_HEADER]: signPathname("/account/security", secret)!,
+        [PATHNAME_SIGNATURE_HEADER]: signed("GET", "/account/security"),
       }),
     ).toBe("allow");
+  });
+
+  it("denies a signed POST to /account/security with no next-action header", () => {
+    expect(
+      decideFor({
+        [REQUEST_METHOD_HEADER]: "POST",
+        [PATHNAME_HEADER]: "/account/security",
+        [PATHNAME_SIGNATURE_HEADER]: signed("POST", "/account/security"),
+      }),
+    ).toBe("deny");
+  });
+
+  it("denies a POST that relabels itself as GET", () => {
+    expect(
+      decideFor({
+        [REQUEST_METHOD_HEADER]: "GET",
+        [PATHNAME_HEADER]: "/account/security",
+        [PATHNAME_SIGNATURE_HEADER]: signed("POST", "/account/security"),
+      }),
+    ).toBe("deny");
   });
 });
 

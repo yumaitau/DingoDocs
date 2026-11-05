@@ -13,6 +13,8 @@ const MFA_ADMIN_ROLES = new Set<string>([
   "client_administrator",
 ]);
 
+export { MFA_MODES, type MfaMode } from "./mfa-modes";
+
 export const MFA_REQUIRED_MESSAGE = "Multi-factor authentication is required";
 export const MFA_ENROLMENT_PATH = "/account/security";
 
@@ -85,19 +87,23 @@ export function isAuthApiPath(pathname: string | null | undefined) {
   return path === "/api/auth" || path.startsWith("/api/auth/");
 }
 
+const SAFE_METHODS = new Set(["GET", "HEAD"]);
+
 export function mfaAccessDecision(input: {
   blocked: boolean;
   pathname: string | null;
+  /** Proxy-signed request method; null when unknown or unverified. */
+  method: string | null;
   serverAction: boolean;
 }): "allow" | "redirect" | "deny" {
   if (!input.blocked || isAuthApiPath(input.pathname)) return "allow";
-  if (!input.serverAction && isAccountSecurityPath(input.pathname))
-    return "allow";
-  if (
-    input.serverAction ||
-    !input.pathname ||
-    input.pathname.startsWith("/api/")
-  )
+  // Next also runs server actions from no-JS form POSTs that carry
+  // $ACTION_ID_ fields and no next-action header, so any non-GET/HEAD (or
+  // unknown) method counts as a server action.
+  const serverAction =
+    input.serverAction || !input.method || !SAFE_METHODS.has(input.method);
+  if (!serverAction && isAccountSecurityPath(input.pathname)) return "allow";
+  if (serverAction || !input.pathname || input.pathname.startsWith("/api/"))
     return "deny";
   return "redirect";
 }

@@ -5,6 +5,7 @@ import { db } from "@/db";
 import { findingTemplates } from "@/db/schema";
 import { apiReadContext, apiWriteContext } from "@/lib/api/authentication";
 import { apiError, apiNotFound } from "@/lib/api/responses";
+import { jsonWithLimit } from "@/lib/security/request-body";
 import { reviseFindingTemplate } from "@/server/services/findings";
 
 const reviseSchema = z
@@ -77,7 +78,7 @@ export async function POST(
     );
     if (!principal.userId)
       throw new Error("API key does not have an attributable owner");
-    const changes = reviseSchema.parse(await request.json());
+    const changes = reviseSchema.parse(await jsonWithLimit(request));
     const template = await reviseFindingTemplate(
       { organisationId: principal.organisationId, userId: principal.userId },
       id,

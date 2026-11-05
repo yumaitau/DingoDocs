@@ -5,6 +5,7 @@ import { db } from "@/db";
 import { notes } from "@/db/schema";
 import { apiReadContext, apiWriteContext } from "@/lib/api/authentication";
 import { apiError } from "@/lib/api/responses";
+import { jsonWithLimit } from "@/lib/security/request-body";
 import { assertActorEngagementAccess } from "@/lib/permissions/require";
 import { createWorkspaceNote } from "@/server/services/engagement-workspace";
 import { visibleToAuthor } from "@/lib/permissions/visibility";
@@ -70,7 +71,7 @@ export async function POST(
     );
     if (!principal.userId)
       throw new Error("API key does not have an attributable owner");
-    const input = createSchema.parse(await request.json());
+    const input = createSchema.parse(await jsonWithLimit(request));
     const note = await createWorkspaceNote(
       { organisationId: principal.organisationId, userId: principal.userId },
       { engagementId: id, ...input },

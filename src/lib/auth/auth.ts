@@ -12,7 +12,7 @@ import {
 import { db } from "@/db";
 import {
   accounts,
-  auditEvents,
+  organisationMembers,
   passkeys,
   sessions,
   twoFactor as twoFactorRecords,
@@ -24,7 +24,9 @@ import { authProviderConfiguration } from "@/lib/auth/providers";
 import { DEFAULT_TIME_ZONE } from "@/lib/time-zone";
 import { DEVELOPMENT_AUTH_SECRET } from "@/lib/auth/secret";
 import { createSecondFactorSessionGuard } from "@/lib/auth/second-factor-session-guard";
-import { eq } from "drizzle-orm";
+import { insertAuthenticationAudit } from "@/lib/auth/authentication-audit";
+import { createRevokedSessionGuard } from "@/lib/auth/revoked-session-guard";
+import { and, eq, gte } from "drizzle-orm";
 
 const secret = process.env.BETTER_AUTH_SECRET;
 const providerConfiguration = authProviderConfiguration();
@@ -65,6 +67,27 @@ export const auth = betterAuth({
       },
     },
   },
+  hooks: {
+    // Tenant revocation keeps the session row, so stop a revoked session
+    // minting a replacement (newer createdAt) or registering a passkey.
+    before: createRevokedSessionGuard(async (token) => {
+      const [revoked] = await db
+        .select({ id: organisationMembers.id })
+        .from(sessions)
+        .innerJoin(
+          organisationMembers,
+          eq(organisationMembers.userId, sessions.userId),
+        )
+        .where(
+          and(
+            eq(sessions.token, token),
+            gte(organisationMembers.sessionsRevokedAt, sessions.createdAt),
+          ),
+        )
+        .limit(1);
+      return Boolean(revoked);
+    }),
+  },
   databaseHooks: {
     user: {
       create: {
@@ -75,8 +98,10 @@ export const auth = betterAuth({
     },
     session: {
       create: {
-        // Magic-link and verify-email sign-in prove only email possession, so
-        // TOTP-enrolled accounts must use password + code instead.
+        // Magic links, verify-email auto sign-in and OAuth callbacks (which
+        // implicitly link a matching verified email) prove only email or IdP
+        // possession, so TOTP-enrolled accounts must use password + code or a
+        // passkey instead. Allow-listed in the guard.
         before: createSecondFactorSessionGuard(async (userId) => {
           const [row] = await db
             .select({ twoFactorEnabled: users.twoFactorEnabled })
@@ -86,28 +111,34 @@ export const auth = betterAuth({
           return row?.twoFactorEnabled === true;
         }),
         after: async (session, context) => {
-          await db.insert(auditEvents).values({
-            actorId: session.userId,
-            action: "authentication.session.created",
-            targetType: "session",
-            targetId: session.id,
-            ipAddress: session.ipAddress,
-            userAgent: session.userAgent,
-            requestId: context?.request?.headers.get("x-request-id"),
-          });
+          await insertAuthenticationAudit(
+            {
+              actorId: session.userId,
+              action: "authentication.session.created",
+              targetType: "session",
+              targetId: session.id,
+              ipAddress: session.ipAddress,
+              userAgent: session.userAgent,
+              requestId: context?.request?.headers.get("x-request-id"),
+            },
+            session.userId,
+          );
         },
       },
       delete: {
         after: async (session, context) => {
-          await db.insert(auditEvents).values({
-            actorId: session.userId,
-            action: "authentication.session.ended",
-            targetType: "session",
-            targetId: session.id,
-            ipAddress: session.ipAddress,
-            userAgent: session.userAgent,
-            requestId: context?.request?.headers.get("x-request-id"),
-          });
+          await insertAuthenticationAudit(
+            {
+              actorId: session.userId,
+              action: "authentication.session.ended",
+              targetType: "session",
+              targetId: session.id,
+              ipAddress: session.ipAddress,
+              userAgent: session.userAgent,
+              requestId: context?.request?.headers.get("x-request-id"),
+            },
+            session.userId,
+          );
         },
       },
     },

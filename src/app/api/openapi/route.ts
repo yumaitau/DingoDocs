@@ -150,8 +150,9 @@ export function GET() {
       },
       "/reports/{id}/export": {
         post: {
-          summary: "Return report export metadata or queue generation",
-          security: [{ bearerAuth: ["reports:read"] }, { cookieAuth: [] }],
+          summary:
+            "Return report export metadata or queue generation (requires data:export; service-account keys are denied)",
+          security: [{ bearerAuth: ["findings:write"] }, { cookieAuth: [] }],
           parameters: [
             {
               name: "id",

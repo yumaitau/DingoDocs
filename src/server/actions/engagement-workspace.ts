@@ -81,7 +81,8 @@ export async function approveScopeVersionAction(
   formData: FormData,
 ) {
   id.parse(engagementId);
-  const context = await requirePermission("scope:manage", { engagementId });
+  // Approval is an engagement-level sign-off, not a scope edit.
+  const context = await requirePermission("engagement:edit", { engagementId });
   const { scopeVersionId } = z
     .object({ scopeVersionId: id })
     .parse(Object.fromEntries(formData));
@@ -315,7 +316,6 @@ export async function transitionEngagementAction(
   formData: FormData,
 ) {
   id.parse(engagementId);
-  const context = await requirePermission("engagement:edit", { engagementId });
   const input = z
     .object({
       toStatus: z.enum([
@@ -336,6 +336,13 @@ export async function transitionEngagementAction(
       reason: z.string().trim().max(500).optional(),
     })
     .parse(Object.fromEntries(formData));
+  // Archiving or cancelling ends the engagement; it needs the archive right.
+  const context = await requirePermission(
+    input.toStatus === "archived" || input.toStatus === "cancelled"
+      ? "engagement:archive"
+      : "engagement:edit",
+    { engagementId },
+  );
   await transitionEngagement(context, { engagementId, ...input });
   refresh(engagementId);
 }

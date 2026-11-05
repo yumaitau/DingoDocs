@@ -1,6 +1,15 @@
 import "server-only";
 
-import { and, asc, desc, eq, inArray, isNotNull, isNull } from "drizzle-orm";
+import {
+  and,
+  asc,
+  desc,
+  eq,
+  inArray,
+  isNotNull,
+  isNull,
+  notInArray,
+} from "drizzle-orm";
 import { db } from "@/db";
 import {
   auditEvents,
@@ -12,6 +21,7 @@ import {
   findings,
   findingTransitions,
   findingVersions,
+  organisationMembers,
   remediationUpdates,
   reports,
   reportReviews,
@@ -22,7 +32,12 @@ import {
   retestNotes,
   scopeItems,
   scopeVersions,
+  users,
 } from "@/db/schema";
+import {
+  canTransitionFinding,
+  type FindingStatus,
+} from "@/features/findings/workflow";
 import {
   PortalNotFoundError,
   portalEngagementQuery,
@@ -34,6 +49,11 @@ import {
 } from "@/lib/permissions/require";
 import { CommentError, createComment, replyComment } from "./comments";
 import { emitDomainEvent, withClientAudience } from "./domain-events";
+import {
+  assertEngagementWritable,
+  WorkspaceTransitionError,
+} from "./engagement-guards";
+import { evidenceAccessCondition } from "./evidence";
 import { createReportRevision } from "./reports";
 
 export type PortalActor = { organisationId: string; userId: string };
@@ -189,9 +209,11 @@ export async function getPortalEngagement(
             eq(evidence.organisationId, actor.organisationId),
             eq(evidence.clientId, engagement.clientId),
             eq(evidence.engagementId, engagementId),
-            eq(evidence.classification, "client_visible"),
-            isNull(evidence.deletedAt),
-            isNull(evidence.quarantinedAt),
+            evidenceAccessCondition({
+              userId: actor.userId,
+              canViewRestricted: false,
+              clientVisibleOnly: true,
+            }),
           ),
         )
         .orderBy(desc(evidence.createdAt)),
@@ -358,8 +380,21 @@ async function requireVisibleFinding(actor: PortalActor, findingId: string) {
     )
     .limit(1);
   if (!rows[0]) throw new PortalNotFoundError();
-  await requirePortalEngagement(actor, rows[0].engagementId, true);
+  await requireWritablePortalEngagement(actor, rows[0].engagementId);
   return rows[0].finding;
+}
+
+/**
+ * Write grant plus the read-only rule: the portal query already hides
+ * archived engagements; cancelled ones stay visible but cannot be changed.
+ */
+async function requireWritablePortalEngagement(
+  actor: PortalActor,
+  engagementId: string,
+) {
+  const grant = await requirePortalEngagement(actor, engagementId, true);
+  assertEngagementWritable({ status: grant.status, archivedAt: null });
+  return grant;
 }
 
 export async function addPortalComment(
@@ -402,7 +437,7 @@ export async function addPortalComment(
       )
       .limit(1);
     if (!row[0]) throw new PortalNotFoundError();
-    await requirePortalEngagement(actor, row[0].engagementId, true);
+    await requireWritablePortalEngagement(actor, row[0].engagementId);
     title = "Comment on report";
     actionUrl = `/reports/${input.targetId}`;
   }
@@ -621,7 +656,7 @@ export async function approvePortalReport(
     .limit(1);
   const current = rows[0];
   if (!current) throw new PortalNotFoundError();
-  await requirePortalEngagement(actor, current.report.engagementId, true);
+  await requireWritablePortalEngagement(actor, current.report.engagementId);
   return db.transaction(async (tx) => {
     const now = new Date();
     const [version] = await tx
@@ -691,25 +726,166 @@ async function requireInternalRetest(actor: PortalActor, attemptId: string) {
   return rows[0];
 }
 
+/** Attempts that can still be scheduled or completed. */
+const openRetestStatuses = ["requested", "scheduled"];
+/**
+ * Finding statuses from which a retest outcome can be recorded. Matches the
+ * statuses requestRetest accepts; closed is terminal.
+ */
+const retestableFindingStatuses: readonly FindingStatus[] = [
+  "published",
+  "ready_for_retest",
+  "remediation_in_progress",
+  "retested",
+  "resolved",
+  "risk_accepted",
+];
+
+type Transaction = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+/**
+ * Locks the attempt, then its finding, and re-checks both under the lock so
+ * concurrent schedule/complete calls serialise and cannot act twice.
+ */
+async function lockOpenRetest(
+  tx: Transaction,
+  actor: PortalActor,
+  attemptId: string,
+) {
+  const [attempt] = await tx
+    .select()
+    .from(retestAttempts)
+    .where(
+      and(
+        eq(retestAttempts.id, attemptId),
+        eq(retestAttempts.organisationId, actor.organisationId),
+      ),
+    )
+    .for("update");
+  if (!attempt) throw new PortalNotFoundError();
+  const [finding] = await tx
+    .select()
+    .from(findings)
+    .where(
+      and(
+        eq(findings.id, attempt.findingId),
+        eq(findings.organisationId, actor.organisationId),
+        isNull(findings.deletedAt),
+      ),
+    )
+    .for("update");
+  if (!finding) throw new PortalNotFoundError();
+  const [engagement] = await tx
+    .select({
+      status: engagements.status,
+      archivedAt: engagements.archivedAt,
+    })
+    .from(engagements)
+    .where(
+      and(
+        eq(engagements.id, finding.engagementId),
+        eq(engagements.organisationId, actor.organisationId),
+        isNull(engagements.deletedAt),
+      ),
+    )
+    .limit(1);
+  if (!engagement) throw new PortalNotFoundError();
+  assertEngagementWritable(engagement);
+  if (!openRetestStatuses.includes(attempt.status))
+    throw new WorkspaceTransitionError(
+      `A ${attempt.status} retest cannot be changed`,
+    );
+  if (!retestableFindingStatuses.includes(finding.status))
+    throw new WorkspaceTransitionError(
+      `A retest cannot be recorded for a ${finding.status} finding`,
+    );
+  return { attempt, finding };
+}
+
+/** Retest assignees must be active internal (non-client) members. */
+async function requireInternalAssignee(
+  tx: Transaction,
+  actor: PortalActor,
+  userId: string,
+) {
+  const [member] = await tx
+    .select({ userId: organisationMembers.userId })
+    .from(organisationMembers)
+    .innerJoin(users, eq(users.id, organisationMembers.userId))
+    .where(
+      and(
+        eq(organisationMembers.organisationId, actor.organisationId),
+        eq(organisationMembers.userId, userId),
+        isNull(organisationMembers.deletedAt),
+        notInArray(organisationMembers.role, [
+          "client_user",
+          "client_administrator",
+        ]),
+        isNull(users.disabledAt),
+        eq(users.banned, false),
+      ),
+    )
+    .limit(1);
+  if (!member)
+    throw new WorkspaceTransitionError(
+      "Retests can only be assigned to active internal members",
+    );
+}
+
+/**
+ * The legal workflow path from the finding's current status to the retest
+ * result. Every hop is checked against the finding workflow and recorded,
+ * so no override is needed.
+ */
+function retestTransitionPath(
+  from: FindingStatus,
+  to: "retested" | "resolved" | "risk_accepted",
+) {
+  const path: FindingStatus[] = [];
+  if (from === "retested") path.push("remediation_in_progress");
+  if (from !== "ready_for_retest") path.push("ready_for_retest");
+  path.push("retested");
+  if (to !== "retested") path.push(to);
+  let current = from;
+  for (const next of path) {
+    if (!canTransitionFinding(current, next))
+      throw new WorkspaceTransitionError(
+        `Finding cannot transition from ${current} to ${next}`,
+      );
+    current = next;
+  }
+  return path;
+}
+
 export async function scheduleRetest(
   actor: PortalActor,
   input: { attemptId: string; assignedTo: string; scheduledFor: Date },
 ) {
   const { finding } = await requireInternalRetest(actor, input.attemptId);
-  const [attempt] = await db
-    .update(retestAttempts)
-    .set({
-      assignedTo: input.assignedTo,
-      scheduledFor: input.scheduledFor,
-      status: "scheduled",
-    })
-    .where(
-      and(
-        eq(retestAttempts.id, input.attemptId),
-        eq(retestAttempts.organisationId, actor.organisationId),
-      ),
-    )
-    .returning();
+  const attempt = await db.transaction(async (tx) => {
+    const locked = await lockOpenRetest(tx, actor, input.attemptId);
+    await requireInternalAssignee(tx, actor, input.assignedTo);
+    const [attempt] = await tx
+      .update(retestAttempts)
+      .set({
+        assignedTo: input.assignedTo,
+        scheduledFor: input.scheduledFor,
+        status: "scheduled",
+      })
+      .where(
+        and(
+          eq(retestAttempts.id, input.attemptId),
+          eq(retestAttempts.organisationId, actor.organisationId),
+          eq(retestAttempts.status, locked.attempt.status),
+        ),
+      )
+      .returning();
+    if (!attempt)
+      throw new WorkspaceTransitionError(
+        "Retest changed; reload and try again",
+      );
+    return attempt;
+  });
   if (attempt) {
     await emitDomainEvent({
       organisationId: actor.organisationId,
@@ -787,33 +963,51 @@ export async function completeRetest(
       : input.outcome === "risk_accepted"
         ? "risk_accepted"
         : "retested";
-  const nextVersion = current.finding.version + 1;
   await db.transaction(async (tx) => {
-    await tx
+    // Re-read both rows under lock: the pre-check above ran outside the
+    // transaction and a concurrent completion may have won since.
+    const { attempt, finding } = await lockOpenRetest(
+      tx,
+      actor,
+      input.attemptId,
+    );
+    const path = retestTransitionPath(finding.status, nextStatus);
+    const nextVersion = finding.version + 1;
+    const [completed] = await tx
       .update(retestAttempts)
       .set({
         status: "completed",
         outcome: input.outcome,
-        notes: input.notes?.trim() || current.attempt.notes,
+        notes: input.notes?.trim() || attempt.notes,
         comparison: input.comparison,
         completedAt: new Date(),
       })
-      .where(eq(retestAttempts.id, input.attemptId));
+      .where(
+        and(
+          eq(retestAttempts.id, attempt.id),
+          inArray(retestAttempts.status, openRetestStatuses),
+        ),
+      )
+      .returning({ id: retestAttempts.id });
+    if (!completed)
+      throw new WorkspaceTransitionError(
+        "Retest changed; reload and try again",
+      );
     const snapshot = {
-      ...current.finding,
+      ...finding,
       status: nextStatus,
       retestStatus: input.outcome,
       version: nextVersion,
     };
     await tx.insert(findingVersions).values({
       organisationId: actor.organisationId,
-      findingId: current.finding.id,
+      findingId: finding.id,
       version: nextVersion,
       snapshot,
       changedBy: actor.userId,
       changeSummary: `Retest completed: ${input.outcome}`,
     });
-    await tx
+    const [updated] = await tx
       .update(findings)
       .set({
         status: nextStatus,
@@ -821,17 +1015,32 @@ export async function completeRetest(
         version: nextVersion,
         updatedAt: new Date(),
       })
-      .where(eq(findings.id, current.finding.id));
-    await tx.insert(findingTransitions).values({
-      organisationId: actor.organisationId,
-      findingId: current.finding.id,
-      fromStatus: current.finding.status,
-      toStatus: nextStatus,
-      actorId: actor.userId,
-      comment: input.notes,
-      findingVersion: nextVersion,
-      overrideReason: "Retest outcome",
-    });
+      .where(
+        and(
+          eq(findings.id, finding.id),
+          eq(findings.organisationId, actor.organisationId),
+          eq(findings.status, finding.status),
+          eq(findings.version, finding.version),
+        ),
+      )
+      .returning({ id: findings.id });
+    if (!updated)
+      throw new WorkspaceTransitionError(
+        "Finding changed; reload and try again",
+      );
+    let fromStatus = finding.status;
+    for (const toStatus of path) {
+      await tx.insert(findingTransitions).values({
+        organisationId: actor.organisationId,
+        findingId: finding.id,
+        fromStatus,
+        toStatus,
+        actorId: actor.userId,
+        comment: input.notes,
+        findingVersion: nextVersion,
+      });
+      fromStatus = toStatus;
+    }
     await tx.insert(auditEvents).values({
       organisationId: actor.organisationId,
       actorId: actor.userId,
@@ -839,8 +1048,8 @@ export async function completeRetest(
       targetType: "retest_attempt",
       targetId: input.attemptId,
       metadata: {
-        findingId: current.finding.id,
-        originalFindingVersion: current.attempt.originalFindingVersion,
+        findingId: finding.id,
+        originalFindingVersion: attempt.originalFindingVersion,
         resultFindingVersion: nextVersion,
         outcome: input.outcome,
       },

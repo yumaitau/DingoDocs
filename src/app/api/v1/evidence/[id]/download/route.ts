@@ -5,6 +5,7 @@ import {
   rolesForOperation,
 } from "@/lib/permissions/require";
 import { storage } from "@/lib/storage";
+import { attachmentDisposition } from "@/lib/storage/s3";
 import {
   auditEvidenceDownload,
   EvidenceScopeError,
@@ -51,14 +52,17 @@ async function handleDownload(context: { params: Promise<{ id: string }> }) {
   const provider = storage();
   await auditEvidenceDownload(actor, row);
   const signed = provider.createDownloadUrl
-    ? await provider.createDownloadUrl(row.storageKey, 120)
+    ? await provider.createDownloadUrl(row.storageKey, 120, {
+        filename: row.originalFilename,
+        contentType: row.mediaType,
+      })
     : null;
   if (signed) return Response.redirect(signed, 303);
   return new Response(await provider.get(row.storageKey), {
     headers: {
       "content-type": row.mediaType,
       "content-length": String(row.sizeBytes),
-      "content-disposition": `attachment; filename="${row.originalFilename}"`,
+      "content-disposition": attachmentDisposition(row.originalFilename),
       "cache-control": "private, no-store",
       "x-content-type-options": "nosniff",
     },

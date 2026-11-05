@@ -456,6 +456,70 @@ run("report engine with PostgreSQL and storage fixtures", () => {
       ),
     ).rejects.toBeInstanceOf(modules.ReportScopeError);
   });
+
+  it("freezes every report mutation once the engagement is archived", async () => {
+    const template = await modules.createReportTemplate(author, {
+      name: "Frozen layout",
+      definition: definition(),
+    });
+    const draft = await modules.createReport(author, {
+      engagementId: ids.engagement,
+      templateId: template!.id,
+      title: "Frozen draft",
+    });
+    const { EngagementReadOnlyError } = await import("./engagement-guards");
+    await modules.db
+      .update(modules.engagements)
+      .set({ status: "archived", archivedAt: new Date() })
+      .where(modules.eq(modules.engagements.id, ids.engagement));
+    try {
+      const frozen = [
+        () =>
+          modules.createReport(author, {
+            engagementId: ids.engagement,
+            templateId: template!.id,
+            title: "Late report",
+          }),
+        () =>
+          modules.saveReportDraft(author, draft.report!.id, {
+            versionId: draft.version!.id,
+            expectedRevision: "initial",
+            definition: definition(),
+          }),
+        () =>
+          modules.transitionReport(author, {
+            reportId: draft.report!.id,
+            toStatus: "internal_review",
+          }),
+        () =>
+          modules.transitionReport(approver, {
+            reportId: reportId,
+            toStatus: "archived",
+          }),
+        () => modules.createReportRevision(author, reportId),
+        () => modules.refreshReportFindings(author, draft.report!.id),
+        () => modules.queueReportGeneration(author, draft.report!.id, ["html"]),
+      ];
+      for (const mutation of frozen)
+        await expect(mutation()).rejects.toBeInstanceOf(
+          EngagementReadOnlyError,
+        );
+      const [unchanged] = await modules.db
+        .select({ status: modules.reports.status })
+        .from(modules.reports)
+        .where(modules.eq(modules.reports.id, draft.report!.id));
+      expect(unchanged?.status).toBe("draft");
+      // Reads still work on a frozen engagement.
+      await expect(
+        modules.getReportWorkspace(ids.orgA, draft.report!.id),
+      ).resolves.toBeTruthy();
+    } finally {
+      await modules.db
+        .update(modules.engagements)
+        .set({ status: "reporting", archivedAt: null })
+        .where(modules.eq(modules.engagements.id, ids.engagement));
+    }
+  });
 });
 
 function definition(): ReportTemplateDefinition {

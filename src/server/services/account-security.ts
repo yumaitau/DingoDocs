@@ -1,5 +1,5 @@
 import { createHash, randomBytes } from "node:crypto";
-import { and, desc, eq, gt, inArray, isNull } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, isNull, lte } from "drizzle-orm";
 import { db } from "@/db";
 import {
   auditEvents,
@@ -9,6 +9,7 @@ import {
   users,
 } from "@/db/schema";
 import { sendAuthenticationEmail } from "@/lib/email/send";
+import { sessionRevokedForMembership } from "@/lib/auth/membership-sessions";
 import { canGrantRole, type Role } from "@/lib/permissions/matrix";
 import { emitDomainEvent } from "./domain-events";
 
@@ -70,17 +71,30 @@ export async function revokeOrganisationUserSessions(
   if (!member) throw new Error("User is not an active organisation member");
   if (!canGrantRole(actorRole, member.role as Role))
     throw new Error("Cannot revoke sessions for a more privileged member");
+  // Tenant-scoped: existing sessions stop working for this organisation only,
+  // so one tenant's administrator cannot sign the user out of other tenants.
+  const revokedAt = new Date();
   const revoked = await db
-    .delete(sessions)
-    .where(eq(sessions.userId, targetUserId))
-    .returning({ id: sessions.id });
+    .select({ id: sessions.id })
+    .from(sessions)
+    .where(
+      and(
+        eq(sessions.userId, targetUserId),
+        lte(sessions.createdAt, revokedAt),
+        gt(sessions.expiresAt, revokedAt),
+      ),
+    );
+  await db
+    .update(organisationMembers)
+    .set({ sessionsRevokedAt: revokedAt })
+    .where(eq(organisationMembers.id, member.id));
   await db.insert(auditEvents).values({
     organisationId: actor.organisationId,
     actorId: actor.userId,
     action: "authentication.sessions.admin_revoked",
     targetType: "user",
     targetId: targetUserId,
-    metadata: { sessionCount: revoked.length },
+    metadata: { sessionCount: revoked.length, scope: "organisation" },
   });
   return revoked.length;
 }
@@ -92,6 +106,7 @@ export async function listOrganisationUsers(organisationId: string) {
       name: users.name,
       email: users.email,
       role: organisationMembers.role,
+      sessionsRevokedAt: organisationMembers.sessionsRevokedAt,
     })
     .from(organisationMembers)
     .innerJoin(users, eq(users.id, organisationMembers.userId))
@@ -104,14 +119,21 @@ export async function listOrganisationUsers(organisationId: string) {
   const userIds = members.map((member) => member.userId);
   const activeSessions = userIds.length
     ? await db
-        .select({ userId: sessions.userId, id: sessions.id })
+        .select({
+          userId: sessions.userId,
+          id: sessions.id,
+          createdAt: sessions.createdAt,
+        })
         .from(sessions)
         .where(inArray(sessions.userId, userIds))
     : [];
-  return members.map((member) => ({
+  return members.map(({ sessionsRevokedAt, ...member }) => ({
     ...member,
+    // Sessions revoked for this organisation no longer count here.
     activeSessions: activeSessions.filter(
-      (session) => session.userId === member.userId,
+      (session) =>
+        session.userId === member.userId &&
+        !sessionRevokedForMembership(session.createdAt, sessionsRevokedAt),
     ).length,
   }));
 }

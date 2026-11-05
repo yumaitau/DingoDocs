@@ -1,3 +1,4 @@
+import { maxScannerImportBytes } from "@/lib/imports/adapters";
 import { maxUploadBytes } from "./upload";
 
 /** Allowance for multipart boundaries, part headers and small text fields. */
@@ -63,6 +64,68 @@ export async function readBodyWithLimit(
     offset += chunk.byteLength;
   }
   return body;
+}
+
+/** Default cap for JSON API request bodies (1 MiB). */
+export const defaultJsonBodyLimit = 1_048_576;
+
+/**
+ * Envelope cap for requests that carry scanner source inline (MCP JSON-RPC,
+ * the imports API). JSON escaping can roughly double the source, so allow
+ * twice the decoded limit plus 64 KiB for the surrounding fields. The decoded
+ * content is still validated against maxScannerImportBytes.
+ */
+export const scannerImportEnvelopeBytes = 2 * maxScannerImportBytes + 65_536;
+
+/** Malformed JSON request body; mapped to 400 by apiError. */
+export class InvalidJsonBodyError extends SyntaxError {
+  readonly status = 400;
+
+  constructor() {
+    super("Request body is not valid JSON");
+    this.name = "InvalidJsonBodyError";
+  }
+}
+
+async function readUtf8WithLimit(request: Request, limit: number) {
+  const body = await readBodyWithLimit(request, limit);
+  try {
+    return new TextDecoder("utf-8", { fatal: true }).decode(body);
+  } catch {
+    throw new InvalidJsonBodyError();
+  }
+}
+
+function parseJson(text: string): unknown {
+  try {
+    return JSON.parse(text) as unknown;
+  } catch {
+    throw new InvalidJsonBodyError();
+  }
+}
+
+/**
+ * Reads a UTF-8 JSON body after enforcing the byte limit. Oversized bodies
+ * throw RequestBodyTooLargeError (413); malformed JSON, including an empty
+ * body, throws InvalidJsonBodyError (400).
+ */
+export async function jsonWithLimit(
+  request: Request,
+  limit = defaultJsonBodyLimit,
+): Promise<unknown> {
+  return parseJson(await readUtf8WithLimit(request, limit));
+}
+
+/**
+ * As jsonWithLimit, but an empty body is treated as `{}` for endpoints whose
+ * body is entirely optional. Malformed JSON is still rejected.
+ */
+export async function optionalJsonWithLimit(
+  request: Request,
+  limit = defaultJsonBodyLimit,
+): Promise<unknown> {
+  const text = await readUtf8WithLimit(request, limit);
+  return text.trim() ? parseJson(text) : {};
 }
 
 /** Parses multipart/urlencoded form data only after enforcing the byte limit. */

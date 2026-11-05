@@ -49,6 +49,7 @@ import { summariseScannerIngest } from "@/lib/imports/ingest-summary";
 import { assertActorEngagementAccess } from "@/lib/permissions/require";
 import { uploadEvidence } from "./evidence";
 import { emitDomainEvent } from "./domain-events";
+import { assertEngagementWritable } from "./engagement-guards";
 import { findingScheduleDefaults } from "./finding-schedule";
 import {
   createTimelineEntry,
@@ -78,7 +79,11 @@ export async function previewScannerImport(
   },
 ) {
   const [engagement] = await db
-    .select({ id: engagements.id })
+    .select({
+      id: engagements.id,
+      status: engagements.status,
+      archivedAt: engagements.archivedAt,
+    })
     .from(engagements)
     .where(
       and(
@@ -90,6 +95,7 @@ export async function previewScannerImport(
     .limit(1);
   if (!engagement) throw new ExchangeScopeError();
   await assertActorEngagementAccess(actor, input.engagementId);
+  assertEngagementWritable(engagement);
   const normalized = parseScannerImport(input.adapter, input.bytes);
   const source = await uploadEvidence(
     { ...actor, canViewRestricted: true },
@@ -222,15 +228,23 @@ export async function applyScannerImport(
       .for("update");
     if (!run || run.status !== "previewed") throw new ExchangeScopeError();
     const [engagement] = await tx
-      .select({ clientId: engagements.clientId })
+      .select({
+        clientId: engagements.clientId,
+        status: engagements.status,
+        archivedAt: engagements.archivedAt,
+      })
       .from(engagements)
       .where(
         and(
           eq(engagements.id, run.engagementId),
           eq(engagements.organisationId, actor.organisationId),
+          isNull(engagements.deletedAt),
         ),
       )
       .limit(1);
+    if (!engagement) throw new ExchangeScopeError();
+    // The engagement may have been archived between preview and apply.
+    assertEngagementWritable(engagement);
     const scheduleBySeverity = new Map<
       string,
       { dueAt?: Date; retainUntil?: Date }
@@ -874,6 +888,11 @@ type OrganisationBundle = {
   evidence?: unknown[];
 };
 
+/** Matches the authoring statuses in which findings.ts allows content edits. */
+const bundleEditableFindingStatuses: ReadonlyArray<
+  (typeof findings.$inferSelect)["status"]
+> = ["draft", "in_progress", "changes_requested"];
+
 function asUuid(value: unknown) {
   return typeof value === "string" &&
     /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(
@@ -1002,6 +1021,8 @@ export async function importOrganisationBundle(
     clients: 0,
     engagements: 0,
     findings: 0,
+    /** Existing findings left untouched because they are past authoring. */
+    findingsSkipped: 0,
     templates: 0,
     runbooks: 0,
     riskMatrices: 0,
@@ -1195,13 +1216,36 @@ export async function importOrganisationBundle(
         "findings",
         sourceId,
       );
+      const [existing] = await tx
+        .select()
+        .from(findings)
+        .where(
+          and(
+            eq(findings.id, targetId),
+            eq(findings.organisationId, actor.organisationId),
+          ),
+        )
+        .for("update");
+      // A bundle must never rewrite reviewed, approved or published work.
+      if (
+        existing &&
+        !bundleEditableFindingStatuses.includes(existing.status)
+      ) {
+        counts.findingsSkipped += 1;
+        continue;
+      }
       const values = {
         id: targetId,
         organisationId: actor.organisationId,
         engagementId,
         identifier: String(row.identifier ?? `F-${targetId.slice(0, 8)}`),
         title: String(row.title ?? "Imported finding"),
-        status: (row.status as typeof findings.$inferInsert.status) ?? "draft",
+        // Imports never carry workflow state: new findings start as
+        // unpublished drafts and existing ones keep their own status.
+        status: existing?.status ?? "draft",
+        clientVisible: false,
+        publishedAt: null,
+        approvedVersion: null,
         severity:
           (row.severity as typeof findings.$inferInsert.severity) ??
           "informational",
@@ -1220,26 +1264,72 @@ export async function importOrganisationBundle(
         updatedAt: new Date(),
         deletedAt: null,
       };
-      await tx
-        .insert(findings)
-        .values(values as typeof findings.$inferInsert)
-        .onConflictDoUpdate({
-          target: findings.id,
-          set: {
+      if (!existing) {
+        await tx
+          .insert(findings)
+          .values(values as typeof findings.$inferInsert);
+      } else {
+        // Keep the pre-import content recoverable, as other edits do.
+        await tx
+          .insert(findingVersions)
+          .values({
+            organisationId: actor.organisationId,
+            findingId: existing.id,
+            version: existing.version,
+            snapshot: { ...existing },
+            changedBy: actor.userId,
+            changeSummary: "Before organisation bundle import",
+          })
+          .onConflictDoNothing();
+        const [updated] = await tx
+          .update(findings)
+          .set({
             engagementId: values.engagementId,
             identifier: values.identifier,
             title: values.title,
-            status: values.status,
             severity: values.severity,
             executiveSummary: values.executiveSummary,
             technicalDetail: values.technicalDetail,
             remediation: values.remediation,
             sourceProvenance: values.sourceProvenance,
             retainUntil: values.retainUntil,
+            version: existing.version + 1,
             updatedAt: values.updatedAt,
             deletedAt: null,
-          },
-        });
+          })
+          .where(
+            and(
+              eq(findings.id, existing.id),
+              eq(findings.organisationId, actor.organisationId),
+              eq(findings.status, existing.status),
+              eq(findings.version, existing.version),
+            ),
+          )
+          .returning({ id: findings.id });
+        if (!updated) {
+          counts.findingsSkipped += 1;
+          continue;
+        }
+      }
+      await tx.insert(auditEvents).values({
+        organisationId: actor.organisationId,
+        actorId: actor.userId,
+        action: existing ? "finding.import_updated" : "finding.imported",
+        targetType: "finding",
+        targetId,
+        previousValues: existing
+          ? {
+              title: existing.title,
+              severity: existing.severity,
+              version: existing.version,
+            }
+          : undefined,
+        metadata: {
+          source: "organisation_bundle",
+          engagementId,
+          status: values.status,
+        },
+      });
       counts.findings += 1;
     }
 

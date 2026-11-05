@@ -4,10 +4,7 @@ import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { lintFindings, type QaLintIssue } from "@/lib/findings/qa-lint";
 import { requirePermission } from "@/lib/permissions/require";
-import {
-  assertPublicHttpUrl,
-  outboundFetchInit,
-} from "@/lib/security/outbound-url";
+import { outboundFetch } from "@/lib/security/outbound-url";
 import {
   addFindingComment,
   assertFindingEngagement,
@@ -287,10 +284,11 @@ export async function runFindingQaLintAction(
   const languageToolUrl = process.env.LANGUAGE_TOOL_URL?.trim();
   if (!languageToolUrl) return { issues };
   try {
-    const endpoint = await assertPublicHttpUrl(languageToolUrl, {
-      allowHttp: process.env.NODE_ENV !== "production",
-      allowLoopback: process.env.NODE_ENV !== "production",
-    });
+    const development = process.env.NODE_ENV !== "production";
+    const endpointOptions = {
+      allowHttp: development,
+      allowLoopback: development,
+    };
     for (const finding of rows) {
       const text = [
         finding.executiveSummary,
@@ -300,16 +298,19 @@ export async function runFindingQaLintAction(
         .filter(Boolean)
         .join("\n\n");
       if (!text.trim()) continue;
-      const response = await fetch(endpoint, {
-        method: "POST",
-        headers: { "content-type": "application/x-www-form-urlencoded" },
-        body: new URLSearchParams({
-          language: "en-US",
-          text: text.slice(0, 20_000),
-        }),
-        signal: AbortSignal.timeout(5_000),
-        ...outboundFetchInit,
-      });
+      const response = await outboundFetch(
+        languageToolUrl,
+        {
+          method: "POST",
+          headers: { "content-type": "application/x-www-form-urlencoded" },
+          body: new URLSearchParams({
+            language: "en-US",
+            text: text.slice(0, 20_000),
+          }),
+          signal: AbortSignal.timeout(5_000),
+        },
+        endpointOptions,
+      );
       if (!response.ok) continue;
       const data = (await response.json()) as {
         matches?: Array<{ message?: string }>;

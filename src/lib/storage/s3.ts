@@ -9,7 +9,50 @@ import {
   S3Client,
 } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
-import type { PutObjectInput, StorageProvider } from "./types";
+import type {
+  DownloadUrlOptions,
+  PutObjectInput,
+  StorageProvider,
+} from "./types";
+
+/**
+ * Types a presigned bucket URL may serve with their own Content-Type. The
+ * bucket origin is not covered by the app's CSP, so anything that can run
+ * script there (HTML, SVG, and PDF, which can carry JavaScript) is served as
+ * application/octet-stream instead.
+ */
+const passiveDownloadTypes = new Set([
+  "image/png",
+  "image/jpeg",
+  "image/gif",
+  "image/webp",
+]);
+
+export function downloadContentType(contentType?: string) {
+  const type = contentType?.split(";")[0].trim().toLowerCase();
+  return type && passiveDownloadTypes.has(type)
+    ? type
+    : "application/octet-stream";
+}
+
+/**
+ * Builds an `attachment` Content-Disposition with an ASCII fallback name and
+ * an RFC 5987 UTF-8 name, so a stored filename cannot inject header syntax.
+ */
+export function attachmentDisposition(filename?: string) {
+  const name = filename?.normalize("NFC").trim();
+  if (!name) return "attachment";
+  const fallback =
+    name
+      .replace(/[^\x20-\x7e]+/g, "_")
+      .replace(/["\\/]/g, "_")
+      .slice(0, 200) || "download";
+  const encoded = encodeURIComponent(name.slice(0, 200)).replace(
+    /['()*]/g,
+    (char) => `%${char.charCodeAt(0).toString(16).toUpperCase()}`,
+  );
+  return `attachment; filename="${fallback}"; filename*=UTF-8''${encoded}`;
+}
 
 export class S3StorageProvider implements StorageProvider {
   readonly name: string;
@@ -57,6 +100,8 @@ export class S3StorageProvider implements StorageProvider {
         Key: input.key,
         Body: body,
         ContentType: input.mediaType,
+        // Direct bucket reads download rather than render inline.
+        ContentDisposition: "attachment",
         ContentLength: input.expectedSize,
         ServerSideEncryption: "AES256",
       }),
@@ -97,10 +142,21 @@ export class S3StorageProvider implements StorageProvider {
       return false;
     }
   }
-  async createDownloadUrl(key: string, expiresInSeconds: number) {
+  async createDownloadUrl(
+    key: string,
+    expiresInSeconds: number,
+    options: DownloadUrlOptions = {},
+  ) {
     return getSignedUrl(
       this.client,
-      new GetObjectCommand({ Bucket: this.bucket, Key: key }),
+      new GetObjectCommand({
+        Bucket: this.bucket,
+        Key: key,
+        // Override the stored headers so a presigned URL never renders
+        // active content on the bucket origin.
+        ResponseContentDisposition: attachmentDisposition(options.filename),
+        ResponseContentType: downloadContentType(options.contentType),
+      }),
       { expiresIn: Math.min(900, Math.max(30, expiresInSeconds)) },
     );
   }

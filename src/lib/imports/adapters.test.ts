@@ -433,6 +433,43 @@ describe("scanner import adapters", () => {
   });
 });
 
+describe("scanner XML parsing cost", () => {
+  it("scans unclosed tags in linear time", () => {
+    const hostile = `<nmaprun>${"<host>".repeat(80_000)}</nmaprun>`;
+    const started = performance.now();
+    expect(() =>
+      parseScannerImport("nmap", new TextEncoder().encode(hostile)),
+    ).toThrow("No supported nmap records");
+    expect(performance.now() - started).toBeLessThan(1_000);
+  });
+
+  it("strips unclosed CDATA and tag openers in linear time", () => {
+    const detail = `${"<![CDATA[".repeat(20_000)}${"<".repeat(80_000)}`;
+    const hostile = `<issues><issue><name>Slow</name><issueDetail>${detail}</issueDetail></issue></issues>`;
+    const started = performance.now();
+    const [item] = parseScannerImport(
+      "burp",
+      new TextEncoder().encode(hostile),
+    );
+    expect(item?.title).toBe("Slow");
+    expect(performance.now() - started).toBeLessThan(1_000);
+  });
+
+  it("matches tags case-insensitively without matching longer names", () => {
+    const [item] = parseScannerImport(
+      "burp",
+      new TextEncoder().encode(
+        `<issues><ISSUE><Name>Mixed</NAME><names>skip</names><issueDetail>a <b>b</b><![CDATA[<c>]]></issueDetail><host>h.test</host></ISSUE></issues>`,
+      ),
+    );
+    expect(item).toMatchObject({
+      title: "Mixed",
+      description: "a b<c>",
+      assetIdentifier: "h.test",
+    });
+  });
+});
+
 describe("scanner host and port normalisation", () => {
   it.each([
     ["example.com:443", "example.com"],

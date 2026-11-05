@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { apiReadContext, apiWriteContext } from "@/lib/api/authentication";
 import { apiError } from "@/lib/api/responses";
+import { jsonWithLimit } from "@/lib/security/request-body";
 import {
   createFindingTemplate,
   searchFindingTemplates,
@@ -68,7 +69,7 @@ export async function POST(request: Request) {
     );
     if (!principal.userId)
       throw new Error("API key does not have an attributable owner");
-    const input = createSchema.parse(await request.json());
+    const input = createSchema.parse(await jsonWithLimit(request));
     const template = await createFindingTemplate(
       { organisationId: principal.organisationId, userId: principal.userId },
       input,

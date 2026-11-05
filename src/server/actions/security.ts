@@ -1,11 +1,14 @@
 "use server";
 
+import { createHash } from "node:crypto";
 import { eq } from "drizzle-orm";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { z } from "zod";
 import { db } from "@/db";
 import { organisations, type SecurityPolicy } from "@/db/schema";
+import { recordAudit } from "@/lib/audit/log";
+import { MFA_MODES } from "@/lib/auth/mfa-modes";
 import { requireSession } from "@/lib/auth/session";
 import { encryptIntegrationSecret } from "@/lib/integrations/crypto";
 import { canGrantRole, roles, type Role } from "@/lib/permissions/matrix";
@@ -38,6 +41,34 @@ import {
 import { userFacingError } from "@/lib/errors";
 
 const id = z.string().uuid();
+
+/**
+ * Audit-safe view of the SSO policy: never the raw certificate or client
+ * secret, only a certificate fingerprint and the entry point host.
+ */
+function ssoAuditSummary(policy: SecurityPolicy): Record<string, unknown> {
+  const sso = policy.sso;
+  let entryPointHost: string | null = null;
+  if (sso?.entryPoint) {
+    try {
+      entryPointHost = new URL(sso.entryPoint).host;
+    } catch {
+      entryPointHost = "(invalid URL)";
+    }
+  }
+  return {
+    protocol: sso?.protocol ?? null,
+    issuer: sso?.issuer ?? null,
+    clientId: sso?.clientId ?? null,
+    entryPointHost,
+    certificateSha256: sso?.certificate
+      ? createHash("sha256").update(sso.certificate.trim()).digest("hex")
+      : null,
+    confidentialClient: Boolean(sso?.clientSecretEncrypted),
+    groupRoles: sso?.groupRoles ?? null,
+    scimGroupRoles: policy.scimGroupRoles ?? null,
+  };
+}
 
 export type SettingsSecretState = {
   secret?: string;
@@ -127,11 +158,81 @@ export async function updateDataRegionAction(formData: FormData) {
     .max(64)
     .default("ap-southeast-2")
     .parse(formData.get("dataRegion") || "ap-southeast-2");
-  await db
-    .update(organisations)
-    .set({ dataRegion, updatedAt: new Date() })
-    .where(eq(organisations.id, context.organisationId));
+  const previous = await db.transaction(async (tx) => {
+    const [org] = await tx
+      .select({ dataRegion: organisations.dataRegion })
+      .from(organisations)
+      .where(eq(organisations.id, context.organisationId))
+      .limit(1)
+      .for("update");
+    await tx
+      .update(organisations)
+      .set({ dataRegion, updatedAt: new Date() })
+      .where(eq(organisations.id, context.organisationId));
+    return org?.dataRegion ?? null;
+  });
+  await recordAudit({
+    organisationId: context.organisationId,
+    actorId: context.userId,
+    action: "organisation.data_region.updated",
+    targetType: "organisation",
+    targetId: context.organisationId,
+    metadata: { from: previous, to: dataRegion },
+  });
   revalidatePath("/settings");
+}
+
+export type MfaPolicyState = { message?: string; error?: string };
+
+export async function saveMfaPolicyAction(
+  _state: MfaPolicyState,
+  formData: FormData,
+): Promise<MfaPolicyState> {
+  try {
+    const context = await requirePermission("user:manage");
+    const mfaMode = z
+      .enum(MFA_MODES, { message: "Choose a valid MFA requirement" })
+      .parse(formData.get("mfaMode"));
+    const mfaGracePeriodDays = z.coerce
+      .number({ message: "Grace period must be a number of days" })
+      .int("Grace period must be a whole number of days")
+      .min(0, "Grace period must be between 0 and 30 days")
+      .max(30, "Grace period must be between 0 and 30 days")
+      .parse(formData.get("mfaGracePeriodDays") || 0);
+    const previous = await db.transaction(async (tx) => {
+      const [org] = await tx
+        .select({ securityPolicy: organisations.securityPolicy })
+        .from(organisations)
+        .where(eq(organisations.id, context.organisationId))
+        .limit(1)
+        .for("update");
+      const current = (org?.securityPolicy ?? {}) as SecurityPolicy;
+      await tx
+        .update(organisations)
+        .set({
+          securityPolicy: { ...current, mfaMode, mfaGracePeriodDays },
+          updatedAt: new Date(),
+        })
+        .where(eq(organisations.id, context.organisationId));
+      return current;
+    });
+    await recordAudit({
+      organisationId: context.organisationId,
+      actorId: context.userId,
+      action: "organisation.mfa_policy.updated",
+      targetType: "organisation",
+      targetId: context.organisationId,
+      previousValues: {
+        mfaMode: previous.mfaMode ?? null,
+        mfaGracePeriodDays: previous.mfaGracePeriodDays ?? null,
+      },
+      newValues: { mfaMode, mfaGracePeriodDays },
+    });
+    revalidatePath("/settings");
+    return { message: "MFA requirement saved." };
+  } catch (error) {
+    return { error: userFacingError(error, "Could not save MFA requirement") };
+  }
 }
 
 export async function saveJiraConnectionAction(
@@ -296,8 +397,16 @@ export async function saveSsoPolicyAction(
       .optional()
       .parse(formData.get("groupRoles") || undefined);
 
+    // Same rules as SCIM: valid, non-protected roles the actor may grant.
+    const parsedScimGroupRoles = scimGroupRolesRaw
+      ? parseScimGroupRoles(scimGroupRolesRaw, context.role as Role)
+      : undefined;
+    const parsedGroupRoles = groupRolesRaw
+      ? parseScimGroupRoles(groupRolesRaw, context.role as Role)
+      : undefined;
+
     // Lock the row so a concurrent SCIM-domain change is not overwritten.
-    await db.transaction(async (tx) => {
+    const { before, after } = await db.transaction(async (tx) => {
       const [org] = await tx
         .select({ securityPolicy: organisations.securityPolicy })
         .from(organisations)
@@ -305,12 +414,8 @@ export async function saveSsoPolicyAction(
         .limit(1)
         .for("update");
       const current = (org?.securityPolicy ?? {}) as SecurityPolicy;
-      const scimGroupRoles = scimGroupRolesRaw
-        ? parseScimGroupRoles(scimGroupRolesRaw, context.role as Role)
-        : current.scimGroupRoles;
-      const groupRoles = groupRolesRaw
-        ? (JSON.parse(groupRolesRaw) as Record<string, string>)
-        : current.sso?.groupRoles;
+      const scimGroupRoles = parsedScimGroupRoles ?? current.scimGroupRoles;
+      const groupRoles = parsedGroupRoles ?? current.sso?.groupRoles;
 
       const next: SecurityPolicy = {
         ...current,
@@ -331,6 +436,27 @@ export async function saveSsoPolicyAction(
         .update(organisations)
         .set({ securityPolicy: next, updatedAt: new Date() })
         .where(eq(organisations.id, context.organisationId));
+      return { before: current, after: next };
+    });
+    const previousSummary = ssoAuditSummary(before);
+    const nextSummary = ssoAuditSummary(after);
+    await recordAudit({
+      organisationId: context.organisationId,
+      actorId: context.userId,
+      action: "organisation.sso_policy.updated",
+      targetType: "organisation",
+      targetId: context.organisationId,
+      metadata: {
+        changed: Object.keys(nextSummary).filter(
+          (field) =>
+            JSON.stringify(previousSummary[field]) !==
+            JSON.stringify(nextSummary[field]),
+        ),
+        // Key names avoid "secret" so audit redaction keeps the boolean.
+        oidcClientRotated: Boolean(clientSecret),
+      },
+      previousValues: previousSummary,
+      newValues: nextSummary,
     });
     revalidatePath("/settings");
     return {

@@ -8,9 +8,12 @@ import {
   mfaAccessDecision,
   MfaRequiredError,
 } from "@/lib/auth/mfa-policy";
-import { verifiedPathnameFromHeaders } from "@/lib/auth/pathname-signature";
+import { verifiedRequestFromHeaders } from "@/lib/auth/pathname-signature";
 import { requireSession } from "@/lib/auth/session";
-import { resolveActiveOrganisation } from "@/lib/auth/active-organisation";
+import {
+  OrganisationSessionRevokedError,
+  resolveActiveOrganisation,
+} from "@/lib/auth/active-organisation";
 import { EngagementAccessError } from "./access";
 import {
   canSeeAllEngagements,
@@ -44,10 +47,13 @@ export async function guardOrganisationMfa(input: {
   );
   if (!decision.blocked) return decision;
   const headerList = await headers();
+  // Only trust the method and pathname the proxy signed; unsigned values are
+  // spoofable.
+  const request = verifiedRequestFromHeaders(headerList);
   const effect = mfaAccessDecision({
     blocked: true,
-    // Only trust the pathname the proxy signed; unsigned values are spoofable.
-    pathname: verifiedPathnameFromHeaders(headerList),
+    pathname: request?.pathname ?? null,
+    method: request?.method ?? null,
     serverAction: headerList.has("next-action"),
   });
   if (effect === "redirect") redirect("/account/security");
@@ -57,7 +63,24 @@ export async function guardOrganisationMfa(input: {
 
 export async function requireOrganisationContext() {
   const session = await requireSession();
-  const organisation = await resolveActiveOrganisation(session.user.id);
+  const organisation = await resolveActiveOrganisation(
+    session.user.id,
+    session.session.createdAt,
+  ).catch(async (error: unknown) => {
+    // Page renders go back to sign-in; actions and API calls get a 401.
+    if (error instanceof OrganisationSessionRevokedError) {
+      const headerList = await headers();
+      const request = verifiedRequestFromHeaders(headerList);
+      if (
+        request &&
+        (request.method === "GET" || request.method === "HEAD") &&
+        !headerList.has("next-action") &&
+        !request.pathname.startsWith("/api/")
+      )
+        redirect("/sign-in?error=session_revoked");
+    }
+    throw error;
+  });
   if (!organisation)
     throw new PermissionDeniedError(
       "data:export",

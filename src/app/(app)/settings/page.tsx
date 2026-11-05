@@ -35,6 +35,7 @@ import {
 import { previewRetention } from "@/server/services/retention";
 import {
   JiraConnectionForm,
+  MfaPolicyForm,
   ScimDomainsForm,
   ScimTokenForm,
   SsoPolicyForm,
@@ -144,6 +145,21 @@ export default async function SettingsPage() {
         </section>
 
         <section className="rounded-xl border bg-paper p-5">
+          <h2 className="font-semibold">Multi-factor authentication</h2>
+          <p className="mt-1 text-sm text-slate-500">
+            Require an authenticator app. Members in scope without one are sent
+            to account security once the grace period ends; 0 days enforces
+            immediately.
+          </p>
+          <div className="mt-4">
+            <MfaPolicyForm
+              mfaMode={securityPolicy.mfaMode}
+              mfaGracePeriodDays={securityPolicy.mfaGracePeriodDays}
+            />
+          </div>
+        </section>
+
+        <section className="rounded-xl border bg-paper p-5">
           <h2 className="font-semibold">Personal account security</h2>
           <p className="mt-1 text-sm text-slate-500">
             Register passkeys, rotate MFA recovery codes, and revoke your
@@ -158,8 +174,9 @@ export default async function SettingsPage() {
           <div className="border-b p-5">
             <h2 className="font-semibold">Members, roles, and sessions</h2>
             <p className="mt-1 text-sm text-slate-500">
-              Role changes cannot exceed your privilege. Force logout across
-              every active browser for a member.
+              Role changes cannot exceed your privilege. Force logout ends a
+              member&apos;s current sessions for this organisation; they must
+              sign in again.
             </p>
           </div>
           <ul className="divide-y">

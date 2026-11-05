@@ -1,10 +1,7 @@
 import { headers } from "next/headers";
 import { db } from "@/db";
 import { auditEvents } from "@/db/schema";
-import {
-  assertPublicHttpUrl,
-  outboundFetchInit,
-} from "@/lib/security/outbound-url";
+import { outboundFetch } from "@/lib/security/outbound-url";
 
 type AuditInput = {
   organisationId?: string | null;
@@ -40,8 +37,7 @@ async function forwardToSiem(event: Record<string, unknown>) {
   const webhook = process.env.SIEM_WEBHOOK_URL;
   if (!webhook) return;
   try {
-    const url = await assertPublicHttpUrl(webhook);
-    await fetch(url, {
+    await outboundFetch(webhook, {
       method: "POST",
       headers: {
         "content-type": "application/json",
@@ -49,7 +45,6 @@ async function forwardToSiem(event: Record<string, unknown>) {
       },
       body: JSON.stringify(event),
       signal: AbortSignal.timeout(3_000),
-      ...outboundFetchInit,
     });
   } catch {
     // Swallow SIEM delivery errors; audit insert already succeeded.

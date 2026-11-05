@@ -4,6 +4,7 @@ import { and, eq, inArray, isNotNull, isNull } from "drizzle-orm";
 import { db } from "@/db";
 import { evidence, findings, reports, type ReportCondition } from "@/db/schema";
 import { redactReportText } from "@/lib/reports/redact";
+import { evidenceAccessCondition } from "./evidence";
 import type {
   ReportDocumentModel,
   ReportFindingModel,
@@ -186,9 +187,9 @@ export async function presentClientReport(
         and(
           eq(evidence.organisationId, actorOrganisationId),
           eq(evidence.engagementId, report.engagementId),
-          eq(evidence.classification, "client_visible"),
-          isNull(evidence.deletedAt),
-          isNull(evidence.quarantinedAt),
+          // No single viewer here, so evidence restricted to named users is
+          // excluded along with quarantined, infected and unscanned files.
+          evidenceAccessCondition({ clientVisibleOnly: true }),
         ),
       ),
   ]);

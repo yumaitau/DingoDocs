@@ -10,7 +10,7 @@ import {
 } from "@/lib/integrations/crypto";
 import {
   assertPublicHttpUrl,
-  outboundFetchInit,
+  outboundFetch,
 } from "@/lib/security/outbound-url";
 
 export type IntegrationActor = { organisationId: string; userId: string };
@@ -94,23 +94,22 @@ export async function createServiceNowIncident(
   input: { shortDescription: string; description: string },
 ) {
   const config = await loadConfig(actor.organisationId);
-  const url = await assertPublicHttpUrl(
+  const response = await outboundFetch(
     `${config.instanceUrl}/api/now/table/${encodeURIComponent(config.table)}`,
-  );
-  const response = await fetch(url, {
-    method: "POST",
-    headers: {
-      authorization: `Basic ${Buffer.from(`${config.username}:${config.password}`).toString("base64")}`,
-      accept: "application/json",
-      "content-type": "application/json",
+    {
+      method: "POST",
+      headers: {
+        authorization: `Basic ${Buffer.from(`${config.username}:${config.password}`).toString("base64")}`,
+        accept: "application/json",
+        "content-type": "application/json",
+      },
+      body: JSON.stringify({
+        short_description: input.shortDescription.slice(0, 160),
+        description: input.description.slice(0, 40_000),
+      }),
+      signal: AbortSignal.timeout(15_000),
     },
-    body: JSON.stringify({
-      short_description: input.shortDescription.slice(0, 160),
-      description: input.description.slice(0, 40_000),
-    }),
-    signal: AbortSignal.timeout(15_000),
-    ...outboundFetchInit,
-  });
+  );
   if (!response.ok)
     throw new Error(`ServiceNow create failed (HTTP ${response.status})`);
   const body = (await response.json()) as {

@@ -5,8 +5,9 @@ import { db } from "@/db";
 import { reports } from "@/db/schema";
 import { apiReadContext, apiWriteContext } from "@/lib/api/authentication";
 import { apiError, apiNotFound } from "@/lib/api/responses";
+import { jsonWithLimit } from "@/lib/security/request-body";
 import { engagementVisibility } from "@/lib/permissions/access";
-import type { Permission } from "@/lib/permissions/matrix";
+import { reportTransitionPermission } from "@/lib/reports/transition-permission";
 import { reportStatuses, transitionReport } from "@/server/services/reports";
 
 const bodySchema = z.object({
@@ -40,23 +41,10 @@ export async function POST(
       .limit(1);
     if (!existing) return apiNotFound(requestId, "Report was not found");
 
-    const input = bodySchema.parse(await request.json());
+    const input = bodySchema.parse(await jsonWithLimit(request));
     // Publication lifecycle and approval gates are human-only: service-account
     // keys are denied report:publish and finding:approve.
-    const permission: Permission = [
-      "published",
-      "superseded",
-      "archived",
-    ].includes(input.status)
-      ? "report:publish"
-      : [
-            "changes_requested",
-            "qa_approved",
-            "client_review",
-            "approved",
-          ].includes(input.status)
-        ? "finding:approve"
-        : "finding:create";
+    const permission = reportTransitionPermission(input.status);
     const writer = await apiWriteContext(
       request,
       "findings:write",
