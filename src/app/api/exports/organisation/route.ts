@@ -1,4 +1,7 @@
-import { requirePermission } from "@/lib/permissions/require";
+import {
+  requirePermission,
+  runInOrganisation,
+} from "@/lib/permissions/require";
 import { exportOrganisation } from "@/server/services/data-exchange";
 import { apiError } from "@/lib/api/responses";
 
@@ -9,7 +12,9 @@ export async function POST(request: Request) {
       new URL(request.url).searchParams.get("mode") === "migration"
         ? "migration"
         : "data";
-    const result = await exportOrganisation(context, mode);
+    const result = await runInOrganisation(context, () =>
+      exportOrganisation(context, mode),
+    );
     return new Response(result.json, {
       headers: {
         "content-type": "application/json",

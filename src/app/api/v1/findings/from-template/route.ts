@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { apiReadContext, apiWriteContext } from "@/lib/api/authentication";
+import {
+  apiReadContext,
+  apiWriteContext,
+  runInOrganisation,
+} from "@/lib/api/authentication";
 import { apiError } from "@/lib/api/responses";
 import { jsonWithLimit } from "@/lib/security/request-body";
 import { assertActorEngagementAccess } from "@/lib/permissions/require";
@@ -26,13 +30,15 @@ export async function POST(request: Request) {
       "finding:create",
       { engagementId: input.engagementId },
     );
-    if (!context.userId)
-      throw new Error("API key does not have an attributable owner");
-    await assertActorEngagementAccess(context, input.engagementId);
-    const created = await createFindingFromTemplate(
-      { organisationId: context.organisationId, userId: context.userId },
-      input,
-    );
+    const userId = context.userId;
+    if (!userId) throw new Error("API key does not have an attributable owner");
+    const created = await runInOrganisation(context, async () => {
+      await assertActorEngagementAccess(context, input.engagementId);
+      return createFindingFromTemplate(
+        { organisationId: context.organisationId, userId },
+        input,
+      );
+    });
     return NextResponse.json({ data: created, requestId }, { status: 201 });
   } catch (error) {
     return apiError(error, requestId);

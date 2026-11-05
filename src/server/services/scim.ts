@@ -476,6 +476,13 @@ const scimProtectedRoles: readonly Role[] = [
   "organisation_owner",
 ];
 
+/** A role an IdP (SCIM group push or SAML JIT) may assign: never owner or platform admin. */
+export function isIdpAssignableRole(role: string): role is Role {
+  return (
+    roles.includes(role as Role) && !scimProtectedRoles.includes(role as Role)
+  );
+}
+
 const scimGroupRolesError =
   "SCIM group roles must be a JSON object mapping group names to roles";
 
@@ -489,11 +496,7 @@ export function parseScimGroupRoles(raw: string, actorRole: Role) {
   const result = z.record(z.string(), z.string()).safeParse(parsed);
   if (!result.success) throw new Error(scimGroupRolesError);
   for (const [group, role] of Object.entries(result.data)) {
-    if (
-      !roles.includes(role as Role) ||
-      scimProtectedRoles.includes(role as Role) ||
-      !canGrantRole(actorRole, role as Role)
-    )
+    if (!isIdpAssignableRole(role) || !canGrantRole(actorRole, role))
       throw new Error(
         `SCIM group "${group}" cannot be mapped to role "${role}"`,
       );
@@ -537,14 +540,10 @@ export async function patchScimGroup(
   const displayName =
     body.displayName?.trim() || decodeGroupDisplayName(groupId);
   const roleName = context.securityPolicy.scimGroupRoles?.[displayName];
-  if (
-    !roleName ||
-    !roles.includes(roleName as Role) ||
-    scimProtectedRoles.includes(roleName as Role)
-  ) {
+  if (!roleName || !isIdpAssignableRole(roleName)) {
     return { ignored: true as const, displayName };
   }
-  const role = roleName as Role;
+  const role = roleName;
   const memberIds = new Set<string>();
   for (const operation of body.Operations ?? []) {
     if (

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { apiWriteContext } from "@/lib/api/authentication";
+import { apiWriteContext, runInOrganisation } from "@/lib/api/authentication";
 import { apiError } from "@/lib/api/responses";
 import { jsonWithLimit } from "@/lib/security/request-body";
 import { assertActorEngagementAccess } from "@/lib/permissions/require";
@@ -28,24 +28,26 @@ export async function POST(
       "scope:manage",
       { engagementId: id },
     );
-    if (!principal.userId)
-      throw new Error("API key does not have an attributable owner");
-    await assertActorEngagementAccess(principal, id);
+    const userId = principal.userId;
+    if (!userId) throw new Error("API key does not have an attributable owner");
     const input = bodySchema.parse(await jsonWithLimit(request));
     const startedAt = new Date(input.startedAt);
     if (Number.isNaN(startedAt.getTime()))
       throw new Error("startedAt is not a valid timestamp");
-    const entry = await logWorkspaceTime(
-      { organisationId: principal.organisationId, userId: principal.userId },
-      {
-        engagementId: id,
-        category: input.category,
-        hours: input.hours,
-        description: input.description,
-        startedAt,
-        billable: input.billable,
-      },
-    );
+    const entry = await runInOrganisation(principal, async () => {
+      await assertActorEngagementAccess(principal, id);
+      return logWorkspaceTime(
+        { organisationId: principal.organisationId, userId },
+        {
+          engagementId: id,
+          category: input.category,
+          hours: input.hours,
+          description: input.description,
+          startedAt,
+          billable: input.billable,
+        },
+      );
+    });
     return NextResponse.json({ data: entry, requestId }, { status: 201 });
   } catch (error) {
     return apiError(error, requestId);

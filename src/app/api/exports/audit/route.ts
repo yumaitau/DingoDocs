@@ -5,7 +5,10 @@ import {
   readAuditListFilters,
 } from "@/app/(app)/audit/page";
 import { apiError } from "@/lib/api/responses";
-import { requirePermission } from "@/lib/permissions/require";
+import {
+  requirePermission,
+  runInOrganisation,
+} from "@/lib/permissions/require";
 
 export async function GET(request: Request) {
   try {
@@ -22,7 +25,9 @@ export async function GET(request: Request) {
         status: 400,
         headers: { "content-type": "text/plain; charset=utf-8" },
       });
-    const rows = await loadAuditEvents(context.organisationId, filters);
+    const rows = await runInOrganisation(context, () =>
+      loadAuditEvents(context.organisationId, filters),
+    );
     return auditCsvResponse(auditEventsToCsv(rows, context.timeZone));
   } catch (error) {
     return apiError(error, request.headers.get("x-request-id"));

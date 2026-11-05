@@ -292,6 +292,76 @@ export function MfaPolicyForm({
   );
 }
 
+export type SamlServiceProviderView = {
+  entityId: string;
+  acsUrl: string;
+  metadataUrl: string;
+  loginUrl: string;
+};
+
+function CopyField({ label, value }: { label: string; value: string }) {
+  return (
+    <label className="block text-sm font-medium">
+      {label}
+      <input
+        className={`${field} mt-1 font-mono text-xs`}
+        readOnly
+        value={value}
+        onFocus={(event) => event.currentTarget.select()}
+      />
+    </label>
+  );
+}
+
+export function SamlServiceProviderDetails({
+  urls,
+}: {
+  urls: SamlServiceProviderView;
+}) {
+  return (
+    <div className="space-y-3 rounded-md border bg-muted/40 p-3">
+      <p className="text-sm text-slate-600">
+        Give these to your identity provider. The entity ID is also the audience
+        your IdP must put in each assertion.
+      </p>
+      <CopyField label="SP entity ID (audience)" value={urls.entityId} />
+      <CopyField label="ACS URL (HTTP-POST)" value={urls.acsUrl} />
+      <CopyField label="SP metadata URL" value={urls.metadataUrl} />
+      <CopyField
+        label="Sign-in URL for this organisation"
+        value={urls.loginUrl}
+      />
+    </div>
+  );
+}
+
+function Toggle({
+  name,
+  defaultChecked,
+  label,
+  hint,
+}: {
+  name: string;
+  defaultChecked?: boolean;
+  label: string;
+  hint: string;
+}) {
+  return (
+    <label className="flex items-start gap-2 text-sm">
+      <input
+        className="mt-1"
+        name={name}
+        type="checkbox"
+        defaultChecked={defaultChecked}
+      />
+      <span>
+        <span className="font-medium">{label}</span>
+        <span className="block text-slate-500">{hint}</span>
+      </span>
+    </label>
+  );
+}
+
 export function SsoPolicyForm({
   protocol,
   issuer,
@@ -300,6 +370,11 @@ export function SsoPolicyForm({
   hasCertificate,
   scimGroupRolesJson,
   groupRolesJson,
+  emailAttribute,
+  groupsAttribute,
+  jitProvisioning,
+  allowIdpInitiated,
+  idpEnforcesMfa,
 }: {
   protocol?: "oidc" | "saml";
   issuer?: string;
@@ -308,6 +383,11 @@ export function SsoPolicyForm({
   hasCertificate?: boolean;
   scimGroupRolesJson?: string;
   groupRolesJson?: string;
+  emailAttribute?: string;
+  groupsAttribute?: string;
+  jitProvisioning?: boolean;
+  allowIdpInitiated?: boolean;
+  idpEnforcesMfa?: boolean;
 }) {
   const [state, action, pending] = useActionState(saveSsoPolicyAction, initial);
   return (
@@ -324,7 +404,7 @@ export function SsoPolicyForm({
         </select>
       </label>
       <label className="block text-sm font-medium">
-        Issuer
+        Issuer (SAML: IdP entity ID)
         <input
           className={`${field} mt-1`}
           name="issuer"
@@ -351,11 +431,13 @@ export function SsoPolicyForm({
         />
       </label>
       <label className="block text-sm font-medium">
-        SAML entry point
+        SAML entry point (IdP SSO URL)
         <input
           className={`${field} mt-1`}
           name="entryPoint"
+          type="url"
           defaultValue={entryPoint}
+          placeholder="https://idp.example.com/saml/sso"
         />
       </label>
       <label className="block text-sm font-medium">
@@ -366,6 +448,42 @@ export function SsoPolicyForm({
           placeholder="-----BEGIN CERTIFICATE-----"
         />
       </label>
+      <label className="block text-sm font-medium">
+        SAML email attribute
+        <input
+          className={`${field} mt-1`}
+          name="emailAttribute"
+          defaultValue={emailAttribute}
+          placeholder="email"
+        />
+      </label>
+      <label className="block text-sm font-medium">
+        SAML groups attribute
+        <input
+          className={`${field} mt-1`}
+          name="groupsAttribute"
+          defaultValue={groupsAttribute}
+          placeholder="groups"
+        />
+      </label>
+      <Toggle
+        name="jitProvisioning"
+        defaultChecked={jitProvisioning}
+        label="Just-in-time provisioning"
+        hint="Add people on verified domains at their first SAML sign-in, with the role from the group mapping (read only by default)."
+      />
+      <Toggle
+        name="allowIdpInitiated"
+        defaultChecked={allowIdpInitiated}
+        label="Allow IdP-initiated sign-in"
+        hint="Accept unsolicited responses started from the IdP dashboard. Off is safer: only sign-ins started in DingoDocs are accepted."
+      />
+      <Toggle
+        name="idpEnforcesMfa"
+        defaultChecked={idpEnforcesMfa}
+        label="IdP enforces MFA"
+        hint="Let people with an authenticator app sign in through SAML without their DingoDocs code. Turn on only if your IdP requires MFA for this app."
+      />
       <label className="block text-sm font-medium">
         SCIM group → role JSON
         <textarea

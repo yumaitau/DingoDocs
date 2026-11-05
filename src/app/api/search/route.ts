@@ -1,6 +1,9 @@
 import { z } from "zod";
 import { apiError } from "@/lib/api/responses";
-import { requireOrganisationContext } from "@/lib/permissions/require";
+import {
+  requireOrganisationContext,
+  runInOrganisation,
+} from "@/lib/permissions/require";
 import { globalSearch } from "@/server/services/global-search";
 
 export async function GET(request: Request) {
@@ -11,7 +14,11 @@ export async function GET(request: Request) {
       .max(200)
       .parse(new URL(request.url).searchParams.get("q") ?? "");
     return Response.json(
-      { results: await globalSearch(context, query) },
+      {
+        results: await runInOrganisation(context, () =>
+          globalSearch(context, query),
+        ),
+      },
       { headers: { "cache-control": "private, no-store" } },
     );
   } catch (error) {

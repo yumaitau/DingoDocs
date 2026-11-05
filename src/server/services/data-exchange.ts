@@ -3,6 +3,7 @@ import "server-only";
 import { createHash, randomUUID } from "node:crypto";
 import { and, asc, eq, inArray, isNull, notInArray, or } from "drizzle-orm";
 import { db } from "@/db";
+import { withTenant } from "@/db/tenant";
 import {
   assets,
   auditEvents,
@@ -78,25 +79,29 @@ export async function previewScannerImport(
     bytes: Uint8Array;
   },
 ) {
-  const [engagement] = await db
-    .select({
-      id: engagements.id,
-      status: engagements.status,
-      archivedAt: engagements.archivedAt,
-    })
-    .from(engagements)
-    .where(
-      and(
-        eq(engagements.id, input.engagementId),
-        eq(engagements.organisationId, actor.organisationId),
-        isNull(engagements.deletedAt),
-      ),
-    )
-    .limit(1);
-  if (!engagement) throw new ExchangeScopeError();
-  await assertActorEngagementAccess(actor, input.engagementId);
-  assertEngagementWritable(engagement);
+  await withTenant(actor.organisationId, async () => {
+    const [engagement] = await db
+      .select({
+        id: engagements.id,
+        status: engagements.status,
+        archivedAt: engagements.archivedAt,
+      })
+      .from(engagements)
+      .where(
+        and(
+          eq(engagements.id, input.engagementId),
+          eq(engagements.organisationId, actor.organisationId),
+          isNull(engagements.deletedAt),
+        ),
+      )
+      .limit(1);
+    if (!engagement) throw new ExchangeScopeError();
+    await assertActorEngagementAccess(actor, input.engagementId);
+    assertEngagementWritable(engagement);
+  });
   const normalized = parseScannerImport(input.adapter, input.bytes);
+  // uploadEvidence opens its own tenant transactions around the storage
+  // write; the rest of the preview runs in a separate one.
   const source = await uploadEvidence(
     { ...actor, canViewRestricted: true },
     {
@@ -108,104 +113,110 @@ export async function previewScannerImport(
       allowDuplicate: true,
     },
   );
-  await db
-    .update(evidence)
-    .set({ immutable: true })
-    .where(eq(evidence.id, source.id));
-  // Live findings with the same fingerprint are duplicates. The generated
-  // identifier is unique per engagement even for soft-deleted rows, so any
-  // existing row holding it (deleted or not) is a conflict too.
-  const existing = await db
-    .select({
-      fingerprint: findings.sourceFingerprint,
-      identifier: findings.identifier,
-    })
-    .from(findings)
-    .where(
-      and(
-        eq(findings.organisationId, actor.organisationId),
-        eq(findings.engagementId, input.engagementId),
-        or(
-          and(
-            inArray(
-              findings.sourceFingerprint,
-              normalized.map((item) => item.fingerprint),
+  return withTenant(actor.organisationId, async () => {
+    await db
+      .update(evidence)
+      .set({ immutable: true })
+      .where(eq(evidence.id, source.id));
+    // Live findings with the same fingerprint are duplicates. The generated
+    // identifier is unique per engagement even for soft-deleted rows, so any
+    // existing row holding it (deleted or not) is a conflict too.
+    const existing = await db
+      .select({
+        fingerprint: findings.sourceFingerprint,
+        identifier: findings.identifier,
+      })
+      .from(findings)
+      .where(
+        and(
+          eq(findings.organisationId, actor.organisationId),
+          eq(findings.engagementId, input.engagementId),
+          or(
+            and(
+              inArray(
+                findings.sourceFingerprint,
+                normalized.map((item) => item.fingerprint),
+              ),
+              isNull(findings.deletedAt),
             ),
-            isNull(findings.deletedAt),
-          ),
-          inArray(
-            findings.identifier,
-            normalized.map((item) => importIdentifier(item.fingerprint)),
+            inArray(
+              findings.identifier,
+              normalized.map((item) => importIdentifier(item.fingerprint)),
+            ),
           ),
         ),
-      ),
+      );
+    const duplicate = new Set(
+      existing.flatMap((row) => [
+        row.identifier,
+        ...(row.fingerprint ? [importIdentifier(row.fingerprint)] : []),
+      ]),
     );
-  const duplicate = new Set(
-    existing.flatMap((row) => [
-      row.identifier,
-      ...(row.fingerprint ? [importIdentifier(row.fingerprint)] : []),
-    ]),
-  );
-  const actions = normalized.map((item) => {
-    const identifier = importIdentifier(item.fingerprint);
-    const action = duplicate.has(identifier) ? "duplicate" : "create";
-    duplicate.add(identifier);
-    return action;
-  });
-  const duplicateCount = actions.filter(
-    (action) => action === "duplicate",
-  ).length;
-  return db.transaction(async (tx) => {
-    const [run] = await tx
-      .insert(importRuns)
-      .values({
-        organisationId: actor.organisationId,
-        engagementId: input.engagementId,
-        sourceEvidenceId: source.id,
-        adapter: input.adapter,
-        sourceFilename: source.originalFilename,
-        sourceSha256: source.sha256,
-        createdBy: actor.userId,
-        summary: {
-          total: normalized.length,
-          new: normalized.length - duplicateCount,
-          duplicate: duplicateCount,
-          selected: normalized.length - duplicateCount,
-        },
-      })
-      .returning();
-    const items = await tx
-      .insert(importItems)
-      .values(
-        normalized.map((item, index) => ({
-          organisationId: actor.organisationId,
-          importRunId: run!.id,
-          fingerprint: item.fingerprint,
-          externalId: item.externalId,
-          title: item.title,
-          severity: item.severity,
-          assetIdentifier: item.assetIdentifier,
-          action: actions[index],
-          selected: actions[index] === "create",
-          normalized: item,
-        })),
-      )
-      .returning();
-    await tx.insert(auditEvents).values({
-      organisationId: actor.organisationId,
-      actorId: actor.userId,
-      action: "import.previewed",
-      targetType: "import_run",
-      targetId: run!.id,
-      metadata: {
-        adapter: input.adapter,
-        engagementId: input.engagementId,
-        sourceEvidenceId: source.id,
-        total: normalized.length,
-        duplicates: duplicateCount,
-      },
+    const actions = normalized.map((item) => {
+      const identifier = importIdentifier(item.fingerprint);
+      const action = duplicate.has(identifier) ? "duplicate" : "create";
+      duplicate.add(identifier);
+      return action;
     });
-    return { run: run!, items, sourceEvidence: { ...source, immutable: true } };
+    const duplicateCount = actions.filter(
+      (action) => action === "duplicate",
+    ).length;
+    return db.transaction(async (tx) => {
+      const [run] = await tx
+        .insert(importRuns)
+        .values({
+          organisationId: actor.organisationId,
+          engagementId: input.engagementId,
+          sourceEvidenceId: source.id,
+          adapter: input.adapter,
+          sourceFilename: source.originalFilename,
+          sourceSha256: source.sha256,
+          createdBy: actor.userId,
+          summary: {
+            total: normalized.length,
+            new: normalized.length - duplicateCount,
+            duplicate: duplicateCount,
+            selected: normalized.length - duplicateCount,
+          },
+        })
+        .returning();
+      const items = await tx
+        .insert(importItems)
+        .values(
+          normalized.map((item, index) => ({
+            organisationId: actor.organisationId,
+            importRunId: run!.id,
+            fingerprint: item.fingerprint,
+            externalId: item.externalId,
+            title: item.title,
+            severity: item.severity,
+            assetIdentifier: item.assetIdentifier,
+            action: actions[index],
+            selected: actions[index] === "create",
+            normalized: item,
+          })),
+        )
+        .returning();
+      await tx.insert(auditEvents).values({
+        organisationId: actor.organisationId,
+        actorId: actor.userId,
+        action: "import.previewed",
+        targetType: "import_run",
+        targetId: run!.id,
+        metadata: {
+          adapter: input.adapter,
+          engagementId: input.engagementId,
+          sourceEvidenceId: source.id,
+          total: normalized.length,
+          duplicates: duplicateCount,
+        },
+      });
+      return {
+        run: run!,
+        items,
+        sourceEvidence: { ...source, immutable: true },
+      };
+    });
   });
 }
 
@@ -503,62 +514,66 @@ export async function ingestScannerImport(
   const selectedItemIds = preview.items
     .filter((item) => item.action === "create")
     .map((item) => item.id);
-  const applied =
-    input.applyCreates === false
-      ? []
-      : await applyScannerImport(actor, {
-          importRunId: preview.run.id,
-          selectedItemIds,
-        });
-  const summary = summariseScannerIngest({
-    adapter: input.adapter,
-    filename: input.filename,
-    appliedCount: applied.length,
-    items: preview.items.map((item) => ({
-      title: item.title,
-      severity: item.severity,
-      action: item.action,
-      assetIdentifier: item.assetIdentifier,
-    })),
-  });
-  const note = await createWorkspaceNote(actor, {
-    engagementId: input.engagementId,
-    title: `Scanner ingest (${input.adapter})`,
-    body: summary.note,
-    kind: "testing_journal",
-    visibility: "team",
-  });
-  const timeline = await createTimelineEntry(actor, {
-    engagementId: input.engagementId,
-    occurredAt: new Date(),
-    phase: "testing",
-    description: summary.timeline,
-    clientVisible: false,
-  });
-  await db.insert(auditEvents).values({
-    organisationId: actor.organisationId,
-    actorId: actor.userId,
-    action: "import.ingested",
-    targetType: "import_run",
-    targetId: preview.run.id,
-    metadata: {
-      engagementId: input.engagementId,
+  // The preview stored evidence outside a transaction; everything after it is
+  // database work and runs in one tenant transaction.
+  return withTenant(actor.organisationId, async () => {
+    const applied =
+      input.applyCreates === false
+        ? []
+        : await applyScannerImport(actor, {
+            importRunId: preview.run.id,
+            selectedItemIds,
+          });
+    const summary = summariseScannerIngest({
       adapter: input.adapter,
-      applied: applied.length,
-      publication: "draft",
-      noteId: note.id,
-      timelineId: timeline?.id,
-    },
+      filename: input.filename,
+      appliedCount: applied.length,
+      items: preview.items.map((item) => ({
+        title: item.title,
+        severity: item.severity,
+        action: item.action,
+        assetIdentifier: item.assetIdentifier,
+      })),
+    });
+    const note = await createWorkspaceNote(actor, {
+      engagementId: input.engagementId,
+      title: `Scanner ingest (${input.adapter})`,
+      body: summary.note,
+      kind: "testing_journal",
+      visibility: "team",
+    });
+    const timeline = await createTimelineEntry(actor, {
+      engagementId: input.engagementId,
+      occurredAt: new Date(),
+      phase: "testing",
+      description: summary.timeline,
+      clientVisible: false,
+    });
+    await db.insert(auditEvents).values({
+      organisationId: actor.organisationId,
+      actorId: actor.userId,
+      action: "import.ingested",
+      targetType: "import_run",
+      targetId: preview.run.id,
+      metadata: {
+        engagementId: input.engagementId,
+        adapter: input.adapter,
+        applied: applied.length,
+        publication: "draft",
+        noteId: note.id,
+        timelineId: timeline?.id,
+      },
+    });
+    return {
+      run: preview.run,
+      items: preview.items,
+      applied,
+      note,
+      timeline,
+      publication: "draft" as const,
+      summary,
+    };
   });
-  return {
-    run: preview.run,
-    items: preview.items,
-    applied,
-    note,
-    timeline,
-    publication: "draft" as const,
-    summary,
-  };
 }
 
 export function mediaTypeForImport(filename: string, bytes: Uint8Array) {

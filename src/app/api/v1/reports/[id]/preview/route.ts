@@ -4,6 +4,7 @@ import {
   assertEngagementAccess,
   requireInternalOrganisationContext,
   requirePermission,
+  runInOrganisation,
 } from "@/lib/permissions/require";
 import {
   renderReportHtml,
@@ -24,12 +25,20 @@ export async function GET(
     const { id } = await context.params;
     z.string().uuid().parse(id);
     const organisation = await requireInternalOrganisationContext();
-    const workspace = await getReportWorkspace(organisation.organisationId, id);
-    await assertEngagementAccess({
-      userId: organisation.userId,
-      organisationId: organisation.organisationId,
-      engagementId: workspace.report.engagementId,
+    const workspace = await runInOrganisation(organisation, async () => {
+      const workspace = await getReportWorkspace(
+        organisation.organisationId,
+        id,
+      );
+      await assertEngagementAccess({
+        userId: organisation.userId,
+        organisationId: organisation.organisationId,
+        engagementId: workspace.report.engagementId,
+      });
+      return workspace;
     });
+    // Re-resolves the session and membership (auth tables, no RLS), so it
+    // runs outside the tenant transaction.
     await requirePermission("data:export", {
       engagementId: workspace.report.engagementId,
     });

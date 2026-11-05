@@ -13,6 +13,7 @@ import {
   type SQL,
 } from "drizzle-orm";
 import { db } from "@/db";
+import { savepointIfScoped } from "@/db/tenant";
 import {
   clientContacts,
   clients,
@@ -164,7 +165,9 @@ function guard(
   event: string,
   work: () => Promise<unknown>,
 ) {
-  return work().catch((error: unknown) => {
+  // The error is swallowed, so inside a tenant transaction the work needs its
+  // own savepoint or a failed insert would abort the caller's transaction.
+  return savepointIfScoped(work).catch((error: unknown) => {
     structuredLog("error", event, {
       organisationId,
       eventType,
@@ -313,11 +316,13 @@ async function queueChannels(organisationId: string, message: DeliveryMessage) {
     if (channel.provider === "in_app") continue;
     if (!canQueueWithoutExtraConfig(channel.provider)) continue;
     try {
-      await queueNotification(organisationId, channel.id, {
-        eventType: message.eventType,
-        title: message.title,
-        ...(message.actionUrl ? { actionUrl: message.actionUrl } : {}),
-      });
+      await savepointIfScoped(() =>
+        queueNotification(organisationId, channel.id, {
+          eventType: message.eventType,
+          title: message.title,
+          ...(message.actionUrl ? { actionUrl: message.actionUrl } : {}),
+        }),
+      );
     } catch (error) {
       structuredLog("error", "domain_event.channel_skipped", {
         organisationId,

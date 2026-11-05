@@ -47,6 +47,9 @@ describe("revoked session guard", () => {
     "/magic-link/verify",
     "/passkey/verify-authentication",
     "/reset-password/:token",
+    "/sso/saml/:orgSlug/login",
+    "/sso/saml/:orgSlug/acs",
+    "/sso/discover",
   ])("lets a revoked session reach %s without a lookup", async (path) => {
     const lookup = vi.fn(async () => true);
     await expect(

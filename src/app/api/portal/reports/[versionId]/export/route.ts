@@ -1,6 +1,9 @@
 import { z } from "zod";
 import { apiError } from "@/lib/api/responses";
-import { requireOrganisationContext } from "@/lib/permissions/require";
+import {
+  requireOrganisationContext,
+  runInOrganisation,
+} from "@/lib/permissions/require";
 import {
   renderReport,
   reportMediaTypes,
@@ -29,11 +32,15 @@ export async function GET(
     const actor = await requireOrganisationContext();
     if (actor.role !== "client_user" && actor.role !== "client_administrator")
       throw new PortalNotFoundError();
-    const report = await getPortalReportVersion(actor, versionId);
-    const model = await presentClientReport(
-      actor.organisationId,
-      report.content as ReportDocumentModel,
-    );
+    const { report, model } = await runInOrganisation(actor, async () => {
+      const report = await getPortalReportVersion(actor, versionId);
+      const model = await presentClientReport(
+        actor.organisationId,
+        report.content as ReportDocumentModel,
+      );
+      return { report, model };
+    });
+    // Rendering is CPU work; keep it out of the tenant transaction.
     const bytes = await renderReport(model, format);
     const filename = `${safeName(report.title)}-v${report.version}.${format}`;
     return new Response(Buffer.from(bytes), {

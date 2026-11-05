@@ -6,6 +6,27 @@ Create `.env` from `.env.example`, replace `BETTER_AUTH_SECRET` with at least 32
 
 For production, replace development database and MinIO credentials, terminate TLS at a trusted reverse proxy, restrict service ports to an internal network, and persist PostgreSQL and file-storage volumes on encrypted media. Do not expose ports 5432, 9000, 9001, 1025, or 8025 publicly.
 
+## PostgreSQL roles and row-level security
+
+Tenant isolation uses PostgreSQL row-level security as well as application predicates (see [Security model](security.md#tenant-row-level-security)). Request work switches to the `NOLOGIN` role `dingodocs_tenant`, which is subject to the `tenant_isolation` policies. Migration 0016 creates that role and grants it to the user that runs migrations.
+
+- **Self-hosted or Docker Compose.** No action is needed. The bundled user is a superuser, so the migration creates the role, and a superuser can `SET ROLE` to it, so RLS enforces.
+- **Connecting user.** Prefer a non-superuser application user. It must be a member of `dingodocs_tenant`, and it must own the tables or have privileges on them for the owner path. A superuser connection still works, because tenant work switches roles, but code outside a tenant scope then bypasses RLS entirely. Code running as a superuser outside `withTenant` is not protected by RLS.
+- **Managed PostgreSQL (RDS, Cloud SQL, Azure, and others) without `CREATEROLE`.** The migration prints `WARNING: dingodocs: cannot create or grant role dingodocs_tenant` and continues. The application logs a `db.tenant_rls.inactive` warning at first use and runs with RLS inactive, relying on application predicates only. To turn RLS on, ask a DBA (a user with `CREATEROLE`, such as `rds_superuser` members) to run the following, substituting the application's connecting user for `dingodocs_app`, then restart the application:
+
+```sql
+CREATE ROLE dingodocs_tenant NOLOGIN NOSUPERUSER NOBYPASSRLS NOCREATEDB NOCREATEROLE;
+GRANT dingodocs_tenant TO dingodocs_app;
+GRANT USAGE ON SCHEMA public TO dingodocs_tenant;
+GRANT SELECT, INSERT, UPDATE, DELETE ON ALL TABLES IN SCHEMA public TO dingodocs_tenant;
+GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO dingodocs_tenant;
+-- Run as dingodocs_app (the user that runs migrations) so future tables are covered:
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE ON TABLES TO dingodocs_tenant;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO dingodocs_tenant;
+```
+
+On PostgreSQL 16 and later, make sure the membership allows `SET` (the default for `GRANT ... TO`). The startup check probes `SET ROLE` and logs `db.tenant_rls.inactive` if it is refused. To confirm RLS is active, check that the log line is absent, or run `SELECT pg_has_role(current_user, 'dingodocs_tenant', 'SET');` as the application user (use `'MEMBER'` on PostgreSQL 15 and earlier).
+
 ## Backup and restore
 
 Back up the PostgreSQL database and file store as a coordinated set. A database-only backup does not contain evidence or generated reports.

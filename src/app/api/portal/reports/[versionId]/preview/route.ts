@@ -1,6 +1,9 @@
 import { z } from "zod";
 import { apiError } from "@/lib/api/responses";
-import { requireOrganisationContext } from "@/lib/permissions/require";
+import {
+  requireOrganisationContext,
+  runInOrganisation,
+} from "@/lib/permissions/require";
 import {
   renderReportHtml,
   type ReportDocumentModel,
@@ -23,11 +26,13 @@ export async function GET(
     const actor = await requireOrganisationContext();
     if (actor.role !== "client_user" && actor.role !== "client_administrator")
       throw new PortalNotFoundError();
-    const report = await getPortalReportVersion(actor, versionId);
-    const model = await presentClientReport(
-      actor.organisationId,
-      report.content as ReportDocumentModel,
-    );
+    const model = await runInOrganisation(actor, async () => {
+      const report = await getPortalReportVersion(actor, versionId);
+      return presentClientReport(
+        actor.organisationId,
+        report.content as ReportDocumentModel,
+      );
+    });
     return new Response(renderReportHtml(model), {
       headers: {
         "content-type": "text/html; charset=utf-8",

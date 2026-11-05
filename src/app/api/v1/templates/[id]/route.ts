@@ -3,7 +3,11 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/db";
 import { findingTemplates } from "@/db/schema";
-import { apiReadContext, apiWriteContext } from "@/lib/api/authentication";
+import {
+  apiReadContext,
+  apiWriteContext,
+  runInOrganisation,
+} from "@/lib/api/authentication";
 import { apiError, apiNotFound } from "@/lib/api/responses";
 import { jsonWithLimit } from "@/lib/security/request-body";
 import { reviseFindingTemplate } from "@/server/services/findings";
@@ -46,16 +50,18 @@ export async function GET(
     const { id } = await context.params;
     z.string().uuid().parse(id);
     const principal = await apiReadContext(request, "findings:read");
-    const [template] = await db
-      .select()
-      .from(findingTemplates)
-      .where(
-        and(
-          eq(findingTemplates.id, id),
-          eq(findingTemplates.organisationId, principal.organisationId),
-        ),
-      )
-      .limit(1);
+    const [template] = await runInOrganisation(principal, () =>
+      db
+        .select()
+        .from(findingTemplates)
+        .where(
+          and(
+            eq(findingTemplates.id, id),
+            eq(findingTemplates.organisationId, principal.organisationId),
+          ),
+        )
+        .limit(1),
+    );
     if (!template) return apiNotFound(requestId, "Template was not found");
     return NextResponse.json({ data: template, requestId });
   } catch (error) {
@@ -76,13 +82,15 @@ export async function POST(
       "findings:write",
       "template:manage",
     );
-    if (!principal.userId)
-      throw new Error("API key does not have an attributable owner");
+    const userId = principal.userId;
+    if (!userId) throw new Error("API key does not have an attributable owner");
     const changes = reviseSchema.parse(await jsonWithLimit(request));
-    const template = await reviseFindingTemplate(
-      { organisationId: principal.organisationId, userId: principal.userId },
-      id,
-      changes,
+    const template = await runInOrganisation(principal, () =>
+      reviseFindingTemplate(
+        { organisationId: principal.organisationId, userId },
+        id,
+        changes,
+      ),
     );
     return NextResponse.json({ data: template, requestId }, { status: 201 });
   } catch (error) {

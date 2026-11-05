@@ -75,4 +75,42 @@ describe("second-factor session guard", () => {
     const guard = createSecondFactorSessionGuard(async () => true);
     await expect(guard({ userId: "u1" }, null)).resolves.toBeUndefined();
   });
+
+  it("blocks the SAML ACS for a TOTP-enrolled user by default", async () => {
+    const guard = createSecondFactorSessionGuard(async () => true);
+    await expect(
+      guard({ userId: "u1" }, context("/sso/saml/:orgSlug/acs")),
+    ).rejects.toMatchObject({
+      url: `http://127.0.0.1:3000/sign-in?error=${SECOND_FACTOR_REQUIRED_ERROR}`,
+    });
+  });
+
+  it("allows the SAML ACS only when the organisation trusts IdP MFA", async () => {
+    const trustsIdpMfa = vi.fn(
+      async (ctx: { params?: Record<string, string | undefined> }) =>
+        ctx.params?.orgSlug === "trusted",
+    );
+    const guard = createSecondFactorSessionGuard(async () => true, {
+      trustsIdpMfa,
+    });
+    const acs = (orgSlug: string) => ({
+      ...context("/sso/saml/:orgSlug/acs"),
+      params: { orgSlug },
+    });
+    await expect(
+      guard({ userId: "u1" }, acs("trusted")),
+    ).resolves.toBeUndefined();
+    await expect(guard({ userId: "u1" }, acs("other"))).rejects.toMatchObject({
+      url: expect.stringContaining("two_factor_required"),
+    });
+    // The trust decision never extends to other email-only paths.
+    await expect(
+      guard(
+        { userId: "u1" },
+        { ...context("/magic-link/verify"), params: { orgSlug: "trusted" } },
+      ),
+    ).rejects.toMatchObject({
+      url: expect.stringContaining("two_factor_required"),
+    });
+  });
 });

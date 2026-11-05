@@ -11,6 +11,8 @@ import {
   type SecurityPolicy,
 } from "@/db/schema";
 import { decryptIntegrationSecret } from "@/lib/integrations/crypto";
+import { deploymentAuthBaseURL } from "@/lib/auth/saml-config";
+import { samlServiceProviderUrls } from "@/lib/auth/saml-paths";
 import { grantableRoles } from "@/lib/permissions/matrix";
 import { requirePermission } from "@/lib/permissions/require";
 import { formatDateTime } from "@/lib/time-zone";
@@ -37,6 +39,7 @@ import {
   JiraConnectionForm,
   MfaPolicyForm,
   ScimDomainsForm,
+  SamlServiceProviderDetails,
   ScimTokenForm,
   SsoPolicyForm,
 } from "./settings-forms";
@@ -373,10 +376,20 @@ export default async function SettingsPage() {
         <section className="rounded-xl border bg-paper xl:col-span-2 p-5">
           <h2 className="font-semibold">Per-organisation SSO</h2>
           <p className="mt-1 text-sm text-slate-500">
-            Deployment-wide env providers (better-auth) still exist. Per-org
-            OIDC is stored for ACS/login redirect wiring. SAML assertions POST
-            to /api/auth/saml/acs with RelayState set to the organisation id.
+            SAML 2.0 sign-in for this organisation. People sign in with SSO
+            using an email on a verified domain (see Verified domains above),
+            and only after a DingoDocs-started request unless IdP-initiated
+            sign-in is allowed. Per-org OIDC settings are stored only;
+            deployment-wide providers still come from environment variables.
           </p>
+          <div className="mt-4">
+            <SamlServiceProviderDetails
+              urls={samlServiceProviderUrls(
+                deploymentAuthBaseURL(),
+                context.slug,
+              )}
+            />
+          </div>
           <div className="mt-4">
             <SsoPolicyForm
               protocol={securityPolicy.sso?.protocol}
@@ -394,6 +407,11 @@ export default async function SettingsPage() {
                   ? JSON.stringify(securityPolicy.sso.groupRoles, null, 2)
                   : undefined
               }
+              emailAttribute={securityPolicy.sso?.emailAttribute}
+              groupsAttribute={securityPolicy.sso?.groupsAttribute}
+              jitProvisioning={securityPolicy.sso?.jitProvisioning}
+              allowIdpInitiated={securityPolicy.sso?.allowIdpInitiated}
+              idpEnforcesMfa={securityPolicy.sso?.idpEnforcesMfa}
             />
           </div>
         </section>

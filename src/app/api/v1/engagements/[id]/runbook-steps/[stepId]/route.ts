@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { apiWriteContext } from "@/lib/api/authentication";
+import { apiWriteContext, runInOrganisation } from "@/lib/api/authentication";
 import { apiError } from "@/lib/api/responses";
 import { optionalJsonWithLimit } from "@/lib/security/request-body";
 import { assertActorEngagementAccess } from "@/lib/permissions/require";
@@ -37,22 +37,24 @@ export async function POST(
       "scope:manage",
       { engagementId: id },
     );
-    if (!principal.userId)
-      throw new Error("API key does not have an attributable owner");
-    await assertActorEngagementAccess(principal, id);
+    const userId = principal.userId;
+    if (!userId) throw new Error("API key does not have an attributable owner");
     const input = bodySchema.parse(await optionalJsonWithLimit(request));
-    const step = await updateEngagementRunbookStep(
-      { organisationId: principal.organisationId, userId: principal.userId },
-      {
-        engagementId: id,
-        stepId,
-        status: input.status,
-        notes: input.notes,
-        findingId: input.findingId,
-        evidenceId: input.evidenceId,
-        taskId: input.taskId,
-      },
-    );
+    const step = await runInOrganisation(principal, async () => {
+      await assertActorEngagementAccess(principal, id);
+      return updateEngagementRunbookStep(
+        { organisationId: principal.organisationId, userId },
+        {
+          engagementId: id,
+          stepId,
+          status: input.status,
+          notes: input.notes,
+          findingId: input.findingId,
+          evidenceId: input.evidenceId,
+          taskId: input.taskId,
+        },
+      );
+    });
     return NextResponse.json({ data: step, requestId });
   } catch (error) {
     return apiError(error, requestId);

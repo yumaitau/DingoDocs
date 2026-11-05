@@ -4,7 +4,11 @@ import { z } from "zod";
 import { db } from "@/db";
 import { findings } from "@/db/schema";
 import { createFindingInput } from "@/lib/api/finding-input";
-import { apiReadContext, apiWriteContext } from "@/lib/api/authentication";
+import {
+  apiReadContext,
+  apiWriteContext,
+  runInOrganisation,
+} from "@/lib/api/authentication";
 import { apiError } from "@/lib/api/responses";
 import { jsonWithLimit } from "@/lib/security/request-body";
 import { engagementVisibility } from "@/lib/permissions/access";
@@ -62,19 +66,21 @@ export async function GET(request: Request) {
         : query.sort === "severity"
           ? findings.severity
           : findings.createdAt;
-    const [data, count] = await Promise.all([
-      db
-        .select()
-        .from(findings)
-        .where(where)
-        .orderBy(query.order === "asc" ? asc(column) : desc(column))
-        .limit(query.pageSize)
-        .offset((query.page - 1) * query.pageSize),
-      db
-        .select({ total: sql<number>`count(*)::int` })
-        .from(findings)
-        .where(where),
-    ]);
+    const [data, count] = await runInOrganisation(context, () =>
+      Promise.all([
+        db
+          .select()
+          .from(findings)
+          .where(where)
+          .orderBy(query.order === "asc" ? asc(column) : desc(column))
+          .limit(query.pageSize)
+          .offset((query.page - 1) * query.pageSize),
+        db
+          .select({ total: sql<number>`count(*)::int` })
+          .from(findings)
+          .where(where),
+      ]),
+    );
     return NextResponse.json({
       data,
       pagination: {
@@ -102,22 +108,26 @@ export async function POST(request: Request) {
       "finding:create",
       { engagementId: input.engagementId },
     );
-    if (!context.userId)
-      throw new Error("API key does not have an attributable owner");
-    await assertActorEngagementAccess(context, input.engagementId);
-    const created = await createFindingDraft(
-      { organisationId: context.organisationId, userId: context.userId },
-      {
-        ...input,
-        dueAt: input.dueAt
-          ? new Date(`${input.dueAt}T23:59:59.999Z`)
-          : undefined,
-        sourceProvenance: {
-          channel:
-            request.headers.get("x-dingodocs-source") === "mcp" ? "mcp" : "api",
+    const userId = context.userId;
+    if (!userId) throw new Error("API key does not have an attributable owner");
+    const created = await runInOrganisation(context, async () => {
+      await assertActorEngagementAccess(context, input.engagementId);
+      return createFindingDraft(
+        { organisationId: context.organisationId, userId },
+        {
+          ...input,
+          dueAt: input.dueAt
+            ? new Date(`${input.dueAt}T23:59:59.999Z`)
+            : undefined,
+          sourceProvenance: {
+            channel:
+              request.headers.get("x-dingodocs-source") === "mcp"
+                ? "mcp"
+                : "api",
+          },
         },
-      },
-    );
+      );
+    });
     return NextResponse.json({ data: created, requestId }, { status: 201 });
   } catch (error) {
     return apiError(error, requestId);

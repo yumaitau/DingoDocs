@@ -55,6 +55,8 @@ export async function POST(
           await jsonWithLimit(request, scannerImportEnvelopeBytes),
         );
     const bytes = new TextEncoder().encode(parsed.content);
+    // Not wrapped in runInOrganisation: the import services store the source
+    // evidence and open their own tenant transactions around that write.
     if (parsed.mode === "preview") {
       const preview = await previewScannerImport(actor, {
         engagementId,

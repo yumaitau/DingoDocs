@@ -1,6 +1,9 @@
 import { z } from "zod";
 import { apiError } from "@/lib/api/responses";
-import { requireOrganisationContext } from "@/lib/permissions/require";
+import {
+  requireOrganisationContext,
+  runInOrganisation,
+} from "@/lib/permissions/require";
 import {
   findingsToCsv,
   findingsToXlsx,
@@ -28,7 +31,9 @@ export async function GET(
     const actor = await requireOrganisationContext();
     if (actor.role !== "client_user" && actor.role !== "client_administrator")
       throw new PortalNotFoundError();
-    const portal = await getPortalEngagement(actor, engagementId);
+    const portal = await runInOrganisation(actor, () =>
+      getPortalEngagement(actor, engagementId),
+    );
     const latestRemediation = new Map<string, string>();
     for (const update of [...portal.remediationUpdates].sort(
       (a, b) => a.createdAt.getTime() - b.createdAt.getTime(),

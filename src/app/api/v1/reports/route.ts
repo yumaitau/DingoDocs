@@ -3,7 +3,11 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/db";
 import { reports } from "@/db/schema";
-import { apiReadContext, apiWriteContext } from "@/lib/api/authentication";
+import {
+  apiReadContext,
+  apiWriteContext,
+  runInOrganisation,
+} from "@/lib/api/authentication";
 import { apiError } from "@/lib/api/responses";
 import { jsonWithLimit } from "@/lib/security/request-body";
 import { engagementVisibility } from "@/lib/permissions/access";
@@ -44,19 +48,21 @@ export async function GET(request: Request) {
       query.status ? eq(reports.status, query.status) : undefined,
       engagementVisibility(context, reports.engagementId),
     );
-    const [data, count] = await Promise.all([
-      db
-        .select()
-        .from(reports)
-        .where(where)
-        .orderBy(desc(reports.updatedAt))
-        .limit(query.pageSize)
-        .offset((query.page - 1) * query.pageSize),
-      db
-        .select({ total: sql<number>`count(*)::int` })
-        .from(reports)
-        .where(where),
-    ]);
+    const [data, count] = await runInOrganisation(context, () =>
+      Promise.all([
+        db
+          .select()
+          .from(reports)
+          .where(where)
+          .orderBy(desc(reports.updatedAt))
+          .limit(query.pageSize)
+          .offset((query.page - 1) * query.pageSize),
+        db
+          .select({ total: sql<number>`count(*)::int` })
+          .from(reports)
+          .where(where),
+      ]),
+    );
     return NextResponse.json({
       data,
       pagination: {
@@ -91,37 +97,39 @@ export async function POST(request: Request) {
       "finding:create",
       { engagementId: input.engagementId },
     );
-    if (!principal.userId)
-      throw new Error("API key does not have an attributable owner");
-    await assertActorEngagementAccess(principal, input.engagementId);
-    const created = await createReport(
-      { organisationId: principal.organisationId, userId: principal.userId },
-      {
-        engagementId: input.engagementId,
-        templateId: input.templateId,
-        title: input.title,
-      },
-    );
-    if (input.kind && created.report) {
-      const [updated] = await db
-        .update(reports)
-        .set({ kind: input.kind, updatedAt: new Date() })
-        .where(
-          and(
-            eq(reports.id, created.report.id),
-            eq(reports.organisationId, principal.organisationId),
-          ),
-        )
-        .returning();
-      return NextResponse.json(
+    const userId = principal.userId;
+    if (!userId) throw new Error("API key does not have an attributable owner");
+    return await runInOrganisation(principal, async () => {
+      await assertActorEngagementAccess(principal, input.engagementId);
+      const created = await createReport(
+        { organisationId: principal.organisationId, userId },
         {
-          data: { ...created, report: updated ?? created.report },
-          requestId,
+          engagementId: input.engagementId,
+          templateId: input.templateId,
+          title: input.title,
         },
-        { status: 201 },
       );
-    }
-    return NextResponse.json({ data: created, requestId }, { status: 201 });
+      if (input.kind && created.report) {
+        const [updated] = await db
+          .update(reports)
+          .set({ kind: input.kind, updatedAt: new Date() })
+          .where(
+            and(
+              eq(reports.id, created.report.id),
+              eq(reports.organisationId, principal.organisationId),
+            ),
+          )
+          .returning();
+        return NextResponse.json(
+          {
+            data: { ...created, report: updated ?? created.report },
+            requestId,
+          },
+          { status: 201 },
+        );
+      }
+      return NextResponse.json({ data: created, requestId }, { status: 201 });
+    });
   } catch (error) {
     return apiError(error, requestId);
   }

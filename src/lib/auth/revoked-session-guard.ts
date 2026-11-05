@@ -31,6 +31,8 @@ const PATH_PREFIXES = [
   "/sign-up/",
   "/callback/",
   "/reset-password",
+  // Per-organisation SSO: discovery, SAML login, ACS and SP metadata.
+  "/sso/",
 ] as const;
 
 export function isAllowedForRevokedSession(path: string | null | undefined) {

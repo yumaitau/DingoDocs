@@ -7,6 +7,7 @@ import {
   ApiAuthenticationError,
   apiReadContext,
   apiWriteContext,
+  runInOrganisation,
 } from "@/lib/api/authentication";
 import { apiError } from "@/lib/api/responses";
 import { jsonWithLimit } from "@/lib/security/request-body";
@@ -31,18 +32,20 @@ export async function GET(
     const { id } = await context.params;
     z.string().uuid().parse(id);
     const principal = await apiReadContext(request, "engagements:read");
-    await assertActorEngagementAccess(principal, id);
-    const rows = await db
-      .select()
-      .from(timelineEvents)
-      .where(
-        and(
-          eq(timelineEvents.organisationId, principal.organisationId),
-          eq(timelineEvents.engagementId, id),
-        ),
-      )
-      .orderBy(desc(timelineEvents.occurredAt))
-      .limit(100);
+    const rows = await runInOrganisation(principal, async () => {
+      await assertActorEngagementAccess(principal, id);
+      return db
+        .select()
+        .from(timelineEvents)
+        .where(
+          and(
+            eq(timelineEvents.organisationId, principal.organisationId),
+            eq(timelineEvents.engagementId, id),
+          ),
+        )
+        .orderBy(desc(timelineEvents.occurredAt))
+        .limit(100);
+    });
     return NextResponse.json({ data: rows, requestId });
   } catch (error) {
     return apiError(error, requestId);
@@ -77,21 +80,26 @@ export async function POST(
         403,
         "service_account_forbidden",
       );
-    const entry = await createTimelineEntry(
-      {
-        organisationId: principal.organisationId,
-        userId: principal.userId,
-        serviceAccountId,
-      },
-      {
-        engagementId: id,
-        phase: input.phase,
-        description: input.description,
-        commands: input.commands,
-        clientVisible: input.clientVisible ?? false,
-        attackMappings: input.attackMappings,
-        occurredAt: input.occurredAt ? new Date(input.occurredAt) : new Date(),
-      },
+    const userId = principal.userId;
+    const entry = await runInOrganisation(principal, () =>
+      createTimelineEntry(
+        {
+          organisationId: principal.organisationId,
+          userId,
+          serviceAccountId,
+        },
+        {
+          engagementId: id,
+          phase: input.phase,
+          description: input.description,
+          commands: input.commands,
+          clientVisible: input.clientVisible ?? false,
+          attackMappings: input.attackMappings,
+          occurredAt: input.occurredAt
+            ? new Date(input.occurredAt)
+            : new Date(),
+        },
+      ),
     );
     return NextResponse.json({ data: entry, requestId }, { status: 201 });
   } catch (error) {

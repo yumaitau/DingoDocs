@@ -7,6 +7,7 @@ import {
   scimError,
   ScimRequestError,
 } from "@/server/services/scim";
+import { runInOrganisation } from "@/lib/permissions/require";
 
 export const runtime = "nodejs";
 
@@ -21,7 +22,9 @@ export async function GET(request: Request, { params }: Params) {
     const { id } = await params;
     const context = await authenticateScimRequest(request);
     if (!uuidPattern.test(id)) return scimError(404, "User not found");
-    const resource = await getScimUser(context.organisationId, id);
+    const resource = await runInOrganisation(context, () =>
+      getScimUser(context.organisationId, id),
+    );
     if (!resource) return scimError(404, "User not found");
     return Response.json(resource, {
       headers: { "content-type": "application/scim+json" },
@@ -45,10 +48,8 @@ export async function PATCH(request: Request, { params }: Params) {
     const payload = (await request.json()) as {
       Operations?: Array<{ op: string; path?: string; value?: unknown }>;
     };
-    const resource = await patchScimUser(
-      context.organisationId,
-      id,
-      payload.Operations ?? [],
+    const resource = await runInOrganisation(context, () =>
+      patchScimUser(context.organisationId, id, payload.Operations ?? []),
     );
     if (!resource) return scimError(404, "User not found");
     return Response.json(resource, {
@@ -70,7 +71,9 @@ export async function DELETE(request: Request, { params }: Params) {
     const { id } = await params;
     const context = await authenticateScimRequest(request);
     if (!uuidPattern.test(id)) return scimError(404, "User not found");
-    const resource = await disableScimUser(context.organisationId, id);
+    const resource = await runInOrganisation(context, () =>
+      disableScimUser(context.organisationId, id),
+    );
     if (!resource) return scimError(404, "User not found");
     return new Response(null, { status: 204 });
   } catch (error) {

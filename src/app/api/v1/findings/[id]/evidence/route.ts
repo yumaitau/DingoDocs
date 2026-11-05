@@ -3,7 +3,11 @@ import { z } from "zod";
 import { db } from "@/db";
 import { findings } from "@/db/schema";
 import { linkFindingEvidenceInput } from "@/lib/api/finding-input";
-import { apiReadContext, apiWriteContext } from "@/lib/api/authentication";
+import {
+  apiReadContext,
+  apiWriteContext,
+  runInOrganisation,
+} from "@/lib/api/authentication";
 import { apiError, apiNotFound } from "@/lib/api/responses";
 import { jsonWithLimit } from "@/lib/security/request-body";
 import { engagementVisibility } from "@/lib/permissions/access";
@@ -19,18 +23,20 @@ export async function POST(
     z.string().uuid().parse(id);
     const reader = await apiReadContext(request, "findings:write");
     const input = linkFindingEvidenceInput.parse(await jsonWithLimit(request));
-    const [locator] = await db
-      .select({ engagementId: findings.engagementId })
-      .from(findings)
-      .where(
-        and(
-          eq(findings.id, id),
-          eq(findings.organisationId, reader.organisationId),
-          isNull(findings.deletedAt),
-          engagementVisibility(reader, findings.engagementId),
-        ),
-      )
-      .limit(1);
+    const [locator] = await runInOrganisation(reader, () =>
+      db
+        .select({ engagementId: findings.engagementId })
+        .from(findings)
+        .where(
+          and(
+            eq(findings.id, id),
+            eq(findings.organisationId, reader.organisationId),
+            isNull(findings.deletedAt),
+            engagementVisibility(reader, findings.engagementId),
+          ),
+        )
+        .limit(1),
+    );
     if (!locator) return apiNotFound(requestId, "Finding was not found");
     const principal = await apiWriteContext(
       request,
@@ -38,11 +44,13 @@ export async function POST(
       "finding:create",
       { engagementId: locator.engagementId },
     );
-    if (!principal.userId)
-      throw new Error("API key does not have an attributable owner");
-    const linked = await linkFindingEvidence(
-      { organisationId: principal.organisationId, userId: principal.userId },
-      { findingId: id, evidenceIds: input.evidenceIds },
+    const userId = principal.userId;
+    if (!userId) throw new Error("API key does not have an attributable owner");
+    const linked = await runInOrganisation(principal, () =>
+      linkFindingEvidence(
+        { organisationId: principal.organisationId, userId },
+        { findingId: id, evidenceIds: input.evidenceIds },
+      ),
     );
     return Response.json({
       data: linked.map((row) => ({ id: row.id })),

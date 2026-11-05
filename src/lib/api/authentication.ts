@@ -222,6 +222,8 @@ export async function apiWriteContext(
 /** Read that is role-checked like a write, for administrative listings. */
 export const apiReadContextWithPermission = apiWriteContext;
 
+export { runInOrganisation } from "@/lib/permissions/require";
+
 export async function createApiCredential(
   actor: { organisationId: string; userId: string },
   input: {

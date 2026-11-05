@@ -4,6 +4,7 @@ import { and, eq, isNull } from "drizzle-orm";
 import nodemailer from "nodemailer";
 import { z } from "zod";
 import { db } from "@/db";
+import { withTenant } from "@/db/tenant";
 import {
   auditEvents,
   backgroundJobs,
@@ -55,43 +56,47 @@ export async function createNotificationChannel(
     configuration: ChannelConfiguration;
   },
 ) {
+  // The URL check resolves DNS, so it runs before the tenant transaction
+  // opens; callers should not already hold a tenant scope.
   await validateConfiguration(input.provider, input.configuration);
-  if (input.provider === "in_app" && input.configuration.userId) {
-    const [member] = await db
-      .select({ id: organisationMembers.id })
-      .from(organisationMembers)
-      .where(
-        and(
-          eq(organisationMembers.organisationId, actor.organisationId),
-          eq(organisationMembers.userId, input.configuration.userId),
-          isNull(organisationMembers.deletedAt),
+  return withTenant(actor.organisationId, async () => {
+    if (input.provider === "in_app" && input.configuration.userId) {
+      const [member] = await db
+        .select({ id: organisationMembers.id })
+        .from(organisationMembers)
+        .where(
+          and(
+            eq(organisationMembers.organisationId, actor.organisationId),
+            eq(organisationMembers.userId, input.configuration.userId),
+            isNull(organisationMembers.deletedAt),
+          ),
+        )
+        .limit(1);
+      if (!member)
+        throw new Error("in-app notifications require an organisation member");
+    }
+    const [channel] = await db
+      .insert(notificationChannels)
+      .values({
+        organisationId: actor.organisationId,
+        name: input.name.trim(),
+        provider: input.provider,
+        configurationEncrypted: encryptIntegrationSecret(
+          JSON.stringify(input.configuration),
         ),
-      )
-      .limit(1);
-    if (!member)
-      throw new Error("in-app notifications require an organisation member");
-  }
-  const [channel] = await db
-    .insert(notificationChannels)
-    .values({
+        createdBy: actor.userId,
+      })
+      .returning({ id: notificationChannels.id });
+    await db.insert(auditEvents).values({
       organisationId: actor.organisationId,
-      name: input.name.trim(),
-      provider: input.provider,
-      configurationEncrypted: encryptIntegrationSecret(
-        JSON.stringify(input.configuration),
-      ),
-      createdBy: actor.userId,
-    })
-    .returning({ id: notificationChannels.id });
-  await db.insert(auditEvents).values({
-    organisationId: actor.organisationId,
-    actorId: actor.userId,
-    action: "notification_channel.created",
-    targetType: "notification_channel",
-    targetId: channel.id,
-    metadata: { provider: input.provider },
+      actorId: actor.userId,
+      action: "notification_channel.created",
+      targetType: "notification_channel",
+      targetId: channel.id,
+      metadata: { provider: input.provider },
+    });
+    return channel;
   });
-  return channel;
 }
 
 async function validateConfiguration(

@@ -3,7 +3,10 @@ import { z } from "zod";
 import { db } from "@/db";
 import { notifications } from "@/db/schema";
 import { apiError } from "@/lib/api/responses";
-import { requireOrganisationContext } from "@/lib/permissions/require";
+import {
+  requireOrganisationContext,
+  runInOrganisation,
+} from "@/lib/permissions/require";
 
 const markSchema = z
   .object({
@@ -46,7 +49,9 @@ export async function GET(request: Request) {
   try {
     const context = await requireOrganisationContext();
     return Response.json(
-      await listNotifications(context.userId, context.organisationId),
+      await runInOrganisation(context, () =>
+        listNotifications(context.userId, context.organisationId),
+      ),
       { headers: { "cache-control": "private, no-store" } },
     );
   } catch (error) {
@@ -64,16 +69,18 @@ export async function POST(request: Request) {
       eq(notifications.userId, context.userId),
       isNull(notifications.readAt),
     );
-    await db
-      .update(notifications)
-      .set({ readAt: now })
-      .where(
-        body.all ? scope : and(scope, eq(notifications.id, body.id ?? "")),
-      );
-    return Response.json(
-      await listNotifications(context.userId, context.organisationId),
-      { headers: { "cache-control": "private, no-store" } },
-    );
+    const result = await runInOrganisation(context, async () => {
+      await db
+        .update(notifications)
+        .set({ readAt: now })
+        .where(
+          body.all ? scope : and(scope, eq(notifications.id, body.id ?? "")),
+        );
+      return listNotifications(context.userId, context.organisationId);
+    });
+    return Response.json(result, {
+      headers: { "cache-control": "private, no-store" },
+    });
   } catch (error) {
     return apiError(error, request.headers.get("x-request-id"));
   }

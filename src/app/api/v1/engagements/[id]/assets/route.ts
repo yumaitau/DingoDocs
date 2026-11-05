@@ -3,7 +3,11 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { db } from "@/db";
 import { assets } from "@/db/schema";
-import { apiReadContext, apiWriteContext } from "@/lib/api/authentication";
+import {
+  apiReadContext,
+  apiWriteContext,
+  runInOrganisation,
+} from "@/lib/api/authentication";
 import { apiError } from "@/lib/api/responses";
 import { jsonWithLimit } from "@/lib/security/request-body";
 import { assertActorEngagementAccess } from "@/lib/permissions/require";
@@ -27,19 +31,21 @@ export async function GET(
     const { id } = await context.params;
     z.string().uuid().parse(id);
     const principal = await apiReadContext(request, "engagements:read");
-    await assertActorEngagementAccess(principal, id);
-    const rows = await db
-      .select()
-      .from(assets)
-      .where(
-        and(
-          eq(assets.organisationId, principal.organisationId),
-          eq(assets.engagementId, id),
-          isNull(assets.deletedAt),
-        ),
-      )
-      .orderBy(asc(assets.name))
-      .limit(500);
+    const rows = await runInOrganisation(principal, async () => {
+      await assertActorEngagementAccess(principal, id);
+      return db
+        .select()
+        .from(assets)
+        .where(
+          and(
+            eq(assets.organisationId, principal.organisationId),
+            eq(assets.engagementId, id),
+            isNull(assets.deletedAt),
+          ),
+        )
+        .orderBy(asc(assets.name))
+        .limit(500);
+    });
     return NextResponse.json({ data: rows, requestId });
   } catch (error) {
     return apiError(error, requestId);
@@ -64,10 +70,13 @@ export async function POST(
     );
     if (!principal.userId)
       throw new Error("API key does not have an attributable owner");
+    const userId = principal.userId;
     const input = createSchema.parse(await jsonWithLimit(request));
-    const asset = await createAsset(
-      { organisationId: principal.organisationId, userId: principal.userId },
-      { engagementId: id, ...input },
+    const asset = await runInOrganisation(principal, () =>
+      createAsset(
+        { organisationId: principal.organisationId, userId },
+        { engagementId: id, ...input },
+      ),
     );
     return NextResponse.json({ data: asset, requestId }, { status: 201 });
   } catch (error) {
