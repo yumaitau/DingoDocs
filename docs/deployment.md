@@ -25,7 +25,7 @@ ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT, INSERT, UPDATE, DELETE O
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT USAGE, SELECT ON SEQUENCES TO dingodocs_tenant;
 ```
 
-On PostgreSQL 16 and later, make sure the membership allows `SET` (the default for `GRANT ... TO`). The startup check probes `SET ROLE` and logs `db.tenant_rls.inactive` if it is refused. To confirm RLS is active, check that the log line is absent, or run `SELECT pg_has_role(current_user, 'dingodocs_tenant', 'MEMBER');` as the application user.
+On PostgreSQL 16 and later, make sure the membership allows `SET` (the default for `GRANT ... TO`). The startup check probes `SET ROLE` and logs `db.tenant_rls.inactive` if it is refused. To confirm RLS is active, check that the log line is absent, or run `SELECT pg_has_role(current_user, 'dingodocs_tenant', 'SET');` as the application user (use `'MEMBER'` on PostgreSQL 15 and earlier).
 
 ## Backup and restore
 

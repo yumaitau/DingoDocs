@@ -1,6 +1,6 @@
 import "server-only";
 
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 import { db } from "@/db";
 import {
   accounts,
@@ -35,7 +35,8 @@ export type SamlRejectReason =
   | "not_a_member"
   | "unverified_account"
   | "provisioning_failed"
-  | "two_factor_required";
+  | "two_factor_required"
+  | "protected_role";
 
 export type SamlResolution =
   | {
@@ -168,6 +169,27 @@ async function linkedAccountOwner(providerId: string, accountId: string) {
   return row?.userId ?? null;
 }
 
+/** Roles that must sign in with a local credential, never via an org IdP. */
+const samlProtectedRoles: Role[] = [
+  "organisation_owner",
+  "platform_administrator",
+];
+
+async function holdsProtectedRole(userId: string) {
+  const [row] = await db
+    .select({ id: organisationMembers.id })
+    .from(organisationMembers)
+    .where(
+      and(
+        eq(organisationMembers.userId, userId),
+        isNull(organisationMembers.deletedAt),
+        inArray(organisationMembers.role, samlProtectedRoles),
+      ),
+    )
+    .limit(1);
+  return Boolean(row);
+}
+
 async function loadMembership(organisationId: string, userId: string) {
   const [row] = await db
     .select({
@@ -234,6 +256,11 @@ export async function resolveSamlSignIn(input: {
   if (existing) {
     if (existing.disabledAt || isBanned(existing))
       return { ok: false, reason: "user_disabled", userId };
+    // Organisation administrators control the IdP configuration, so SAML
+    // must not mint sessions for roles above them. Sessions span every
+    // organisation, so a protected role anywhere blocks SAML sign-in.
+    if (await holdsProtectedRole(existing.id))
+      return { ok: false, reason: "protected_role", userId };
     const membership = await loadMembership(organisation.id, existing.id);
     if (membership?.deletedAt)
       return { ok: false, reason: "membership_inactive", userId };

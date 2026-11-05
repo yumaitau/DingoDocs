@@ -738,6 +738,38 @@ run("per-organisation SAML SSO", () => {
     expect(await sessionCount(ids.totp)).toBe(1);
   });
 
+  it("refuses SAML for a user who owns any organisation", async () => {
+    await modules.db
+      .update(modules.organisationMembers)
+      .set({ role: "organisation_owner" })
+      .where(
+        modules.and(
+          modules.eq(modules.organisationMembers.organisationId, ids.otherOrg),
+          modules.eq(modules.organisationMembers.userId, ids.outsider),
+        ),
+      );
+    await modules.db.insert(modules.organisationMembers).values({
+      organisationId: ids.org,
+      userId: ids.outsider,
+      role: "consultant",
+    });
+    const login = await startLogin(slugs.org);
+    const response = await postAcs(
+      slugs.org,
+      buildSamlResponse(idp, {
+        audience: spUrls(slugs.org).entityId,
+        acsUrl: spUrls(slugs.org).acsUrl,
+        nameID: "outsider-owner-subject",
+        inResponseTo: login.requestId,
+        attributes: { email: emails.outsider },
+      }),
+      { cookie: login.cookie },
+    );
+    expectSsoFailure(response);
+    expect(await sessionCount(ids.outsider)).toBe(0);
+    expect(await rejectionReasons(ids.org)).toContain("protected_role");
+  });
+
   it("does not sign in a member whose sessions are revoked into the future", async () => {
     await modules.db
       .update(modules.organisationMembers)
