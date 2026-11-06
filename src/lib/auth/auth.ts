@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { betterAuth } from "better-auth";
 import { passkey } from "@better-auth/passkey";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
@@ -9,9 +10,10 @@ import {
   oAuthProxy,
   twoFactor,
 } from "better-auth/plugins";
-import { db } from "@/db";
+import { db, withSystemDb } from "@/db";
 import {
   accounts,
+  organisationInvitations,
   organisationMembers,
   passkeys,
   sessions,
@@ -28,8 +30,9 @@ import { insertAuthenticationAudit } from "@/lib/auth/authentication-audit";
 import { createRevokedSessionGuard } from "@/lib/auth/revoked-session-guard";
 import { samlSso } from "@/lib/auth/saml-plugin";
 import { samlPolicy } from "@/lib/auth/saml-config";
+import { createSignUpGuard, signUpMode } from "@/lib/auth/sign-up-policy";
 import { findSamlOrganisationBySlug } from "@/server/services/saml-sso";
-import { and, eq, gte } from "drizzle-orm";
+import { and, eq, gt, gte, isNull } from "drizzle-orm";
 
 const secret = process.env.BETTER_AUTH_SECRET;
 const providerConfiguration = authProviderConfiguration();
@@ -41,6 +44,31 @@ if (
 ) {
   throw new Error("BETTER_AUTH_SECRET is required in production");
 }
+
+const hashInvitationToken = (token: string) =>
+  createHash("sha256").update(token).digest("hex");
+
+// Enforced at user creation, so every sign-up route (email, magic link,
+// OAuth callbacks) is covered without listing them.
+const signUpGuard = createSignUpGuard(signUpMode(), async (email, token) => {
+  // Invitations have no RLS: the invitee is not a member yet.
+  const [invitation] = await withSystemDb(() =>
+    db
+      .select({ id: organisationInvitations.id })
+      .from(organisationInvitations)
+      .where(
+        and(
+          eq(organisationInvitations.email, email),
+          eq(organisationInvitations.tokenHash, hashInvitationToken(token)),
+          isNull(organisationInvitations.acceptedAt),
+          isNull(organisationInvitations.revokedAt),
+          gt(organisationInvitations.expiresAt, new Date()),
+        ),
+      )
+      .limit(1),
+  );
+  return Boolean(invitation);
+});
 
 export const auth = betterAuth({
   appName: "DingoDocs",
@@ -94,9 +122,10 @@ export const auth = betterAuth({
   databaseHooks: {
     user: {
       create: {
-        before: async (user) => ({
-          data: { ...user, role: "user" },
-        }),
+        before: async (user, context) => {
+          await signUpGuard(user, context);
+          return { data: { ...user, role: "user" } };
+        },
       },
     },
     session: {

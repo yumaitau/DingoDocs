@@ -32,6 +32,9 @@ env:
   CRON_TIMEZONE: Australia/Sydney
   REQUIRE_EMAIL_VERIFICATION: "false"
   EMAIL_PROVIDER: none
+  SIGN_UP_MODE: invite
+  # Platform admin (justin@yumait.com.au). Comma-separated user ids.
+  BETTER_AUTH_ADMIN_USER_IDS: 2487af8f-18d0-422a-a007-09cbe4118351
   BETTER_AUTH_URL: https://app.dingodocs.yumait.au
   TRUSTED_ORIGINS: https://app.dingodocs.yumait.au
   APP_URL: https://app.dingodocs.yumait.au
