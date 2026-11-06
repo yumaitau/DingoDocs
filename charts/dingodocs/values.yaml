@@ -40,6 +40,9 @@ env:
   TRUSTED_ORIGINS: https://dingodocs.example.com
   REQUIRE_EMAIL_VERIFICATION: "false"
   EMAIL_PROVIDER: none
+  # open: anyone can create an account. invite: only emails with a pending
+  # organisation invitation. closed: SAML JIT, SCIM or platform admins only.
+  SIGN_UP_MODE: open
   STORAGE_PROVIDER: s3
   PORT: "3000"
   S3_FORCE_PATH_STYLE: "false"

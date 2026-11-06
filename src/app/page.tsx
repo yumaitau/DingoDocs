@@ -2,11 +2,13 @@ import { ArrowRight, FileCheck2, LockKeyhole, Server } from "lucide-react";
 import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
+import { connection } from "next/server";
 import dingoArtwork from "../../docs/assets/dingodocs-banner.png";
 import dashboardScreenshot from "../../docs/screenshots/dashboard.png";
 import engagementsScreenshot from "../../docs/screenshots/engagements.png";
 import findingsScreenshot from "../../docs/screenshots/findings.png";
 import reportsScreenshot from "../../docs/screenshots/reports.png";
+import { signUpMode } from "@/lib/auth/sign-up-policy";
 import styles from "./page.module.css";
 
 export const metadata: Metadata = {
@@ -57,7 +59,10 @@ const workflow = [
   },
 ];
 
-export default function Home() {
+export default async function Home() {
+  // SIGN_UP_MODE is runtime configuration, so render per request.
+  await connection();
+  const signUpOpen = signUpMode() === "open";
   return (
     <main className={styles.page}>
       <header className={styles.header}>
@@ -90,8 +95,11 @@ export default function Home() {
             defensible reports from one secure workspace.
           </p>
           <div className={styles.heroActions}>
-            <Link className={styles.primaryAction} href="/sign-up">
-              Start free
+            <Link
+              className={styles.primaryAction}
+              href={signUpOpen ? "/sign-up" : "/sign-in"}
+            >
+              {signUpOpen ? "Start free" : "Sign in"}
               <ArrowRight aria-hidden="true" size={18} strokeWidth={1.8} />
             </Link>
             <a className={styles.secondaryAction} href="#product">

@@ -1,14 +1,19 @@
 import type { Metadata } from "next";
 import Image from "next/image";
 import Link from "next/link";
+import { connection } from "next/server";
 import { Suspense } from "react";
 import { SignInForm } from "./sign-in-form";
 import { publicAuthProviders } from "@/lib/auth/providers";
+import { signUpMode } from "@/lib/auth/sign-up-policy";
 
 export const metadata: Metadata = { title: "Sign in" };
 
-export default function SignInPage() {
+export default async function SignInPage() {
+  // SIGN_UP_MODE is runtime configuration, so render per request.
+  await connection();
   const providers = publicAuthProviders();
+  const mode = signUpMode();
   return (
     <div className="w-full max-w-sm">
       <div className="mb-8 lg:hidden">
@@ -34,15 +39,17 @@ export default function SignInPage() {
       >
         <SignInForm providers={providers} />
       </Suspense>
-      <p className="mt-6 text-center text-sm text-slate-500">
-        New to DingoDocs?{" "}
-        <Link
-          href="/sign-up"
-          className="font-medium text-[var(--harbour-700)] underline-offset-4 hover:underline"
-        >
-          Create an account
-        </Link>
-      </p>
+      {mode === "closed" ? null : (
+        <p className="mt-6 text-center text-sm text-slate-500">
+          {mode === "invite" ? "Invited to DingoDocs?" : "New to DingoDocs?"}{" "}
+          <Link
+            href="/sign-up"
+            className="font-medium text-[var(--harbour-700)] underline-offset-4 hover:underline"
+          >
+            Create an account
+          </Link>
+        </p>
+      )}
     </div>
   );
 }
