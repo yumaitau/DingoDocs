@@ -14,7 +14,8 @@ permissions:
 jobs:
   trivy:
     name: Scan repository
-    runs-on: ubuntu-24.04
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: codebuild-yuma-dingodocs-${{ github.run_id }}-${{ github.run_attempt }}
     timeout-minutes: 20
     permissions:
       contents: read
