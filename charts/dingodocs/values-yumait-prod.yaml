@@ -13,7 +13,7 @@ replicaCount: 1
 
 image:
   repository: 959038055523.dkr.ecr.ap-southeast-2.amazonaws.com/dingodocs/app@sha256
-  tag: "34bb5be4cf7652f2e33a76934c4b6dd01809138c645086f5ba9b6529bf56667b"
+  tag: "282ffd2f01014896e11cd7c60844ea1d8d877a677d5c3ffd63b892f68b0e7fb0" # sha-ef87c34-amd64
   pullPolicy: IfNotPresent
 
 serviceAccount:
@@ -51,7 +51,8 @@ externalSecret:
     - dingodocs-eks-runtime
 
 migration:
-  enabled: false
+  # Apply pending Drizzle migrations in an init container before the web pod.
+  enabled: true
 
 web:
   resources:
@@ -64,7 +65,8 @@ web:
 
 ingress:
   enabled: true
-  className: alb
+  # Shared ALB group (k8s-yumaitshared-*) that Cloudflare fronts.
+  className: alb-shared
   annotations:
     alb.ingress.kubernetes.io/scheme: internet-facing
     alb.ingress.kubernetes.io/target-type: ip
