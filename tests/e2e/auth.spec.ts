@@ -134,6 +134,11 @@ test("administrators create a one-time scoped API key that authenticates REST re
   expect(findings.status()).toBe(403);
   const row = page.getByRole("listitem").filter({ hasText: name });
   await row.getByRole("button", { name: "Revoke" }).click();
+  await page
+    .getByRole("dialog", { name: "Revoke API key?" })
+    .getByRole("button", { name: "Revoke key" })
+    .click();
+  await expect(row).toBeHidden();
 });
 
 test("engagement workspace tabs remain keyboard accessible", async ({

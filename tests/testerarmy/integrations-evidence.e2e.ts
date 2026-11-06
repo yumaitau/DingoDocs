@@ -45,6 +45,10 @@ for (const kind of ["personal", "service"]) {
         .filter({ hasText: name })
         .getByRole("button", "Revoke")
         .click();
+      await screen
+        .getByRole("dialog", "Revoke API key?")
+        .getByRole("button", "Revoke key")
+        .click();
       await expect(
         screen
           .getByRole("listitem")
