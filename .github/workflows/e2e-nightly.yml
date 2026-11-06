@@ -4,7 +4,7 @@ name: E2E nightly
 # Tester Army browser coverage runs nightly from testerarmy.yml.
 on:
   schedule:
-    - cron: '0 15 * * *' # 02:00 AEDT
+    - cron: "0 15 * * *" # 02:00 AEDT
   workflow_dispatch:
 
 permissions:

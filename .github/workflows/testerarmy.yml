@@ -3,7 +3,7 @@ name: Tester Army browser coverage
 # Browser coverage runs nightly only, never in push or pull-request CI.
 on:
   schedule:
-    - cron: '0 15 * * *' # 02:00 AEDT
+    - cron: "0 15 * * *" # 02:00 AEDT
   workflow_dispatch:
 
 permissions:
