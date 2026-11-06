@@ -15,7 +15,9 @@ jobs:
     timeout-minutes: 30
     services:
       postgres:
-        image: postgres:16-alpine
+        # ECR Public mirror of the Docker Hub image (same digest). Avoids Docker
+        # Hub anonymous pull limits on shared CodeBuild egress IPs.
+        image: public.ecr.aws/docker/library/postgres:16-alpine
         env:
           POSTGRES_DB: dingodocs_test
           POSTGRES_USER: dingodocs

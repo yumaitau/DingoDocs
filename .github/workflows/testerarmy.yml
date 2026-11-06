@@ -20,7 +20,9 @@ jobs:
         target: [desktop, mobile]
     services:
       postgres:
-        image: postgres:16-alpine
+        # ECR Public mirror of the Docker Hub image (same digest). Avoids Docker
+        # Hub anonymous pull limits on shared CodeBuild egress IPs.
+        image: public.ecr.aws/docker/library/postgres:16-alpine
         env:
           POSTGRES_DB: dingodocs_e2e
           POSTGRES_USER: dingodocs
