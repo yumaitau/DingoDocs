@@ -13,7 +13,7 @@ replicaCount: 1
 
 image:
   repository: 959038055523.dkr.ecr.ap-southeast-2.amazonaws.com/dingodocs/app@sha256
-  tag: "3cacfe231cb0a275cd27c30174be241f0f4c63bcd0507dfa86ebf211405f8197" # sha-dc32ef9-amd64
+  tag: "282ffd2f01014896e11cd7c60844ea1d8d877a677d5c3ffd63b892f68b0e7fb0" # sha-ef87c34-amd64
   pullPolicy: IfNotPresent
 
 serviceAccount:
