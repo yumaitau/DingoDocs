@@ -1,9 +1,9 @@
 name: Tester Army browser coverage
 
+# Browser coverage runs nightly only, never in push or pull-request CI.
 on:
-  push:
-    branches: [main]
-  pull_request:
+  schedule:
+    - cron: "0 15 * * *" # 02:00 AEDT
   workflow_dispatch:
 
 permissions:
@@ -11,7 +11,8 @@ permissions:
 
 jobs:
   browser:
-    runs-on: ubuntu-24.04
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: codebuild-yuma-dingodocs-${{ github.run_id }}-${{ github.run_attempt }}
     timeout-minutes: 45
     strategy:
       fail-fast: false
@@ -19,7 +20,9 @@ jobs:
         target: [desktop, mobile]
     services:
       postgres:
-        image: postgres:16-alpine
+        # ECR Public mirror of the Docker Hub image (same digest). Avoids Docker
+        # Hub anonymous pull limits on shared CodeBuild egress IPs.
+        image: public.ecr.aws/docker/library/postgres:16-alpine
         env:
           POSTGRES_DB: dingodocs_e2e
           POSTGRES_USER: dingodocs
@@ -42,7 +45,15 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm exec e2e-web install chromium --with-deps
+      # The CodeBuild runner is Amazon Linux 2023 (no apt), so install
+      # Chromium's runtime libraries with dnf instead of --with-deps.
+      - name: Install Chromium system libraries
+        run: >-
+          dnf install -y --setopt=install_weak_deps=False
+          alsa-lib atk at-spi2-atk at-spi2-core cairo cups-libs dbus-libs
+          libdrm libX11 libxcb libXcomposite libXdamage libXext libXfixes
+          libxkbcommon libXrandr mesa-libgbm nspr nss pango
+      - run: pnpm exec e2e-web install chromium
       - run: pnpm test:e2e:army --target ${{ matrix.target }}
       - name: Summarize browser results
         if: always()
