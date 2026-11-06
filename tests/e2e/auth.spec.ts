@@ -57,7 +57,7 @@ test("demo user reaches the tenant-scoped dashboard and command palette", async 
   await signIn(page);
   await expect(page).toHaveURL(/\/dashboard/);
   await expect(
-    page.getByRole("heading", { name: "Good morning" }),
+    page.getByRole("heading", { name: /^Good (morning|afternoon|evening)$/ }),
   ).toBeVisible();
   await expect(
     page.locator('[data-command-palette-ready="true"]'),

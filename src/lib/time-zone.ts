@@ -32,6 +32,14 @@ export function formatDateTime(
   }).format(new Date(value));
 }
 
+/** Time-of-day greeting for the user's local hour in their stored time zone. */
+export function greeting(timeZone: string, now: Date = new Date()) {
+  const hour = Number(formatInTimeZone(now, timeZone, "H"));
+  if (hour >= 5 && hour < 12) return "Good morning";
+  if (hour >= 12 && hour < 18) return "Good afternoon";
+  return "Good evening";
+}
+
 /** Converts a stored instant to an HTML datetime-local value in the user's zone. */
 export function formatDateTimeInput(value: Date | string, timeZone: string) {
   return formatInTimeZone(value, timeZone, "yyyy-MM-dd'T'HH:mm");
