@@ -1,6 +1,6 @@
 import { eq } from "drizzle-orm";
 import { PageHeader } from "@/components/page-header";
-import { Button } from "@/components/ui/button";
+import { ConfirmButton } from "@/components/ui/confirm-button";
 import { db } from "@/db";
 import { users } from "@/db/schema";
 import { requireOrganisationContext } from "@/lib/permissions/require";
@@ -23,7 +23,7 @@ export default async function AccountSecurityPage() {
     <>
       <PageHeader
         title="Account security"
-        description="Manage passkeys, multi-factor recovery, and signed-in devices."
+        description="Manage your password, passkeys, multi-factor recovery, and signed-in devices."
       />
       <div className="space-y-6 px-4 py-6 sm:px-6 lg:px-8">
         <SecurityControls
@@ -50,9 +50,13 @@ export default async function AccountSecurityPage() {
                 </div>
                 <form action={revokeOwnSessionAction}>
                   <input type="hidden" name="sessionId" value={device.id} />
-                  <Button variant="secondary" size="sm">
+                  <ConfirmButton
+                    title="Sign out this device?"
+                    description="This session ends immediately. If it is the device you are using now, you will be signed out."
+                    confirmLabel="Sign out device"
+                  >
                     Revoke
-                  </Button>
+                  </ConfirmButton>
                 </form>
               </li>
             ))}

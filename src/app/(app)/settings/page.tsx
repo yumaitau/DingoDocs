@@ -2,6 +2,7 @@ import { and, eq, isNull } from "drizzle-orm";
 import Link from "next/link";
 import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
+import { ConfirmButton } from "@/components/ui/confirm-button";
 import { db } from "@/db";
 import {
   evidence,
@@ -138,9 +139,13 @@ export default async function SettingsPage() {
                     name="invitationId"
                     value={invitation.id}
                   />
-                  <Button variant="secondary" size="sm">
+                  <ConfirmButton
+                    title="Revoke invitation?"
+                    description={`The invitation link sent to ${invitation.email} will stop working.`}
+                    confirmLabel="Revoke invitation"
+                  >
                     Revoke
-                  </Button>
+                  </ConfirmButton>
                 </form>
               </li>
             ))}
@@ -221,13 +226,14 @@ export default async function SettingsPage() {
                 </form>
                 <form action={revokeUserSessionsAction}>
                   <input type="hidden" name="userId" value={member.userId} />
-                  <Button
-                    variant="secondary"
-                    size="sm"
+                  <ConfirmButton
                     disabled={!member.activeSessions}
+                    title="Force logout?"
+                    description={`Every active session for ${member.email} ends immediately. They will need to sign in again.`}
+                    confirmLabel="Force logout"
                   >
                     Force logout
-                  </Button>
+                  </ConfirmButton>
                 </form>
               </li>
             ))}

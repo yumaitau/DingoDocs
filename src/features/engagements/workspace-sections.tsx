@@ -6,6 +6,7 @@ import {
   ShieldCheck,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ConfirmButton } from "@/components/ui/confirm-button";
 import { StatusPill } from "@/components/ui/status-pill";
 import { AttackChain } from "@/features/engagements/attack-chain";
 import {
@@ -458,9 +459,13 @@ async function ClientPortalAdministrationSection({
                       grant.id,
                     )}
                   >
-                    <Button type="submit" size="sm" variant="secondary">
+                    <ConfirmButton
+                      title="Revoke portal access?"
+                      description={`${grant.name} (${grant.email}) will no longer see this engagement in the client portal.`}
+                      confirmLabel="Revoke access"
+                    >
                       Revoke
-                    </Button>
+                    </ConfirmButton>
                   </form>
                 </li>
               ))}

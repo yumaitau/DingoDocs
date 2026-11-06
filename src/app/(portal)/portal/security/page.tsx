@@ -1,4 +1,4 @@
-import { Button } from "@/components/ui/button";
+import { ConfirmButton } from "@/components/ui/confirm-button";
 import { requireOrganisationContext } from "@/lib/permissions/require";
 import { formatDateTime } from "@/lib/time-zone";
 import { revokeOwnSessionAction } from "@/server/actions/security";
@@ -15,7 +15,8 @@ export default async function PortalSecurityPage() {
           Account security
         </h1>
         <p className="mt-2 text-sm text-slate-600">
-          Manage passkeys, multi-factor recovery, and signed-in devices.
+          Manage your password, passkeys, multi-factor recovery, and signed-in
+          devices.
         </p>
       </div>
       <SecurityControls />
@@ -40,9 +41,13 @@ export default async function PortalSecurityPage() {
               </div>
               <form action={revokeOwnSessionAction}>
                 <input type="hidden" name="sessionId" value={device.id} />
-                <Button variant="secondary" size="sm">
+                <ConfirmButton
+                  title="Sign out this device?"
+                  description="This session ends immediately. If it is the device you are using now, you will be signed out."
+                  confirmLabel="Sign out device"
+                >
                   Revoke
-                </Button>
+                </ConfirmButton>
               </form>
             </li>
           ))}

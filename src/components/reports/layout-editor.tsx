@@ -18,6 +18,7 @@ import type {
   ReportTemplateDefinition,
 } from "@/db/schema";
 import { Button } from "@/components/ui/button";
+import { ConfirmButton } from "@/components/ui/confirm-button";
 import { professionalPentestTemplate } from "@/lib/reports/professional-template";
 import { osaiReportTemplate } from "@/lib/reports/osai-template";
 import {
@@ -724,16 +725,16 @@ function BlockInspector() {
         >
           <Copy className="size-4" />
         </Button>
-        <Button
-          type="button"
-          size="sm"
-          variant="secondary"
+        <ConfirmButton
           aria-label="Delete block"
           disabled={order.length <= 1}
-          onClick={() => actions.delete(selectedId)}
+          title="Delete this block?"
+          description="The block and its content are removed from the layout."
+          confirmLabel="Delete block"
+          onConfirm={() => actions.delete(selectedId)}
         >
           <Trash2 className="size-4" />
-        </Button>
+        </ConfirmButton>
       </div>
     </aside>
   );

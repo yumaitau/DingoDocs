@@ -123,6 +123,45 @@ export function SecurityControls({
     }
   }
 
+  async function changePassword(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const data = new FormData(form);
+    const newPassword = String(data.get("newPassword"));
+    if (newPassword !== String(data.get("confirmPassword"))) {
+      report("The new passwords do not match.", true);
+      return;
+    }
+    setPending(true);
+    report("");
+    try {
+      const result = await authClient.changePassword({
+        currentPassword: String(data.get("currentPassword")),
+        newPassword,
+        revokeOtherSessions: data.get("revokeOtherSessions") === "on",
+      });
+      if (result.error) {
+        report(
+          result.error.code === "CREDENTIAL_ACCOUNT_NOT_FOUND"
+            ? "This account has no password yet. Use “Forgot password” on the sign-in page to set one."
+            : (result.error.message ?? "Could not change your password."),
+          true,
+        );
+        return;
+      }
+      form.reset();
+      report("Password changed.");
+      router.refresh();
+    } catch {
+      report(
+        "Could not change your password. Check your connection and retry.",
+        true,
+      );
+    } finally {
+      setPending(false);
+    }
+  }
+
   async function copy(value: string, label: string) {
     try {
       await navigator.clipboard.writeText(value);
@@ -137,6 +176,60 @@ export function SecurityControls({
 
   return (
     <div className="grid gap-4 md:grid-cols-2">
+      <section
+        aria-labelledby="change-password-heading"
+        className="rounded-xl border bg-paper p-5 md:col-span-2"
+      >
+        <h2 id="change-password-heading" className="font-semibold">
+          Password
+        </h2>
+        <p className="mt-1 text-sm text-slate-500">
+          At least 14 characters; known breached passwords are blocked.
+        </p>
+        <form
+          onSubmit={changePassword}
+          className="mt-4 grid gap-3 md:grid-cols-3"
+        >
+          <input
+            name="currentPassword"
+            type="password"
+            autoComplete="current-password"
+            required
+            aria-label="Current password"
+            placeholder="Current password"
+            className={textField}
+          />
+          <input
+            name="newPassword"
+            type="password"
+            autoComplete="new-password"
+            required
+            minLength={14}
+            maxLength={256}
+            aria-label="New password"
+            placeholder="New password"
+            className={textField}
+          />
+          <input
+            name="confirmPassword"
+            type="password"
+            autoComplete="new-password"
+            required
+            minLength={14}
+            maxLength={256}
+            aria-label="Confirm new password"
+            placeholder="Confirm new password"
+            className={textField}
+          />
+          <label className="flex items-center gap-2 text-sm text-slate-600 md:col-span-2">
+            <input type="checkbox" name="revokeOtherSessions" defaultChecked />
+            Sign out my other devices
+          </label>
+          <Button disabled={pending} className="md:justify-self-end">
+            {pending ? "Saving…" : "Change password"}
+          </Button>
+        </form>
+      </section>
       <section className="rounded-xl border bg-paper p-5">
         <h2 className="font-semibold">Passkeys</h2>
         <p className="mt-1 text-sm text-slate-500">
