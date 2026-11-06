@@ -4,8 +4,16 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { authClient } from "@/lib/auth/client";
+import { INVITATION_TOKEN_HEADER } from "@/lib/auth/invitation-token";
 
-export function SignUpForm() {
+export function SignUpForm({
+  next,
+  invitationToken,
+}: {
+  /** Validated internal path to return to, such as an invitation. */
+  next?: string;
+  invitationToken?: string;
+}) {
   const router = useRouter();
   const [error, setError] = useState("");
   const [pending, setPending] = useState(false);
@@ -18,13 +26,16 @@ export function SignUpForm() {
       name: String(data.get("name")),
       email: String(data.get("email")),
       password: String(data.get("password")),
+      fetchOptions: invitationToken
+        ? { headers: { [INVITATION_TOKEN_HEADER]: invitationToken } }
+        : undefined,
     });
     setPending(false);
     if (result.error) {
       setError(result.error.message ?? "Unable to create account");
       return;
     }
-    router.push("/onboarding");
+    router.push(next ?? "/onboarding");
     router.refresh();
   }
   return (

@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomBytes, randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 
 const testUrl = process.env.TEST_DATABASE_URL;
@@ -23,7 +23,12 @@ type Modules = Awaited<ReturnType<typeof load>>;
 
 let clientCounter = 0;
 
-function signUp(modules: Modules, email: string) {
+const hash = (token: string) =>
+  createHash("sha256").update(token).digest("hex");
+const pendingToken = randomBytes(32).toString("base64url");
+const expiredToken = randomBytes(32).toString("base64url");
+
+function signUp(modules: Modules, email: string, invitation?: string) {
   return modules.auth.handler(
     new Request(`${BASE}/api/auth/sign-up/email`, {
       method: "POST",
@@ -32,6 +37,7 @@ function signUp(modules: Modules, email: string) {
         origin: BASE,
         // A distinct client per request keeps the sign-up rate limit out of it.
         "x-forwarded-for": `198.51.100.${++clientCounter}`,
+        ...(invitation ? { "x-dingodocs-invitation": invitation } : {}),
       },
       body: JSON.stringify({
         email,
@@ -64,14 +70,14 @@ run("SIGN_UP_MODE through Better Auth", () => {
         organisationId,
         email: email("invited"),
         role: "read_only",
-        tokenHash: `pending-${tag}`,
+        tokenHash: hash(pendingToken),
         expiresAt: new Date(Date.now() + 60 * 60 * 1_000),
       },
       {
         organisationId,
         email: email("expired"),
         role: "read_only",
-        tokenHash: `expired-${tag}`,
+        tokenHash: hash(expiredToken),
         expiresAt: new Date(Date.now() - 60 * 1_000),
       },
     ]);
@@ -105,15 +111,27 @@ run("SIGN_UP_MODE through Better Auth", () => {
     expect(response.status).toBe(200);
   });
 
-  it("invite mode admits only a pending invitation", async () => {
+  it("invite mode admits only the invited email with its token", async () => {
     modules = await load("invite");
-    const invited = await signUp(modules, email("Invited").toUpperCase());
-    expect(invited.status).toBe(200);
-    for (const address of [email("stranger"), email("expired")]) {
-      const refused = await signUp(modules, address);
+    const refusals: Array<[string, string | undefined]> = [
+      // Knowing the invited address is not enough without the emailed token.
+      [email("invited"), undefined],
+      [email("invited"), randomBytes(32).toString("base64url")],
+      // A valid token cannot be spent on a different address.
+      [email("stranger"), pendingToken],
+      [email("expired"), expiredToken],
+    ];
+    for (const [address, token] of refusals) {
+      const refused = await signUp(modules, address, token);
       expect(refused.status).toBe(403);
       expect((await body(refused)).code).toBe("SIGN_UP_DISABLED");
     }
+    const invited = await signUp(
+      modules,
+      email("Invited").toUpperCase(),
+      pendingToken,
+    );
+    expect(invited.status).toBe(200);
   });
 
   it("closed mode refuses email sign-up", async () => {

@@ -1,14 +1,22 @@
 import type { Metadata } from "next";
 import Link from "next/link";
 import { connection } from "next/server";
-import { signUpMode } from "@/lib/auth/sign-up-policy";
+import { invitationTokenFromPath, signUpMode } from "@/lib/auth/sign-up-policy";
+import { safeInternalPath } from "@/lib/security/internal-path";
 import { SignUpForm } from "./sign-up-form";
 
 export const metadata: Metadata = { title: "Create account" };
-export default async function SignUpPage() {
+export default async function SignUpPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ next?: string | string[] }>;
+}) {
   // SIGN_UP_MODE is runtime configuration, so render per request.
   await connection();
   const mode = signUpMode();
+  const { next } = await searchParams;
+  const nextPath = typeof next === "string" ? safeInternalPath(next, "") : "";
+  const invitationToken = invitationTokenFromPath(nextPath);
   if (mode === "closed")
     return (
       <div className="w-full max-w-sm">
@@ -39,11 +47,24 @@ export default async function SignUpPage() {
           ? "Use the email address your invitation was sent to."
           : "Start a new DingoDocs organisation."}
       </p>
-      <SignUpForm />
+      {mode === "invite" && !invitationToken ? (
+        <p className="mt-7 rounded-md border bg-paper px-3 py-2 text-sm text-slate-600">
+          Open the invitation link from your email to create your account.
+        </p>
+      ) : (
+        <SignUpForm
+          next={nextPath || undefined}
+          invitationToken={invitationToken}
+        />
+      )}
       <p className="mt-6 text-center text-sm text-slate-500">
         Already have an account?{" "}
         <Link
-          href="/sign-in"
+          href={
+            nextPath
+              ? `/sign-in?next=${encodeURIComponent(nextPath)}`
+              : "/sign-in"
+          }
           className="font-medium text-[var(--harbour-700)] hover:underline"
         >
           Sign in

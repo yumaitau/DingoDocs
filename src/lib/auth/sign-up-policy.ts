@@ -1,10 +1,17 @@
 import { APIError } from "better-auth/api";
+import { INVITATION_TOKEN_HEADER } from "./invitation-token";
 import { SAML_ACS_PATH } from "./saml-paths";
+
+export {
+  INVITATION_TOKEN_HEADER,
+  invitationTokenFromPath,
+} from "./invitation-token";
 
 /**
  * Who may create their own account (SIGN_UP_MODE):
  * - `open`: anyone (default).
- * - `invite`: only an email with a pending organisation invitation.
+ * - `invite`: only through an emailed invitation link: the request must carry
+ *   that invitation's token and the email it was sent to.
  * - `closed`: nobody; accounts come from SAML JIT, SCIM or a platform admin.
  */
 export type SignUpMode = "open" | "invite" | "closed";
@@ -34,7 +41,19 @@ export function signUpMode(env: ProviderEnvironment = process.env): SignUpMode {
   throw new Error("SIGN_UP_MODE must be open, invite or closed");
 }
 
-type UserCreateContext = { path?: string } | null | undefined;
+type UserCreateContext =
+  | {
+      path?: string;
+      headers?: Headers;
+      request?: Request;
+    }
+  | null
+  | undefined;
+
+function invitationToken(context: NonNullable<UserCreateContext>) {
+  const headers = context.headers ?? context.request?.headers;
+  return headers?.get(INVITATION_TOKEN_HEADER)?.trim() || undefined;
+}
 
 /**
  * databaseHooks.user.create.before guard. A null context is a server-side
@@ -42,16 +61,20 @@ type UserCreateContext = { path?: string } | null | undefined;
  */
 export function createSignUpGuard(
   mode: SignUpMode,
-  hasPendingInvitation: (email: string) => Promise<boolean>,
+  /** True when `token` is a pending, unexpired invitation for `email`. */
+  hasPendingInvitation: (email: string, token: string) => Promise<boolean>,
 ) {
   return async (user: { email: string }, context: UserCreateContext) => {
     if (mode === "open" || !context) return;
     if (context.path && SIGN_UP_EXEMPT_PATHS.has(context.path)) return;
-    if (
-      mode === "invite" &&
-      (await hasPendingInvitation(user.email.trim().toLowerCase()))
-    )
-      return;
+    if (mode === "invite") {
+      const token = invitationToken(context);
+      if (
+        token &&
+        (await hasPendingInvitation(user.email.trim().toLowerCase(), token))
+      )
+        return;
+    }
     throw new APIError("FORBIDDEN", {
       code: SIGN_UP_DISABLED_CODE,
       message: SIGN_UP_DISABLED_MESSAGE,

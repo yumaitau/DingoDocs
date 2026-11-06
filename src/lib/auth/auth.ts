@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import { betterAuth } from "better-auth";
 import { passkey } from "@better-auth/passkey";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
@@ -44,9 +45,12 @@ if (
   throw new Error("BETTER_AUTH_SECRET is required in production");
 }
 
+const hashInvitationToken = (token: string) =>
+  createHash("sha256").update(token).digest("hex");
+
 // Enforced at user creation, so every sign-up route (email, magic link,
 // OAuth callbacks) is covered without listing them.
-const signUpGuard = createSignUpGuard(signUpMode(), async (email) => {
+const signUpGuard = createSignUpGuard(signUpMode(), async (email, token) => {
   // Invitations have no RLS: the invitee is not a member yet.
   const [invitation] = await withSystemDb(() =>
     db
@@ -55,6 +59,7 @@ const signUpGuard = createSignUpGuard(signUpMode(), async (email) => {
       .where(
         and(
           eq(organisationInvitations.email, email),
+          eq(organisationInvitations.tokenHash, hashInvitationToken(token)),
           isNull(organisationInvitations.acceptedAt),
           isNull(organisationInvitations.revokedAt),
           gt(organisationInvitations.expiresAt, new Date()),

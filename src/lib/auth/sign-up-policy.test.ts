@@ -1,6 +1,8 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   createSignUpGuard,
+  INVITATION_TOKEN_HEADER,
+  invitationTokenFromPath,
   SIGN_UP_DISABLED_CODE,
   signUpMode,
 } from "./sign-up-policy";
@@ -61,13 +63,33 @@ describe("sign-up guard", () => {
     await expect(guard(user, null)).resolves.toBeUndefined();
   });
 
-  it("allows an invited email in invite mode", async () => {
+  const token = "tok_abcdefghijklmnopqrstuvwxyz012345";
+  const withToken = (value: string) => ({
+    path: "/sign-up/email",
+    headers: new Headers({ [INVITATION_TOKEN_HEADER]: value }),
+  });
+
+  it("allows an invited email with its token in invite mode", async () => {
     const lookup = vi.fn(async () => true);
     const guard = createSignUpGuard("invite", lookup);
-    await expect(
-      guard(user, { path: "/sign-up/email" }),
-    ).resolves.toBeUndefined();
-    expect(lookup).toHaveBeenCalledWith("invitee@example.com");
+    await expect(guard(user, withToken(token))).resolves.toBeUndefined();
+    expect(lookup).toHaveBeenCalledWith("invitee@example.com", token);
+  });
+
+  it("refuses an invited email without the token in invite mode", async () => {
+    const lookup = vi.fn(async () => true);
+    const guard = createSignUpGuard("invite", lookup);
+    await expect(guard(user, { path: "/sign-up/email" })).rejects.toMatchObject(
+      { body: { code: SIGN_UP_DISABLED_CODE } },
+    );
+    expect(lookup).not.toHaveBeenCalled();
+  });
+
+  it("refuses a token that does not match the email in invite mode", async () => {
+    const guard = createSignUpGuard("invite", async () => false);
+    await expect(guard(user, withToken(token))).rejects.toMatchObject({
+      body: { code: SIGN_UP_DISABLED_CODE },
+    });
   });
 
   it("refuses an email without a pending invitation in invite mode", async () => {
@@ -75,5 +97,27 @@ describe("sign-up guard", () => {
     await expect(guard(user, { path: "/sign-up/email" })).rejects.toMatchObject(
       { body: { code: SIGN_UP_DISABLED_CODE } },
     );
+  });
+});
+
+describe("invitationTokenFromPath", () => {
+  it.each([
+    [
+      "/invite/abcdefghijklmnopqrstuvwxyz012345",
+      "abcdefghijklmnopqrstuvwxyz012345",
+    ],
+    [
+      "/invite/abcdefghijklmnopqrstuvwxyz012345?x=1",
+      "abcdefghijklmnopqrstuvwxyz012345",
+    ],
+    ["/invite/short", undefined],
+    ["/dashboard", undefined],
+    [
+      "/invite/abcdefghijklmnopqrstuvwxyz012345/../x",
+      "abcdefghijklmnopqrstuvwxyz012345",
+    ],
+    [undefined, undefined],
+  ])("%s", (path, expected) => {
+    expect(invitationTokenFromPath(path)).toBe(expected);
   });
 });

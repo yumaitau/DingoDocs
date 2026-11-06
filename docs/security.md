@@ -29,7 +29,7 @@ Client roles are intentionally excluded from organisation-wide REST reads, repor
 
 Better Auth's admin plugin defaults every new user to `role=user`. Break-glass impersonation and admin APIs are limited to user ids in `BETTER_AUTH_ADMIN_USER_IDS`. Banned or `disabledAt` users lose their session on the next request.
 
-`SIGN_UP_MODE` controls who can create their own account: `open` (default) lets anyone sign up, `invite` accepts only an email with a pending organisation invitation, and `closed` refuses all self-service accounts. The check runs when the user record is created, so it covers email sign-up, magic links and OAuth callbacks alike. SAML JIT (gated by verified domains) and admin-created users are not affected. Any other value stops the app at start-up.
+`SIGN_UP_MODE` controls who can create their own account: `open` (default) lets anyone sign up, `invite` accepts only someone holding an invitation link: the sign-up request must carry that invitation's token (sent from `/invite/<token>` through sign-in to sign-up) and use the email it was sent to, and `closed` refuses all self-service accounts. The check runs when the user record is created, so it covers email sign-up, magic links and OAuth callbacks alike. SAML JIT (gated by verified domains) and admin-created users are not affected. Any other value stops the app at start-up.
 
 ## Tenant row-level security
 
