@@ -59,7 +59,19 @@ jobs:
           libxkbcommon libXrandr mesa-libgbm nspr nss pango
       - run: pnpm exec playwright install chromium
       - run: pnpm test:e2e
+      # The Lightpanda 0.4.0 aarch64 binary needs glibc 2.38 and Amazon Linux
+      # 2023 ships 2.34, so run the same release from its official arm64 image.
+      - name: Start Lightpanda
+        run: |
+          docker run --detach --name lightpanda --network host \
+            --env LIGHTPANDA_DISABLE_TELEMETRY=true \
+            lightpanda/browser@sha256:01eb5d37ba537259d60ebfe32be49d3db4c7b6d1daac23b59b8532126fe30df0 \
+            /bin/lightpanda serve --host 127.0.0.1 --port 9222 --log_level warn
+          curl --fail --silent --show-error --retry 30 --retry-connrefused --retry-delay 1 \
+            http://127.0.0.1:9222/json/version
       - run: pnpm test:e2e:lightpanda
+        env:
+          LIGHTPANDA_CDP_URL: http://127.0.0.1:9222
 
   container:
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
