@@ -46,7 +46,7 @@ test("signed-in user changes their password from account security", async ({
       page.getByRole("status").filter({ hasText: "Password changed." }),
     ).toBeVisible();
   } finally {
-    expect(await changePasswordBack(page, newPassword)).toBeLessThan(500);
+    expect(await changePasswordBack(page, newPassword)).toBe(200);
   }
 });
 
