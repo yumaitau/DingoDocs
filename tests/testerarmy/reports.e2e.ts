@@ -6,6 +6,8 @@ import { engagementId } from "./support/screens";
 for (const [starter, count] of [
   ["blank", 1],
   ["osai", 46],
+  ["cve-advisory", 13],
+  ["poc-exploit", 13],
 ] as const) {
   test(
     `template ${starter} starter persists and opens a copy`,
