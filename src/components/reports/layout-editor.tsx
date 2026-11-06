@@ -21,6 +21,10 @@ import { Button } from "@/components/ui/button";
 import { professionalPentestTemplate } from "@/lib/reports/professional-template";
 import { osaiReportTemplate } from "@/lib/reports/osai-template";
 import {
+  cveAdvisoryTemplate,
+  pocExploitTemplate,
+} from "@/lib/reports/disclosure-templates";
+import {
   MAX_IMAGE_LENGTH,
   osaiReadiness,
   safeReportImage,
@@ -77,19 +81,23 @@ export function ReportLayoutEditor({
     setDefinition(
       kind === "osai"
         ? osaiReportTemplate()
-        : kind === "blank"
-          ? {
-              ...professionalPentestTemplate(),
-              sections: [
-                {
-                  id: "opening",
-                  type: "prose",
-                  title: "Report introduction",
-                  content: "",
-                },
-              ],
-            }
-          : professionalPentestTemplate(),
+        : kind === "cve-advisory"
+          ? cveAdvisoryTemplate()
+          : kind === "poc-exploit"
+            ? pocExploitTemplate()
+            : kind === "blank"
+              ? {
+                  ...professionalPentestTemplate(),
+                  sections: [
+                    {
+                      id: "opening",
+                      type: "prose",
+                      title: "Report introduction",
+                      content: "",
+                    },
+                  ],
+                }
+              : professionalPentestTemplate(),
     );
     setGeneration((value) => value + 1);
     setMessage("Starter loaded. Save to keep this layout.");
@@ -137,6 +145,8 @@ export function ReportLayoutEditor({
             </option>
             <option value="osai">OSAI exam report</option>
             <option value="pentest">Professional penetration test</option>
+            <option value="cve-advisory">CVE security advisory</option>
+            <option value="poc-exploit">PoC exploit write-up</option>
             <option value="blank">Blank report</option>
           </select>
           <span className="mt-1 block text-xs text-slate-600">
