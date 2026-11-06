@@ -43,7 +43,15 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: pnpm exec e2e-web install chromium --with-deps
+      # The CodeBuild runner is Amazon Linux 2023 (no apt), so install
+      # Chromium's runtime libraries with dnf instead of --with-deps.
+      - name: Install Chromium system libraries
+        run: >-
+          dnf install -y --setopt=install_weak_deps=False
+          alsa-lib atk at-spi2-atk at-spi2-core cairo cups-libs dbus-libs
+          libdrm libX11 libxcb libXcomposite libXdamage libXext libXfixes
+          libxkbcommon libXrandr mesa-libgbm nspr nss pango
+      - run: pnpm exec e2e-web install chromium
       - run: pnpm test:e2e:army --target ${{ matrix.target }}
       - name: Summarize browser results
         if: always()
