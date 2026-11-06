@@ -33,7 +33,9 @@ test("same-origin authentication reaches the tenant dashboard", async ({
 }) => {
   await signInWithoutFormInput(page, appURL("/"));
   await expect(page).toHaveURL(/\/dashboard$/);
-  await expect(page.locator("h1")).toContainText("Good morning");
+  await expect(page.locator("h1")).toContainText(
+    /Good (morning|afternoon|evening)/,
+  );
   await expect(page.getByText("Dingo Security", { exact: true })).toBeVisible();
 });
 

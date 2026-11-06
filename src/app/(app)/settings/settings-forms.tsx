@@ -2,6 +2,7 @@
 
 import { useActionState } from "react";
 import { Button } from "@/components/ui/button";
+import { ConfirmButton } from "@/components/ui/confirm-button";
 import { MFA_MODES } from "@/lib/auth/mfa-modes";
 import {
   addScimDomainAction,
@@ -198,9 +199,14 @@ function ScimDomainRow({ entry }: { entry: ScimDomainView }) {
         )}
         <form action={removeAction}>
           <input type="hidden" name="domain" value={entry.domain} />
-          <Button size="sm" variant="secondary" disabled={removing}>
+          <ConfirmButton
+            disabled={removing}
+            title={`Remove ${entry.domain}?`}
+            description="SCIM provisioning stops trusting this domain. You will need to verify it again to re-add it."
+            confirmLabel="Remove domain"
+          >
             {removing ? "Removing…" : "Remove"}
-          </Button>
+          </ConfirmButton>
         </form>
       </div>
       <Result state={verifyState} />

@@ -1,3 +1,4 @@
+import Image from "next/image";
 import { redirect } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { getSession } from "@/lib/auth/session";
@@ -13,9 +14,14 @@ export default async function OnboardingPage() {
   return (
     <main className="grid min-h-screen place-items-center bg-background px-5 py-10">
       <div className="w-full max-w-lg rounded-xl border bg-paper p-6 shadow-[0_16px_50px_rgba(28,45,65,0.08)] sm:p-8">
-        <span className="grid size-10 place-items-center rounded-lg bg-primary font-semibold text-white">
-          D
-        </span>
+        <Image
+          src="/brand/dingodocs-logo-mark.png"
+          alt="DingoDocs"
+          width={40}
+          height={40}
+          className="size-10 object-contain"
+          priority
+        />
         <p className="mt-7 text-sm font-medium text-[var(--harbour-700)]">
           Set up your workspace
         </p>

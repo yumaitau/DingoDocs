@@ -99,6 +99,10 @@ test(
     await screen.getByRole("button", "Duplicate block").click();
     await expect(screen.getByTestId("report-block")).toHaveCount(11);
     await screen.getByRole("button", "Delete block").click();
+    await screen
+      .getByRole("dialog", "Delete this block?")
+      .getByRole("button", "Delete block")
+      .click();
     await expect(screen.getByTestId("report-block")).toHaveCount(10);
     await screen.getByRole("button", "Undo").click();
     await expect(screen.getByTestId("report-block")).toHaveCount(11);

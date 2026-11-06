@@ -1,6 +1,6 @@
 import { and, desc, eq, isNull } from "drizzle-orm";
 import { PageHeader } from "@/components/page-header";
-import { Button } from "@/components/ui/button";
+import { ConfirmButton } from "@/components/ui/confirm-button";
 import { db } from "@/db";
 import {
   aiConfigurations,
@@ -143,9 +143,13 @@ Authorization: Bearer dd_svc_…`}</code>
                 </div>
                 <form action={revokeApiKeyAction}>
                   <input type="hidden" name="apiKeyId" value={key.id} />
-                  <Button variant="secondary" size="sm">
+                  <ConfirmButton
+                    title="Revoke API key?"
+                    description={`Anything using ${key.name} (${key.prefix}…) will lose access immediately. This cannot be undone.`}
+                    confirmLabel="Revoke key"
+                  >
                     Revoke
-                  </Button>
+                  </ConfirmButton>
                 </form>
               </li>
             ))}

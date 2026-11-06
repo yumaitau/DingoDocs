@@ -2,6 +2,7 @@
 
 import { useActionState } from "react";
 import { Button } from "@/components/ui/button";
+import { ConfirmButton } from "@/components/ui/confirm-button";
 import {
   apiKeyDateBounds,
   defaultApiKeyLifetimeDays,
@@ -136,9 +137,14 @@ export function RotateWebhookForm({ webhookId }: { webhookId: string }) {
   return (
     <form action={action}>
       <input type="hidden" name="webhookId" value={webhookId} />
-      <Button variant="secondary" size="sm" disabled={pending}>
+      <ConfirmButton
+        disabled={pending}
+        title="Rotate webhook secret?"
+        description="The current signing secret stops working immediately. Update the receiver with the new secret straight away."
+        confirmLabel="Rotate secret"
+      >
         Rotate secret
-      </Button>
+      </ConfirmButton>
       <Result state={state} />
     </form>
   );

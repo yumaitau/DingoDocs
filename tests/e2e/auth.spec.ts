@@ -57,7 +57,7 @@ test("demo user reaches the tenant-scoped dashboard and command palette", async 
   await signIn(page);
   await expect(page).toHaveURL(/\/dashboard/);
   await expect(
-    page.getByRole("heading", { name: "Good morning" }),
+    page.getByRole("heading", { name: /^Good (morning|afternoon|evening)$/ }),
   ).toBeVisible();
   await expect(
     page.locator('[data-command-palette-ready="true"]'),
@@ -134,6 +134,11 @@ test("administrators create a one-time scoped API key that authenticates REST re
   expect(findings.status()).toBe(403);
   const row = page.getByRole("listitem").filter({ hasText: name });
   await row.getByRole("button", { name: "Revoke" }).click();
+  await page
+    .getByRole("dialog", { name: "Revoke API key?" })
+    .getByRole("button", { name: "Revoke key" })
+    .click();
+  await expect(row).toBeHidden();
 });
 
 test("engagement workspace tabs remain keyboard accessible", async ({

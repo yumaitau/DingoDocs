@@ -5,7 +5,7 @@ export const templateId = "0197f30f-122c-7000-8000-000000000010";
 export const engagementPath = `/engagements/${engagementId}`;
 
 export const screens = [
-  ["/dashboard", "Good morning"],
+  ["/dashboard", /^Good (morning|afternoon|evening)$/],
   ["/analytics", "Risk analytics"],
   ["/clients", "Clients"],
   ["/clients/new", "New client"],

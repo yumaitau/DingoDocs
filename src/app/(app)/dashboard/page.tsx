@@ -11,7 +11,7 @@ import { PageHeader } from "@/components/page-header";
 import { Button } from "@/components/ui/button";
 import { StatusPill } from "@/components/ui/status-pill";
 import { requireOrganisationContext } from "@/lib/permissions/require";
-import { formatDateTime } from "@/lib/time-zone";
+import { formatDateTime, greeting } from "@/lib/time-zone";
 import { formatDate } from "@/lib/utils";
 import { getDashboardData } from "@/server/services/dashboard";
 
@@ -52,7 +52,7 @@ export default async function DashboardPage() {
   return (
     <>
       <PageHeader
-        title="Good morning"
+        title={greeting(context.timeZone)}
         description="Here is what needs attention across your security assessment work."
         actions={
           <Button asChild>
