@@ -69,7 +69,13 @@ function selfSignedCertificate(
   const now = Date.now();
   const tbs = sequence(
     der(0xa0, integer(Buffer.from([2]))),
-    integer(randomBytes(8)),
+    // Leading byte in 0x01..0x7f keeps the DER integer minimal and positive.
+    integer(
+      Buffer.concat([
+        Buffer.from([1 + (randomBytes(1)[0] % 0x7f)]),
+        randomBytes(7),
+      ]),
+    ),
     sha256WithRsa,
     commonName(cn),
     sequence(

@@ -60,9 +60,11 @@ test(
       .selectOption({ label: `${name} · v1 · 1 steps` });
     await screen.getByRole("button", "Apply snapshot").click();
     const section = browser.locator("section").filter({ hasText: name }).last();
+    // New steps start as not_started, so every status here differs from
+    // the one before it; the pill wait below then proves each save landed.
     for (const status of [
-      "not_started",
       "in_progress",
+      "not_started",
       "blocked",
       "not_applicable",
       "completed",
@@ -76,6 +78,11 @@ test(
         .getByLabel("Testing notes")
         .fill(`Synthetic ${status} result`);
       await section.getByRole("button", "Save execution record").click();
+      // The step's status pill only changes once the server action has
+      // re-rendered; reloading earlier on slow mobile runs aborts the save.
+      await expect(
+        section.getByRole("listitem").getByText(status.replaceAll("_", " ")),
+      ).toBeVisible();
       await browser.reload();
       await section.getByText("Update execution record").click();
       await expect(section.getByLabel("Execution status")).toHaveValue(status);
