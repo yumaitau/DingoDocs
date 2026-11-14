@@ -299,6 +299,17 @@ run("per-organisation SAML SSO", () => {
     return rows.map((row) => String(row.metadata.reason));
   }
 
+  // node-saml >= 5.2 caps SubjectConfirmation at IssueInstant +
+  // maxAssertionAgeMs, so it can reject an old assertion before
+  // checkSignedAssertion runs. Either layer rejecting it is correct.
+  const NODE_SAML_EXPIRED =
+    "invalid_response: No valid subject confirmation found";
+  function hasExpiryRejection(reasons: string[], own: string) {
+    return reasons.some(
+      (reason) => reason === own || reason.startsWith(NODE_SAML_EXPIRED),
+    );
+  }
+
   function expectSsoFailure(response: Response, error = "sso_failed") {
     expect(response.status).toBe(302);
     const location = new URL(response.headers.get("location")!);
@@ -477,8 +488,8 @@ run("per-organisation SAML SSO", () => {
     expectSsoFailure(freshButExpired);
     expect(await sessionCount(ids.member)).toBe(before);
     const reasons = await rejectionReasons(ids.idpInitOrg);
-    expect(reasons).toContain("assertion_too_old");
-    expect(reasons).toContain("bearer_expired");
+    expect(hasExpiryRejection(reasons, "assertion_too_old")).toBe(true);
+    expect(hasExpiryRejection(reasons, "bearer_expired")).toBe(true);
   });
 
   it("rejects an assertion whose bearer Recipient is another ACS", async () => {
@@ -514,7 +525,8 @@ run("per-organisation SAML SSO", () => {
     );
     expectSsoFailure(response);
     expect(await sessionCount(ids.member)).toBe(before);
-    expect((await rejectionReasons(ids.idpInitOrg)).join()).toMatch(/too old/);
+    const reasons = await rejectionReasons(ids.idpInitOrg);
+    expect(hasExpiryRejection(reasons, "assertion_too_old")).toBe(true);
   });
 
   it("rejects a resubmitted assertion even after its tombstone has expired", async () => {
