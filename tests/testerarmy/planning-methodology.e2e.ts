@@ -60,9 +60,11 @@ test(
       .selectOption({ label: `${name} · v1 · 1 steps` });
     await screen.getByRole("button", "Apply snapshot").click();
     const section = browser.locator("section").filter({ hasText: name }).last();
+    // New steps start as not_started, so every status here differs from
+    // the one before it; the pill wait below then proves each save landed.
     for (const status of [
-      "not_started",
       "in_progress",
+      "not_started",
       "blocked",
       "not_applicable",
       "completed",
