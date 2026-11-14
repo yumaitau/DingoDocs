@@ -57,7 +57,16 @@ services:
     restart: unless-stopped
 
   minio:
-    image: minio/minio:RELEASE.2025-04-22T22-12-26Z
+    # Upstream minio/minio is archived and affected by CVE-2026-122267; use the
+    # Chainguard build (fixed in RELEASE.2026-09-22T19-25-18Z). Pinned to the
+    # multi-arch index digest of :latest as built 2026-11-04 (after the fix).
+    # Free-tier Chainguard has no versioned tags; to bump, re-resolve the
+    # digest of :latest and update it here.
+    image: cgr.dev/chainguard/minio:latest@sha256:cee9a8e35885e93f14b3cb32960e5017aff74e2adfb52ba87c65003b0163886b
+    # The Chainguard image defaults to a non-root user, but existing minio_data
+    # volumes were written by root under minio/minio. Keep root so they stay
+    # writable; to drop it, chown the volume to the image uid and remove this.
+    user: "0:0"
     profiles: ["s3"]
     command: server /data --console-address ":9001"
     environment:
