@@ -76,6 +76,11 @@ test(
         .getByLabel("Testing notes")
         .fill(`Synthetic ${status} result`);
       await section.getByRole("button", "Save execution record").click();
+      // The step's status pill only changes once the server action has
+      // re-rendered; reloading earlier on slow mobile runs aborts the save.
+      await expect(
+        section.getByRole("listitem").getByText(status.replaceAll("_", " ")),
+      ).toBeVisible();
       await browser.reload();
       await section.getByText("Update execution record").click();
       await expect(section.getByLabel("Execution status")).toHaveValue(status);
