@@ -48,6 +48,9 @@ export default async function PreferencesPage() {
               ))}
             </select>
             <p className="text-sm text-slate-500">
+              {`Saved time zone: ${context.timeZone}`}
+            </p>
+            <p className="text-sm text-slate-500">
               Current local display:{" "}
               {formatDateTime(new Date(), context.timeZone)}
             </p>
