@@ -2,11 +2,10 @@ import { Clock3 } from "lucide-react";
 import { AppShell } from "@/components/app-shell";
 import { ClientPortalShell } from "@/components/client-portal-shell";
 import { PageHeader } from "@/components/page-header";
-import { Button } from "@/components/ui/button";
 import { requirePageSession } from "@/lib/auth/session";
 import { requireOrganisationContext } from "@/lib/permissions/require";
 import { formatDateTime, listSupportedTimeZones } from "@/lib/time-zone";
-import { updateTimeZoneAction } from "@/server/actions/preferences";
+import { TimeZoneForm } from "./time-zone-form";
 
 export default async function PreferencesPage() {
   const session = await requirePageSession();
@@ -31,28 +30,11 @@ export default async function PreferencesPage() {
               </p>
             </div>
           </div>
-          <form action={updateTimeZoneAction} className="mt-5 space-y-4">
-            <label className="block text-sm font-medium" htmlFor="timeZone">
-              Display time zone
-            </label>
-            <select
-              id="timeZone"
-              name="timeZone"
-              defaultValue={context.timeZone}
-              className="min-h-11 w-full rounded-md border bg-paper px-3 text-sm"
-            >
-              {listSupportedTimeZones().map((timeZone) => (
-                <option key={timeZone} value={timeZone}>
-                  {timeZone}
-                </option>
-              ))}
-            </select>
-            <p className="text-sm text-slate-500">
-              Current local display:{" "}
-              {formatDateTime(new Date(), context.timeZone)}
-            </p>
-            <Button type="submit">Save time zone</Button>
-          </form>
+          <TimeZoneForm
+            timeZone={context.timeZone}
+            timeZones={listSupportedTimeZones()}
+            currentDisplay={formatDateTime(new Date(), context.timeZone)}
+          />
         </section>
       </div>
     </>
