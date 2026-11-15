@@ -36,6 +36,7 @@ test("new signup creates isolated workspace and persists time zone", async ({
     await expect(screen.getByRole("status")).toHaveText(
       `Time zone saved: ${zone}`,
     );
+    await expect(screen.getByLabel("Display time zone")).toHaveValue(zone);
     await browser.reload();
     await expect(screen.getByLabel("Display time zone")).toHaveValue(zone);
   }

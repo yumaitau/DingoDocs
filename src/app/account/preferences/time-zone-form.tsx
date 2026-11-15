@@ -27,7 +27,9 @@ export function TimeZoneForm({
       <label className="block text-sm font-medium" htmlFor="timeZone">
         Display time zone
       </label>
+      {/* Keyed so the post-action form reset uses the newly saved zone. */}
       <select
+        key={timeZone}
         id="timeZone"
         name="timeZone"
         defaultValue={timeZone}
