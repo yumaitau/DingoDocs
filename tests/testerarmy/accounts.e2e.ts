@@ -32,6 +32,10 @@ test("new signup creates isolated workspace and persists time zone", async ({
   for (const zone of ["Australia/Sydney", "Pacific/Auckland", "UTC"]) {
     await screen.getByLabel("Display time zone").selectOption({ value: zone });
     await screen.getByRole("button", "Save time zone").click();
+    // Wait for the server action to finish so the reload can't abort the save.
+    await expect(
+      screen.getByText(`Saved time zone: ${zone}`, { exact: true }),
+    ).toBeVisible();
     await browser.reload();
     await expect(screen.getByLabel("Display time zone")).toHaveValue(zone);
   }
