@@ -55,7 +55,35 @@ jobs:
       - run: pnpm test
       - run: pnpm build
       - run: pnpm exec playwright install --with-deps chromium
+      # Run browser journeys against the production build made above, as
+      # released, instead of compiling every page again under `next dev`.
+      - name: Start production server
+        run: |
+          node node_modules/next/dist/bin/next start --hostname 127.0.0.1 --port 3000 > "$RUNNER_TEMP/next-start.log" 2>&1 &
+          for _ in $(seq 120); do
+            curl --silent --fail http://127.0.0.1:3000/api/health > /dev/null && exit 0
+            sleep 1
+          done
+          cat "$RUNNER_TEMP/next-start.log"
+          exit 1
       - run: pnpm test:e2e
+        env:
+          PLAYWRIGHT_BASE_URL: http://127.0.0.1:3000
+      # `next start` hands the port to a renamed next-server child, so stop
+      # whatever listens on it. Lightpanda's dev server needs the port next.
+      - name: Stop production server
+        if: always()
+        run: |
+          for _ in $(seq 20); do
+            mapfile -t pids < <(lsof -t -iTCP:3000 -sTCP:LISTEN || true)
+            test "${#pids[@]}" -eq 0 && exit 0
+            kill "${pids[@]}" || true
+            sleep 0.5
+          done
+          echo "Port 3000 is still in use" >&2
+          exit 1
+      # Production session cookies are Secure. Lightpanda drops them over
+      # plain HTTP, so its smoke tests keep using the dev server.
       - run: pnpm test:e2e:lightpanda
 
   container:
