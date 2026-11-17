@@ -1,7 +1,7 @@
 "use client";
 
 import { Editor, Element, Frame, useEditor, useNode } from "@craftjs/core";
-import { useState, useTransition, type ReactNode } from "react";
+import { memo, useState, useTransition, type ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import {
   ArrowDown,
@@ -281,40 +281,13 @@ export function ReportLayoutEditor({
           )}
         </fieldset>
       )}
-      <Editor
+      <ReportCanvasEditor
         key={generation}
-        resolver={{ ReportCanvas, ReportBlock }}
-        onNodesChange={(query) => {
-          const nodes = query.getSerializedNodes();
-          if (!nodes.ROOT) return;
-          const sections = nodes.ROOT.nodes.map((id) => ({
-            ...nodes[id].props.section,
-            id,
-          })) as ReportSectionDefinition[];
-          if (sections.length) setDefinition((d) => ({ ...d, sections }));
-        }}
-      >
-        <div className="rounded-xl border bg-muted/40">
-          <EditorToolbar />
-          <div className="grid min-w-0 gap-4 p-3 xl:grid-cols-[150px_minmax(0,1fr)_240px]">
-            <BlockPalette />
-            <div
-              className="min-w-0 overflow-auto rounded-lg bg-slate-200 p-3"
-              style={{ maxHeight: "75vh" }}
-              data-testid="report-canvas-scroll"
-            >
-              <Frame>
-                <Element is={ReportCanvas} canvas id="ROOT">
-                  {definition.sections.map((section) => (
-                    <ReportBlock key={section.id} section={section} />
-                  ))}
-                </Element>
-              </Frame>
-            </div>
-            <BlockInspector />
-          </div>
-        </div>
-      </Editor>
+        sections={definition.sections}
+        onSectionsChange={(sections) =>
+          setDefinition((d) => ({ ...d, sections }))
+        }
+      />
       <details className="rounded-lg border p-4">
         <summary className="cursor-pointer text-sm font-medium">
           Advanced print CSS
@@ -341,6 +314,62 @@ export function ReportLayoutEditor({
     </form>
   );
 }
+
+const resolver = { ReportCanvas, ReportBlock };
+
+// The production bundle inlines Craft's query factory into <Editor>'s render,
+// so every re-render of <Editor> builds a new store and new drag handlers.
+// Starting a drag selects the block, which re-renders this form; the drop
+// then reaches handlers that never saw the drag start, and the block does
+// not move. Craft reads <Editor> and <Frame> props only on mount anyway, so
+// render the editor once per layout. The parent's `key` remounts it when a
+// starter is chosen.
+const ReportCanvasEditor = memo(
+  function ReportCanvasEditor({
+    sections,
+    onSectionsChange,
+  }: {
+    sections: ReportSectionDefinition[];
+    onSectionsChange: (sections: ReportSectionDefinition[]) => void;
+  }) {
+    return (
+      <Editor
+        resolver={resolver}
+        onNodesChange={(query) => {
+          const nodes = query.getSerializedNodes();
+          if (!nodes.ROOT) return;
+          const next = nodes.ROOT.nodes.map((id) => ({
+            ...nodes[id].props.section,
+            id,
+          })) as ReportSectionDefinition[];
+          if (next.length) onSectionsChange(next);
+        }}
+      >
+        <div className="rounded-xl border bg-muted/40">
+          <EditorToolbar />
+          <div className="grid min-w-0 gap-4 p-3 xl:grid-cols-[150px_minmax(0,1fr)_240px]">
+            <BlockPalette />
+            <div
+              className="min-w-0 overflow-auto rounded-lg bg-slate-200 p-3"
+              style={{ maxHeight: "75vh" }}
+              data-testid="report-canvas-scroll"
+            >
+              <Frame>
+                <Element is={ReportCanvas} canvas id="ROOT">
+                  {sections.map((section) => (
+                    <ReportBlock key={section.id} section={section} />
+                  ))}
+                </Element>
+              </Frame>
+            </div>
+            <BlockInspector />
+          </div>
+        </div>
+      </Editor>
+    );
+  },
+  () => true,
+);
 
 function ReportCanvas({ children }: { children?: ReactNode }) {
   const {
