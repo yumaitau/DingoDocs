@@ -1,6 +1,25 @@
 import type { Browser } from "@e2e-dev/web";
 import { expect } from "e2e";
 
+// Pull requests sample each distinct control. Pushes to main and manual runs
+// set TESTERARMY_EXHAUSTIVE_OPTIONS=1 to walk every option and checkbox.
+const exhaustive = process.env.TESTERARMY_EXHAUSTIVE_OPTIONS === "1";
+
+// The saved value plus the first, middle and last options. Native selects
+// with server-rendered options behave the same for every entry between.
+export function sample(values: readonly string[], original: string) {
+  return [
+    ...new Set([
+      original,
+      values[0],
+      values[Math.floor(values.length / 2)],
+      values.at(-1),
+    ]),
+  ].filter(
+    (value): value is string => value !== undefined && values.includes(value),
+  );
+}
+
 export async function checkSelectOptions(browser: Browser) {
   // Repeated record editors share one control schema. Opening all of them makes
   // observations enormous without exercising a new option or behavior.
@@ -72,7 +91,7 @@ export async function checkSelectOptions(browser: Browser) {
     if (!(await control.isVisible()) || !(await control.isEnabled())) continue;
     checked.add(key);
     const original = await control.inputValue();
-    for (const value of values) {
+    for (const value of exhaustive ? values : sample(values, original)) {
       await control.selectOption({ value });
       await expect(control).toHaveValue(value);
     }
@@ -82,23 +101,27 @@ export async function checkSelectOptions(browser: Browser) {
   const checkboxes = await browser.evaluate(() =>
     Array.from(
       document.querySelectorAll<HTMLInputElement>('input[type="checkbox"]'),
-    ).map((checkbox, index) => ({
-      index,
-      key: JSON.stringify([
+    ).map((checkbox, index) => {
+      const label =
         checkbox.name ||
-          checkbox.getAttribute("aria-label") ||
-          checkbox.closest("label")?.textContent,
-        checkbox.value,
-      ]),
-    })),
+        checkbox.getAttribute("aria-label") ||
+        checkbox.closest("label")?.textContent;
+      return {
+        index,
+        key: JSON.stringify([label, checkbox.value]),
+        group: JSON.stringify([label]),
+      };
+    }),
   );
   const toggled = new Set<string>();
-  for (const { index, key } of checkboxes) {
-    if (toggled.has(key)) continue;
+  for (const { index, key, group } of checkboxes) {
+    // Sampled runs toggle one visible member of each same-named group.
+    const id = exhaustive ? key : group;
+    if (toggled.has(id)) continue;
     const checkbox = browser.locator('input[type="checkbox"]').nth(index);
     if (!(await checkbox.isVisible()) || !(await checkbox.isEnabled()))
       continue;
-    toggled.add(key);
+    toggled.add(id);
     const original = await checkbox.isChecked();
     await checkbox.check();
     await expect(checkbox).toBeChecked();
